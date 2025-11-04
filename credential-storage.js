@@ -6,26 +6,39 @@ class WebEncryption {
     constructor() {
         // Generate a unique salt for this extension instance
         this.masterSalt = null;
+        this.keyMaterial = null;
         this.initialized = false;
     }
 
     /**
-     * Initialize the encryption system with a master salt
+     * Initialize the encryption system with a master salt and key material
      */
     async initialize() {
         if (this.initialized) return;
 
         try {
-            // Try to get existing salt from storage
-            const result = await chrome.storage.local.get(['encryption_salt']);
+            // Try to get existing salt and key material from storage
+            const result = await chrome.storage.local.get(['encryption_salt', 'encryption_key_material']);
 
             if (result.encryption_salt) {
                 this.masterSalt = new Uint8Array(result.encryption_salt);
             } else {
                 // Generate new salt and store it
                 this.masterSalt = crypto.getRandomValues(new Uint8Array(32));
+            }
+
+            if (result.encryption_key_material) {
+                this.keyMaterial = new Uint8Array(result.encryption_key_material);
+            } else {
+                // Generate stable key material and store it
+                this.keyMaterial = crypto.getRandomValues(new Uint8Array(32));
+            }
+
+            // Store both salt and key material if either was newly generated
+            if (!result.encryption_salt || !result.encryption_key_material) {
                 await chrome.storage.local.set({
-                    encryption_salt: Array.from(this.masterSalt)
+                    encryption_salt: Array.from(this.masterSalt),
+                    encryption_key_material: Array.from(this.keyMaterial)
                 });
             }
 
@@ -41,21 +54,16 @@ class WebEncryption {
     }
 
     /**
-     * Generate a cryptographic key from the extension ID and user agent
+     * Generate a cryptographic key from stored key material
      * Uses PBKDF2 for secure key derivation
      */
     async deriveKey() {
         await this.initialize();
 
-        // Create key material from extension ID and user agent (stable across sessions)
-        const keyMaterial = (chrome.runtime.id || 'fallback') + navigator.userAgent;
-        const encoder = new TextEncoder();
-        const keyMaterialBuffer = encoder.encode(keyMaterial);
-
-        // Import the key material
+        // Use the stored stable key material
         const importedKey = await crypto.subtle.importKey(
             'raw',
-            keyMaterialBuffer,
+            this.keyMaterial,
             'PBKDF2',
             false,
             ['deriveKey']
@@ -63,15 +71,15 @@ class WebEncryption {
 
         // Derive AES-GCM key using PBKDF2
         const derivedKey = await crypto.subtle.deriveKey({
-                name: 'PBKDF2',
-                salt: this.masterSalt,
-                iterations: 100000, // High iteration count for security
-                hash: 'SHA-256'
-            },
+            name: 'PBKDF2',
+            salt: this.masterSalt,
+            iterations: 100000, // High iteration count for security
+            hash: 'SHA-256'
+        },
             importedKey, {
-                name: 'AES-GCM',
-                length: 256 // 256-bit key
-            },
+            name: 'AES-GCM',
+            length: 256 // 256-bit key
+        },
             false, // Key is not extractable
             ['encrypt', 'decrypt']
         );
@@ -99,9 +107,9 @@ class WebEncryption {
 
             // Encrypt the data
             const encrypted = await crypto.subtle.encrypt({
-                    name: 'AES-GCM',
-                    iv: iv
-                },
+                name: 'AES-GCM',
+                iv: iv
+            },
                 key,
                 data
             );
@@ -146,9 +154,9 @@ class WebEncryption {
 
             // Decrypt the data
             const decrypted = await crypto.subtle.decrypt({
-                    name: 'AES-GCM',
-                    iv: iv
-                },
+                name: 'AES-GCM',
+                iv: iv
+            },
                 key,
                 encrypted
             );
