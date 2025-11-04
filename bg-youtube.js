@@ -8,21 +8,21 @@ import {
 import { TIMEOUTS } from "./constants.js";
 
 export const Youtube = {
-    init: function(objRequest, funcResponse) {
+    init: function (objRequest, funcResponse) {
         AsyncSeries.run({
-                objMessaging: BackgroundUtils.messaging('youtube', {
-                    'youtube-synchronize': Youtube.synchronize,
-                    'youtube-synchronize-liked': Youtube.synchronizeLikedVideos,
-                    'youtube-lookup': Youtube.lookup,
-                    'youtube-ensure': Youtube.ensure,
-                    'youtube-mark': Youtube.mark
-                }),
-            },
-            createResponseCallback(() => {}, funcResponse),
+            objMessaging: BackgroundUtils.messaging('youtube', {
+                'youtube-synchronize': Youtube.synchronize,
+                'youtube-synchronize-liked': Youtube.synchronizeLikedVideos,
+                'youtube-lookup': Youtube.lookup,
+                'youtube-ensure': Youtube.ensure,
+                'youtube-mark': Youtube.mark
+            }),
+        },
+            createResponseCallback(() => { }, funcResponse),
         );
     },
 
-    synchronize: async function(objRequest, funcResponse, funcProgress) {
+    synchronize: async function (objRequest, funcResponse, funcProgress) {
         try {
             // Get the database provider factory
             const extensionManager = globalThis.extensionManager;
@@ -39,14 +39,11 @@ export const Youtube = {
                 return;
             }
 
-            console.log("Starting YouTube history sync with pagination...");
+            console.log("Starting YouTube history sync (single page only)...");
 
             let objVideos = [];
-            let continuationToken = null;
-            let pageCount = 0;
-            const maxPages = 10; // Limit to prevent infinite loops
 
-            // First, fetch the initial YouTube history page
+            // Fetch YouTube history page
             const response = await fetch("https://www.youtube.com/feed/history");
 
             if (!response.ok) {
@@ -109,7 +106,7 @@ export const Youtube = {
                                     const contentId = lockupViewModel.contentId;
                                     const metadata = lockupViewModel.metadata?.lockupMetadataViewModel;
                                     const title = metadata?.title?.content || metadata?.title?.text;
-                                    
+
                                     if (contentId && contentId.length === 11 && title) {
                                         videos.push({
                                             strIdent: contentId,
@@ -120,7 +117,7 @@ export const Youtube = {
                                         continue;
                                     }
                                 }
-                                
+
                                 // OLD: Fallback to videoRenderer format
                                 const videoRenderer = item.videoRenderer;
                                 if (videoRenderer && videoRenderer.videoId) {
@@ -143,17 +140,6 @@ export const Youtube = {
                 return videos;
             };
 
-            // Helper function to extract continuation token
-            const extractContinuationToken = (contents) => {
-                if (!contents || !Array.isArray(contents)) return null;
-                
-                for (const section of contents) {
-                    const token = getNestedProperty(section, 'continuationItemRenderer.continuationEndpoint.continuationCommand.token');
-                    if (token) return token;
-                }
-                return null;
-            };
-
             try {
 
                 // Try to find and parse the main data structure
@@ -170,11 +156,6 @@ export const Youtube = {
                         // Extract videos from first page
                         const pageVideos = extractVideosFromContents(contents);
                         objVideos.push(...pageVideos);
-                        
-                        // Extract continuation token for pagination
-                        continuationToken = extractContinuationToken(contents);
-                        
-                        pageCount++;
                     } catch (jsonError) {
                         console.warn("Failed to parse ytInitialData:", jsonError);
                     }
@@ -182,7 +163,7 @@ export const Youtube = {
 
                 // Fallback: Parse new yt-lockup-view-model format from HTML
                 if (objVideos.length === 0) {
-                    
+
                     // Match yt-lockup-view-model elements with content-id
                     const lockupRegex = /<yt-lockup-view-model[^>]*>[\s\S]*?content-id-([a-zA-Z0-9_-]{11})[\s\S]*?<\/yt-lockup-view-model>/g;
                     let lockupMatch;
@@ -269,73 +250,6 @@ export const Youtube = {
                 }, null, 2));
             }
 
-            // Fetch additional pages using continuation tokens
-            while (continuationToken && pageCount < maxPages) {
-                try {
-                    console.log(`Fetching page ${pageCount + 1}...`);
-                    
-                    // Fetch continuation data
-                    const continuationResponse = await fetch("https://www.youtube.com/youtubei/v1/browse?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            continuation: continuationToken,
-                            context: {
-                                client: {
-                                    clientName: "WEB",
-                                    clientVersion: "2.20231101.01.00"
-                                }
-                            }
-                        })
-                    });
-
-                    if (!continuationResponse.ok) {
-                        console.warn(`Failed to fetch continuation page: ${continuationResponse.status}`);
-                        break;
-                    }
-
-                    const continuationData = await continuationResponse.json();
-                    
-                    // Extract contents from continuation response
-                    const continuationContents = getNestedProperty(
-                        continuationData,
-                        'onResponseReceivedActions.0.appendContinuationItemsAction.continuationItems'
-                    );
-
-                    if (continuationContents && Array.isArray(continuationContents)) {
-                        // Extract videos from this page
-                        const pageVideos = extractVideosFromContents(continuationContents);
-                        objVideos.push(...pageVideos);
-                        console.log(`Page ${pageCount + 1}: Found ${pageVideos.length} videos (total: ${objVideos.length})`);
-                        
-                        // Extract next continuation token
-                        continuationToken = extractContinuationToken(continuationContents);
-                        pageCount++;
-                        
-                        if (!continuationToken) {
-                            console.log("No more pages available");
-                            break;
-                        }
-                        
-                        // Small delay to avoid rate limiting
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    } else {
-                        console.log("No continuation contents found");
-                        break;
-                    }
-                } catch (error) {
-                    console.error("Error fetching continuation page:", JSON.stringify({
-                        error: error.message,
-                        errorName: error.name,
-                        errorStack: error.stack
-                    }, null, 2));
-                    break;
-                }
-            }
-
-
             // Store videos in the current provider
             let processedCount = 0;
             let updatedCount = 0;
@@ -395,7 +309,7 @@ export const Youtube = {
         }
     },
 
-    synchronizeLikedVideos: async function(objRequest, funcResponse, funcProgress) {
+    synchronizeLikedVideos: async function (objRequest, funcResponse, funcProgress) {
         try {
             // Get the database provider factory
             const extensionManager = globalThis.extensionManager;
@@ -594,7 +508,7 @@ export const Youtube = {
         }
     },
 
-    lookup: async function(objRequest, funcResponse) {
+    lookup: async function (objRequest, funcResponse) {
         try {
             // Use the database provider factory instead of direct IndexedDB access
             const extensionManager = globalThis.extensionManager;
@@ -635,7 +549,7 @@ export const Youtube = {
         }
     },
 
-    ensure: async function(objRequest, funcResponse) {
+    ensure: async function (objRequest, funcResponse) {
         try {
             // Use the database provider factory instead of direct IndexedDB access
             const extensionManager = globalThis.extensionManager;
@@ -708,7 +622,7 @@ export const Youtube = {
         }
     },
 
-    mark: async function(objRequest, funcResponse) {
+    mark: async function (objRequest, funcResponse) {
         try {
             // Use the database provider factory instead of direct IndexedDB access
             const extensionManager = globalThis.extensionManager;
