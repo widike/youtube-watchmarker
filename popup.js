@@ -211,8 +211,8 @@ class PopupSearchManager {
             return await chrome.runtime.sendMessage(message);
         } catch (error) {
             if (error.message && (error.message.includes("Extension context invalidated") ||
-                    error.message.includes("context invalidated") ||
-                    error.message.includes("Receiving end does not exist"))) {
+                error.message.includes("context invalidated") ||
+                error.message.includes("Receiving end does not exist"))) {
                 console.log("Extension context invalidated during sendMessage - retrying once");
                 // Try once more in case it was a temporary issue
                 try {
@@ -278,9 +278,10 @@ class PopupSearchManager {
             }
 
             if (response && response.success) {
+                const videos = response.objVideos || response.results || [];
                 this.searchState.totalResults = response.totalResults || 0;
                 this.hideInitialLoading();
-                this.displaySearchResults(response.results);
+                this.displaySearchResults(videos);
 
                 // Show a subtle message if it took multiple retries
                 if (retryCount > 0) {
@@ -330,8 +331,9 @@ class PopupSearchManager {
             });
 
             if (response && response.success) {
+                const videos = response.objVideos || response.results || [];
                 this.searchState.totalResults = response.totalResults || 0;
-                this.displaySearchResults(response.results);
+                this.displaySearchResults(videos);
             } else {
                 const errorMessage = query ?
                     'Search failed. Please try again.' :
@@ -415,26 +417,26 @@ class PopupSearchManager {
                                 <tr class="search-result-item">
                                     <td class="text-center">
                                         <small class="text-muted">
-                                            ${this.formatDateForTable(new Date(result.timestamp))}
+                                            ${this.formatDateForTable(new Date(result.intTimestamp || result.timestamp))}
                                         </small>
                                     </td>
                                     <td>
-                                        <a href="https://www.youtube.com/watch?v=${result.id}" 
+                                        <a href="https://www.youtube.com/watch?v=${result.strIdent || result.id}" 
                                            target="_blank" 
                                            class="text-decoration-none fw-medium text-primary"
-                                           title="${this.escapeHtml(result.title)}">
-                                                                                         ${this.truncateText(this.escapeHtml(result.title), 60)}
+                                           title="${this.escapeHtml(result.strTitle || result.title || 'Untitled Video')}">
+                                                                                         ${this.truncateText(this.escapeHtml(result.strTitle || result.title || 'Untitled Video'), 60)}
                                             <i class="fas fa-external-link-alt ms-1 text-muted small"></i>
                                         </a>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-primary rounded-pill">
-                                            ${result.count}
+                                            ${result.intCount || result.count || 1}
                                         </span>
                                     </td>
                                     <td class="text-center">
                                         <button class="btn btn-sm btn-outline-danger delete-video-btn" 
-                                                data-video-id="${result.id}"
+                                                data-video-id="${result.strIdent || result.id}"
                                                 title="Delete from watch history">
                                             <i class="fas fa-trash"></i>
                                         </button>

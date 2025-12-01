@@ -49,8 +49,6 @@ export const STORAGE_KEYS = {
     // Settings
     SETTINGS_PREFIX: "id",
 
-
-
     // Sync Configuration
     SYNC_ENABLED: "sync_enabled",
     SYNC_PROVIDER: "sync_provider",
@@ -201,7 +199,19 @@ export const TIMEOUTS = {
     DATABASE_OPERATION: 10000, // 10 seconds
     NETWORK_REQUEST: 15000, // 15 seconds
     SYNC_OPERATION: 60000, // 1 minute
-    VIEW_COUNT_COOLDOWN: 30000 // 30 seconds - minimum time between view counts for same video
+    VIEW_COUNT_COOLDOWN: 30000, // 30 seconds - minimum time between view counts for same video
+    TAB_MESSAGE_RETRY: 100, // milliseconds between tab message retries
+    CHUNK_PROCESSING_DELAY: 150 // milliseconds delay between import chunks
+};
+
+// Import/Export Configuration
+export const IMPORT_EXPORT = {
+    MAX_RETRY_ATTEMPTS: 100,
+    CHUNK_SIZE_LARGE: 500,      // For datasets > 50000 videos
+    CHUNK_SIZE_MEDIUM: 750,     // For datasets > 10000 videos
+    CHUNK_SIZE_SMALL: 1000,     // For datasets <= 10000 videos
+    LARGE_DATASET_THRESHOLD: 50000,
+    MEDIUM_DATASET_THRESHOLD: 10000
 };
 
 // Default Values

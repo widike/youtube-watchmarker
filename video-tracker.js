@@ -4,9 +4,10 @@
  */
 
 import { logger } from './logger.js';
-import { getSyncStorageAsync, sendMessageToTab } from './utils.js';
+import { getSyncStorageAsync } from './storage-utils.js';
+import { sendMessageToTab } from './browser-utils.js';
 import { isValidVideoTitle } from './validation.js';
-import { decodeHtmlEntitiesAndFixEncoding } from './utils.js';
+import { decodeHtmlEntitiesAndFixEncoding } from './text-utils.js';
 import { TIMEOUTS } from './constants.js';
 
 /**

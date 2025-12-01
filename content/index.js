@@ -1601,8 +1601,9 @@ class OptionsPageManager {
             });
 
             if (response && response.success) {
+                const videos = response.objVideos || response.results || [];
                 this.searchState.totalResults = response.totalResults || 0;
-                this.displaySearchResults(response.results);
+                this.displaySearchResults(videos);
             } else {
                 const errorMessage = query ?
                     'Search failed. Please try again.' :
@@ -1648,8 +1649,9 @@ class OptionsPageManager {
             });
 
             if (response && response.success) {
+                const videos = response.objVideos || response.results || [];
                 this.searchState.totalResults = response.totalResults || 0;
-                this.displaySearchResults(response.results);
+                this.displaySearchResults(videos);
             } else {
                 console.warn('Initial search failed:', response);
                 // Don't show error on initial load, just show empty state
@@ -1720,25 +1722,25 @@ class OptionsPageManager {
                                 <tr class="search-result-item">
                                     <td class="text-center">
                                         <small class="text-muted font-monospace">
-                                            ${this.formatDateForTable(new Date(result.timestamp))}
+                                            ${this.formatDateForTable(new Date(result.intTimestamp || result.timestamp))}
                                         </small>
                                     </td>
                                     <td>
-                                        <a href="https://www.youtube.com/watch?v=${result.id}" 
+                                        <a href="https://www.youtube.com/watch?v=${result.strIdent || result.id}" 
                                            target="_blank" 
                                            class="text-decoration-none fw-medium text-primary">
-                                            ${this.escapeHtml(result.title)}
+                                            ${this.escapeHtml(result.strTitle || result.title || 'Untitled Video')}
                                             <i class="fas fa-external-link-alt ms-2 text-muted small"></i>
                                         </a>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-primary rounded-pill">
-                                            ${result.count}
+                                            ${result.intCount || result.count || 1}
                                         </span>
                                     </td>
                                     <td class="text-center">
                                         <button class="btn btn-sm btn-outline-danger delete-video-btn hover-lift" 
-                                                data-video-id="${result.id}"
+                                                data-video-id="${result.strIdent || result.id}"
                                                 title="Delete from watch history">
                                             <i class="fas fa-trash"></i>
                                         </button>

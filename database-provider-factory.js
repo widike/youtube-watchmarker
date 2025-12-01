@@ -429,24 +429,19 @@ export class DatabaseProviderFactory {
      */
     async switchToSupabase() {
         try {
-            console.log('🔄 Switching to Supabase provider...');
-
             // Check if credentials are available
             const hasCredentials = await credentialStorage.hasCredentials();
 
             if (!hasCredentials) {
-                console.log('❌ No Supabase credentials found');
                 throw new Error('No Supabase credentials found. Please configure Supabase credentials first using the "Save Configuration" button.');
             }
 
             // Close current provider if different
             if (this.currentProvider && this.providerType !== 'supabase') {
-                console.log('🔄 Closing current provider...');
                 await this.currentProvider.close();
             }
 
             // Initialize Supabase provider with retry logic
-            console.log('🔄 Initializing Supabase provider...');
             let initAttempts = 0;
             const maxInitAttempts = 3;
             let success = false;
@@ -455,8 +450,6 @@ export class DatabaseProviderFactory {
             while (initAttempts < maxInitAttempts && !success) {
                 try {
                     initAttempts++;
-                    console.log(`🔄 Initialization attempt ${initAttempts}/${maxInitAttempts}...`);
-
                     success = await supabaseDatabaseProvider.init();
 
                     if (!success) {
@@ -466,12 +459,10 @@ export class DatabaseProviderFactory {
                     break;
                 } catch (error) {
                     lastError = error;
-                    console.warn(`⚠️ Initialization attempt ${initAttempts} failed:`, error.message);
 
                     if (initAttempts < maxInitAttempts) {
                         // Wait before retrying (exponential backoff)
                         const delay = Math.pow(2, initAttempts) * 1000;
-                        console.log(`⏳ Waiting ${delay}ms before retry...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
                     }
                 }
@@ -479,12 +470,10 @@ export class DatabaseProviderFactory {
 
             if (!success) {
                 const errorMessage = lastError?.message || 'Unknown initialization error';
-                console.error('❌ All initialization attempts failed');
                 throw new Error(`Failed to initialize Supabase provider after ${maxInitAttempts} attempts: ${errorMessage}`);
             }
 
             // Test the connection
-            console.log('🔗 Testing Supabase connection...');
             const connectionTest = await supabaseDatabaseProvider.testConnection();
 
             if (!connectionTest) {
@@ -499,53 +488,20 @@ export class DatabaseProviderFactory {
                 database_provider: 'supabase'
             });
 
-            console.log('✅ Successfully switched to Supabase provider');
             return true;
         } catch (error) {
-            console.error('❌ Failed to switch to Supabase:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-
-            // Provide specific guidance based on error type
-            if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-                console.error('💡 Network/CORS issue detected. Solutions:', JSON.stringify([
-                    '1. Reload the extension completely (chrome://extensions)',
-                    '2. Check if host permissions are configured',
-                    '3. Verify Supabase URL format',
-                    '4. Check network connectivity'
-                ], null, 2));
-            } else if (error.message.includes('credentials')) {
-                console.error('💡 Credentials issue detected. Solutions:', JSON.stringify([
-                    '1. Re-enter your Supabase URL and API key',
-                    '2. Verify API key has proper permissions',
-                    '3. Check if your Supabase project is active'
-                ], null, 2));
-            } else if (error.message.includes('table')) {
-                console.error('💡 Database table issue detected. Solutions:', JSON.stringify([
-                    '1. Run the table creation SQL in Supabase SQL Editor',
-                    '2. Check database permissions',
-                    '3. Verify project is properly configured'
-                ], null, 2));
-            }
+            console.error('Failed to switch to Supabase:', error.message);
 
             // If we failed to switch, make sure we fall back to IndexedDB
             if (this.providerType !== 'indexeddb') {
-                console.log('🔄 Falling back to IndexedDB...');
                 try {
                     await this.switchToIndexedDB(false); // Don't save preference when falling back
-                    console.log('✅ Successfully fell back to IndexedDB');
                 } catch (fallbackError) {
-                    console.error('❌ Fallback to IndexedDB also failed:', JSON.stringify({
-                        error: fallbackError.message,
-                        errorName: fallbackError.name,
-                        errorStack: fallbackError.stack
-                    }, null, 2));
+                    console.error('Fallback to IndexedDB also failed:', fallbackError.message);
                 }
             }
 
-            throw error; // Re-throw to let the caller handle the error message
+            throw error;
         }
     }
 

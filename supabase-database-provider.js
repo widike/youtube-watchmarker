@@ -103,23 +103,20 @@ export class SupabaseDatabaseProvider {
      */
     async init() {
         try {
-            console.log('🔄 Initializing Supabase provider...');
-
             // Get stored credentials
             this.credentials = await credentialStorage.getCredentials();
             if (!this.credentials) {
-                console.log('ℹ️ No Supabase credentials found - provider will remain uninitialized');
                 return false;
             }
 
             // Validate credentials
             if (!this.validateSupabaseUrl(this.credentials.supabaseUrl)) {
-                console.error('❌ Invalid Supabase URL format:', this.credentials.supabaseUrl);
+                console.error('Invalid Supabase URL format:', this.credentials.supabaseUrl);
                 return false;
             }
 
             if (!this.validateApiKey(this.credentials.apiKey)) {
-                console.error('❌ Invalid API key format - key appears to be too short or invalid');
+                console.error('Invalid API key format');
                 return false;
             }
 
@@ -127,27 +124,17 @@ export class SupabaseDatabaseProvider {
             this.baseUrl = this.credentials.supabaseUrl;
             this.apiKey = this.credentials.apiKey;
 
-            console.log('🔗 Testing Supabase connection...');
-
             // Test connection and ensure schema
             await this.ensureSchema();
 
             this.isInitialized = true;
             this.isConnected = true;
 
-            console.log('✅ Supabase provider initialized successfully');
             return true;
         } catch (error) {
-            console.error('❌ Failed to initialize Supabase provider:', error.message);
+            console.error('Failed to initialize Supabase provider:', error.message);
             this.isInitialized = false;
             this.isConnected = false;
-
-            if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-                console.error('💡 Check: Supabase URL, API key permissions, and extension host permissions');
-            } else if (error.message.includes('Database table does not exist')) {
-                console.error('💡 Create the database table using the SQL in ensureSchema() method');
-            }
-
             return false;
         }
     }
@@ -179,11 +166,10 @@ export class SupabaseDatabaseProvider {
         try {
             const response = await this.makeRequest('GET', `/${this.tableName}?select=count&limit=1`);
             if (response.ok) {
-                console.log('✅ Database table exists and is accessible');
                 return;
             }
 
-            console.error('❌ Table does not exist. Create it with this SQL:');
+            console.error('Table does not exist. Create it with this SQL:');
             console.error(`CREATE TABLE IF NOT EXISTS ${this.tableName} (
   str_ident VARCHAR(255) PRIMARY KEY,
   int_timestamp BIGINT NOT NULL,
@@ -207,7 +193,6 @@ export class SupabaseDatabaseProvider {
         } catch (error) {
             if (retries > 0 && this.isRetryableError(error)) {
                 const delay = Math.min(this.retryDelay * Math.pow(2, attempt - 1), 10000);
-                console.log(`🔄 Retrying in ${delay}ms... (${retries} attempts left)`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 return this.retryRequest(requestFn, retries - 1, attempt + 1);
             }
@@ -265,29 +250,11 @@ export class SupabaseDatabaseProvider {
 
                 if (!response.ok) {
                     const errorText = await response.text();
-
-                    if (response.status === 401) {
-                        console.error('❌ Supabase Authentication failed - check your API key');
-                    } else if (response.status === 403) {
-                        console.error('❌ Supabase Access forbidden - check API key permissions');
-                    } else if (response.status === 429) {
-                        console.error('❌ Supabase Rate limit exceeded - wait before retrying');
-                    } else if (response.status >= 500) {
-                        console.error('❌ Supabase Server error - check Supabase status');
-                    }
-
                     throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
                 }
 
                 return response;
             } catch (error) {
-                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-                    console.error('❌ Network error - check CORS, URL, and connectivity');
-                } else if (error.name === 'AbortError' || error.message.includes('timeout')) {
-                    console.error('❌ Request timed out - check network and Supabase status');
-                } else {
-                    console.error('❌ Request failed:', error.message);
-                }
                 throw error;
             }
         };

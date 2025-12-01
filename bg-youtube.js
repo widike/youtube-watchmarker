@@ -1,40 +1,152 @@
-import {
-    decodeHtmlEntitiesAndFixEncoding,
-    isValidVideoTitle
-} from "./utils.js";
+import { decodeHtmlEntitiesAndFixEncoding } from "./text-utils.js";
+import { isValidVideoTitle } from "./validation.js";
 import { TIMEOUTS } from "./constants.js";
 import { logger } from "./logger.js";
 
-export const Youtube = {
-    init: function (objRequest = {}, funcResponse = null) {
-        try {
-            // Initialization complete - messaging is now handled by message router
-            logger.debug('YouTube module initialized');
-            if (funcResponse) funcResponse({});
-        } catch (error) {
-            logger.error('Failed to initialize YouTube module:', error);
-            if (funcResponse) funcResponse(null);
+/**
+ * YouTube management class
+ * Handles YouTube history sync, liked videos, and video operations
+ */
+export class YoutubeManager {
+    constructor() {
+        this.isInitialized = false;
+    }
+
+    /**
+     * Initialize the YouTube module
+     * @returns {Promise<void>}
+     */
+    async init() {
+        if (this.isInitialized) {
+            return;
         }
-    },
 
-    synchronize: async function (objRequest, funcResponse, funcProgress) {
+        this.isInitialized = true;
+        logger.debug('YouTube module initialized');
+    }
+
+    /**
+     * Get the current database provider
+     * @returns {Object} Database provider
+     * @throws {Error} If provider is not available
+     */
+    getProvider() {
+        const extensionManager = globalThis.extensionManager;
+        if (!extensionManager || !extensionManager.providerFactory) {
+            throw new Error("Database provider factory not available");
+        }
+
+        const currentProvider = extensionManager.providerFactory.getCurrentProvider();
+        if (!currentProvider) {
+            throw new Error("No current database provider available");
+        }
+
+        return currentProvider;
+    }
+
+    /**
+     * Helper function to safely extract nested property
+     * @param {Object} obj - Source object
+     * @param {string} path - Dot-separated path
+     * @returns {*} Value at path or null
+     */
+    getNestedProperty(obj, path) {
+        return path.split('.').reduce((current, key) => {
+            return current && current[key] !== undefined ? current[key] : null;
+        }, obj);
+    }
+
+    /**
+     * Extract video title from various YouTube data structures
+     * @param {Object} videoRenderer - Video renderer object
+     * @returns {string|null} Extracted title or null
+     */
+    extractVideoTitle(videoRenderer) {
+        const titlePaths = [
+            'title.runs.0.text',
+            'title.simpleText',
+            'title.text',
+            'headline.runs.0.text',
+            'headline.simpleText',
+            'longBylineText.runs.0.text',
+            'shortBylineText.runs.0.text',
+            'accessibility.accessibilityData.label'
+        ];
+
+        for (const path of titlePaths) {
+            const title = this.getNestedProperty(videoRenderer, path);
+            if (title && typeof title === 'string' && title.trim()) {
+                let cleanTitle = title.trim();
+                cleanTitle = cleanTitle.replace(/\s+by\s+[^,]*$/i, '').trim();
+                cleanTitle = cleanTitle.replace(/\s*-\s*YouTube\s*$/i, '').trim();
+                return cleanTitle;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract videos from YouTube contents array
+     * @param {Array} contents - Contents array from YouTube data
+     * @returns {Array} Array of video objects
+     */
+    extractVideosFromContents(contents) {
+        const videos = [];
+        if (contents && Array.isArray(contents)) {
+            for (const section of contents) {
+                const items = this.getNestedProperty(section, 'itemSectionRenderer.contents');
+                if (items && Array.isArray(items)) {
+                    for (const item of items) {
+                        // Try lockupViewModel format first (new format)
+                        const lockupViewModel = item.lockupViewModel;
+                        if (lockupViewModel) {
+                            const contentId = lockupViewModel.contentId;
+                            const metadata = lockupViewModel.metadata?.lockupMetadataViewModel;
+                            const title = metadata?.title?.content || metadata?.title?.text;
+
+                            if (contentId && contentId.length === 11 && title) {
+                                videos.push({
+                                    strIdent: contentId,
+                                    intTimestamp: Date.now(),
+                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
+                                    intCount: 1,
+                                });
+                                continue;
+                            }
+                        }
+
+                        // Fallback to videoRenderer format (old format)
+                        const videoRenderer = item.videoRenderer;
+                        if (videoRenderer && videoRenderer.videoId) {
+                            const videoId = videoRenderer.videoId;
+                            const title = this.extractVideoTitle(videoRenderer);
+
+                            if (videoId && videoId.length === 11 && title) {
+                                videos.push({
+                                    strIdent: videoId,
+                                    intTimestamp: Date.now(),
+                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
+                                    intCount: 1,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return videos;
+    }
+
+    /**
+     * Synchronize YouTube watch history
+     * @param {Function} [onProgress] - Optional progress callback
+     * @returns {Promise<Object>} Synchronization result
+     */
+    async synchronize(onProgress = null) {
         try {
-            // Get the database provider factory
-            const extensionManager = globalThis.extensionManager;
-            if (!extensionManager || !extensionManager.providerFactory) {
-                console.error("Database provider factory not available");
-                funcResponse(null);
-                return;
-            }
-
-            const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-            if (!currentProvider) {
-                console.error("No current database provider available");
-                funcResponse(null);
-                return;
-            }
-
-            console.log("Starting YouTube history sync (single page only)...");
+            const currentProvider = this.getProvider();
+            logger.info("Starting YouTube history sync (single page only)...");
 
             let objVideos = [];
 
@@ -51,92 +163,7 @@ export const Youtube = {
                 .replaceAll("\r", "")
                 .replaceAll("\n", "");
 
-            // Helper function to decode HTML entities (replaced with enhanced version from utils.js)
-            const decodeHtmlEntities = decodeHtmlEntitiesAndFixEncoding;
-
-            // Helper function to safely extract nested property
-            const getNestedProperty = (obj, path) => {
-                return path.split('.').reduce((current, key) => {
-                    return current && current[key] !== undefined ? current[key] : null;
-                }, obj);
-            };
-
-            // Helper function to find video title from various locations
-            const extractVideoTitle = (videoRenderer) => {
-                const titlePaths = [
-                    'title.runs.0.text',
-                    'title.simpleText',
-                    'title.text',
-                    'headline.runs.0.text',
-                    'headline.simpleText',
-                    'longBylineText.runs.0.text',
-                    'shortBylineText.runs.0.text',
-                    'accessibility.accessibilityData.label'
-                ];
-
-                for (const path of titlePaths) {
-                    const title = getNestedProperty(videoRenderer, path);
-                    if (title && typeof title === 'string' && title.trim()) {
-                        let cleanTitle = title.trim();
-                        cleanTitle = cleanTitle.replace(/\s+by\s+[^,]*$/i, '').trim();
-                        cleanTitle = cleanTitle.replace(/\s*-\s*YouTube\s*$/i, '').trim();
-                        return cleanTitle;
-                    }
-                }
-
-                return null;
-            };
-
-            // Helper function to extract videos from contents array (NEW FORMAT)
-            const extractVideosFromContents = (contents) => {
-                const videos = [];
-                if (contents && Array.isArray(contents)) {
-                    for (const section of contents) {
-                        const items = getNestedProperty(section, 'itemSectionRenderer.contents');
-                        if (items && Array.isArray(items)) {
-                            for (const item of items) {
-                                // NEW: Try lockupViewModel format first
-                                const lockupViewModel = item.lockupViewModel;
-                                if (lockupViewModel) {
-                                    const contentId = lockupViewModel.contentId;
-                                    const metadata = lockupViewModel.metadata?.lockupMetadataViewModel;
-                                    const title = metadata?.title?.content || metadata?.title?.text;
-
-                                    if (contentId && contentId.length === 11 && title) {
-                                        videos.push({
-                                            strIdent: contentId,
-                                            intTimestamp: Date.now(),
-                                            strTitle: decodeHtmlEntities(title),
-                                            intCount: 1,
-                                        });
-                                        continue;
-                                    }
-                                }
-
-                                // OLD: Fallback to videoRenderer format
-                                const videoRenderer = item.videoRenderer;
-                                if (videoRenderer && videoRenderer.videoId) {
-                                    const videoId = videoRenderer.videoId;
-                                    const title = extractVideoTitle(videoRenderer);
-
-                                    if (videoId && videoId.length === 11 && title) {
-                                        videos.push({
-                                            strIdent: videoId,
-                                            intTimestamp: Date.now(),
-                                            strTitle: decodeHtmlEntities(title),
-                                            intCount: 1,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                return videos;
-            };
-
             try {
-
                 // Try to find and parse the main data structure
                 const dataRegex = /var\s+ytInitialData\s*=\s*({.+?});/s;
                 const dataMatch = responseText.match(dataRegex);
@@ -146,20 +173,18 @@ export const Youtube = {
                         const ytInitialData = JSON.parse(dataMatch[1]);
 
                         // Navigate through the YouTube data structure
-                        const contents = getNestedProperty(ytInitialData, 'contents.twoColumnBrowseResultsRenderer.tabs.0.tabRenderer.content.sectionListRenderer.contents');
+                        const contents = this.getNestedProperty(ytInitialData, 'contents.twoColumnBrowseResultsRenderer.tabs.0.tabRenderer.content.sectionListRenderer.contents');
 
                         // Extract videos from first page
-                        const pageVideos = extractVideosFromContents(contents);
+                        const pageVideos = this.extractVideosFromContents(contents);
                         objVideos.push(...pageVideos);
                     } catch (jsonError) {
-                        console.warn("Failed to parse ytInitialData:", jsonError);
+                        logger.warn("Failed to parse ytInitialData:", jsonError);
                     }
                 }
 
                 // Fallback: Parse new yt-lockup-view-model format from HTML
                 if (objVideos.length === 0) {
-
-                    // Match yt-lockup-view-model elements with content-id
                     const lockupRegex = /<yt-lockup-view-model[^>]*>[\s\S]*?content-id-([a-zA-Z0-9_-]{11})[\s\S]*?<\/yt-lockup-view-model>/g;
                     let lockupMatch;
 
@@ -182,12 +207,12 @@ export const Youtube = {
                                 objVideos.push({
                                     strIdent: videoId,
                                     intTimestamp: Date.now(),
-                                    strTitle: decodeHtmlEntities(title),
+                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
                                     intCount: 1,
                                 });
                             }
                         } catch (error) {
-                            console.warn("Error parsing yt-lockup-view-model:", error);
+                            logger.warn("Error parsing yt-lockup-view-model:", error);
                         }
                     }
                 }
@@ -227,27 +252,21 @@ export const Youtube = {
                                 objVideos.push({
                                     strIdent: videoId,
                                     intTimestamp: Date.now(),
-                                    strTitle: decodeHtmlEntities(title),
+                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
                                     intCount: 1,
                                 });
                             }
                         } catch (error) {
-                            console.warn("Error parsing video renderer:", error);
+                            logger.warn("Error parsing video renderer:", error);
                         }
                     }
                 }
-
             } catch (error) {
-                console.error("Error in YouTube history parsing:", JSON.stringify({
-                    error: error.message,
-                    errorName: error.name,
-                    errorStack: error.stack
-                }, null, 2));
+                logger.error("Error in YouTube history parsing:", error);
             }
 
             // Store videos in the current provider
             let processedCount = 0;
-            let updatedCount = 0;
             let skippedCount = 0;
 
             for (const video of objVideos) {
@@ -255,30 +274,23 @@ export const Youtube = {
                     // Check if video already exists
                     const existingVideo = await currentProvider.getVideo(video.strIdent);
 
-                    let videoToStore;
                     if (existingVideo) {
                         skippedCount++;
                         continue;
                     }
-                    // Create new video record
-                    videoToStore = video;
 
-                    await currentProvider.putVideo(videoToStore);
+                    // Store new video
+                    await currentProvider.putVideo(video);
                     processedCount++;
 
                     // Report progress every 10 videos
-                    if (processedCount % 10 === 0 && funcProgress) {
-                        funcProgress({
+                    if (processedCount % 10 === 0 && onProgress) {
+                        onProgress({
                             strProgress: `processed ${processedCount} YouTube videos`,
                         });
                     }
                 } catch (error) {
-                    console.error(`Error storing video ${video.strIdent}:`, JSON.stringify({
-                        error: error.message,
-                        errorName: error.name,
-                        errorStack: error.stack,
-                        videoId: video.strIdent
-                    }, null, 2));
+                    logger.error(`Error storing video ${video.strIdent}:`, error);
                 }
             }
 
@@ -291,39 +303,26 @@ export const Youtube = {
                 skippedCount: skippedCount
             };
 
-            console.log(`YouTube sync completed: Found ${objVideos.length} total videos, ${processedCount} new added, ${skippedCount} already in database`);
-            funcResponse(result);
+            logger.info(`YouTube sync completed: Found ${objVideos.length} total videos, ${processedCount} new added, ${skippedCount} already in database`);
+            return result;
 
         } catch (error) {
-            console.error("YouTube synchronization error:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            funcResponse(null);
+            logger.error("YouTube synchronization error:", error);
+            throw error;
         }
-    },
+    }
 
-    synchronizeLikedVideos: async function (objRequest, funcResponse, funcProgress) {
+    /**
+     * Synchronize YouTube liked videos
+     * @param {Function} [onProgress] - Optional progress callback
+     * @returns {Promise<Object>} Synchronization result
+     */
+    async synchronizeLikedVideos(onProgress = null) {
         try {
-            // Get the database provider factory
-            const extensionManager = globalThis.extensionManager;
-            if (!extensionManager || !extensionManager.providerFactory) {
-                console.error("Database provider factory not available");
-                funcResponse(null);
-                return;
-            }
+            const currentProvider = this.getProvider();
+            logger.info("Starting YouTube liked videos sync (single page only)...");
 
-            const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-            if (!currentProvider) {
-                console.error("No current database provider available");
-                funcResponse(null);
-                return;
-            }
-
-            console.log("Starting YouTube liked videos sync (single page only)...");
-
-            // Fetch YouTube liked videos page (no pagination)
+            // Fetch YouTube liked videos page
             const response = await fetch("https://www.youtube.com/playlist?list=LL");
 
             if (!response.ok) {
@@ -339,114 +338,51 @@ export const Youtube = {
             let objVideos = [];
 
             try {
-                // Helper function to decode HTML entities (replaced with enhanced version from utils.js)
-                const decodeHtmlEntities = decodeHtmlEntitiesAndFixEncoding;
-
                 // Extract liked videos with detailed regex (with date)
                 const objVideoWithDate = new RegExp(
                     '"playlistVideoRenderer":[^"]*"videoId":[^"]*"([^"]{11})"' + // videoId
                     '.*?"title":[^"]*"runs":[^"]*"text":[^"]*"([^"]*)"' + // title
                     '.*?"videoSecondaryInfoRenderer".*?"dateText":[^"]*"simpleText":[^"]*"([^"]*)"', // dateAdded
-                    "g",
+                    "g"
                 );
 
-                // Fallback regex if the first one doesn't match (without date)
-                const objVideoFallback = new RegExp(
-                    '"playlistVideoRenderer":[^"]*"videoId":[^"]*"([^"]{11})"' + // videoId
-                    '.*?"title":[^"]*"runs":[^"]*"text":[^"]*"([^"]*)"', // title
-                    "g",
-                );
-
-                let strRegex;
-
-                // Try to extract videos with date information
-                while ((strRegex = objVideoWithDate.exec(cleanedText)) !== null) {
-                    let strIdent = strRegex[1];
-                    let strTitle = strRegex[2];
-                    let strDateAdded = strRegex[3];
-
-                    // Decode HTML entities in title
-                    strTitle = decodeHtmlEntities(strTitle);
-
-                    // Try to parse the date added, fallback to current time
-                    let intTimestamp = Date.now();
-                    if (strDateAdded) {
-                        // Try to parse relative time like "2 days ago", "1 week ago", etc.
-                        const timeMatch = strDateAdded.match(/(\d+)\s+(second|minute|hour|day|week|month|year)s?\s+ago/i);
-                        if (timeMatch) {
-                            const amount = parseInt(timeMatch[1]);
-                            const unit = timeMatch[2].toLowerCase();
-                            const now = new Date();
-
-                            switch (unit) {
-                                case 'second':
-                                    intTimestamp = now.getTime() - (amount * 1000);
-                                    break;
-                                case 'minute':
-                                    intTimestamp = now.getTime() - (amount * 60 * 1000);
-                                    break;
-                                case 'hour':
-                                    intTimestamp = now.getTime() - (amount * 60 * 60 * 1000);
-                                    break;
-                                case 'day':
-                                    intTimestamp = now.getTime() - (amount * 24 * 60 * 60 * 1000);
-                                    break;
-                                case 'week':
-                                    intTimestamp = now.getTime() - (amount * 7 * 24 * 60 * 60 * 1000);
-                                    break;
-                                case 'month':
-                                    intTimestamp = now.getTime() - (amount * 30 * 24 * 60 * 60 * 1000);
-                                    break;
-                                case 'year':
-                                    intTimestamp = now.getTime() - (amount * 365 * 24 * 60 * 60 * 1000);
-                                    break;
-                            }
-                        } else {
-                            // Try to parse absolute date formats like "Dec 15, 2023"
-                            const parsedDate = new Date(strDateAdded);
-                            if (!isNaN(parsedDate.getTime())) {
-                                intTimestamp = parsedDate.getTime();
-                            }
-                        }
-                    }
-
-                    objVideos.push({
-                        strIdent: strIdent,
-                        intTimestamp: intTimestamp,
-                        strTitle: strTitle,
-                        intCount: 1, // Set count to 1 for liked videos
-                    });
-                }
-
-                // If no videos found with the detailed regex, try the fallback
-                if (objVideos.length === 0) {
-                    while ((strRegex = objVideoFallback.exec(cleanedText)) !== null) {
-                        let strIdent = strRegex[1];
-                        let strTitle = strRegex[2];
-
-                        // Decode HTML entities in title
-                        strTitle = decodeHtmlEntities(strTitle);
-
+                let objMatch;
+                while ((objMatch = objVideoWithDate.exec(cleanedText)) !== null) {
+                    if (objMatch[1] && objMatch[2]) {
                         objVideos.push({
-                            strIdent: strIdent,
-                            intTimestamp: Date.now(), // Use current timestamp as fallback
-                            strTitle: strTitle,
-                            intCount: 1, // Set count to 1 for liked videos
+                            strIdent: objMatch[1],
+                            intTimestamp: Date.now(),
+                            strTitle: decodeHtmlEntitiesAndFixEncoding(objMatch[2]),
+                            intCount: 1,
                         });
                     }
                 }
 
+                // Fallback: Simpler pattern without date
+                if (objVideos.length === 0) {
+                    const objVideoSimple = new RegExp(
+                        '"playlistVideoRenderer":[^"]*"videoId":[^"]*"([^"]{11})"' + // videoId
+                        '.*?"title":[^"]*"runs":[^"]*"text":[^"]*"([^"]*)"', // title
+                        "g"
+                    );
+
+                    while ((objMatch = objVideoSimple.exec(cleanedText)) !== null) {
+                        if (objMatch[1] && objMatch[2]) {
+                            objVideos.push({
+                                strIdent: objMatch[1],
+                                intTimestamp: Date.now(),
+                                strTitle: decodeHtmlEntitiesAndFixEncoding(objMatch[2]),
+                                intCount: 1,
+                            });
+                        }
+                    }
+                }
             } catch (error) {
-                console.error("Error in YouTube liked videos parsing:", JSON.stringify({
-                    error: error.message,
-                    errorName: error.name,
-                    errorStack: error.stack
-                }, null, 2));
+                logger.error("Error in liked videos parsing:", error);
             }
 
             // Store videos in the current provider
             let processedCount = 0;
-            let updatedCount = 0;
             let skippedCount = 0;
 
             for (const video of objVideos) {
@@ -454,30 +390,23 @@ export const Youtube = {
                     // Check if video already exists
                     const existingVideo = await currentProvider.getVideo(video.strIdent);
 
-                    let videoToStore;
                     if (existingVideo) {
                         skippedCount++;
                         continue;
                     }
-                    // Create new video record
-                    videoToStore = video;
 
-                    await currentProvider.putVideo(videoToStore);
+                    // Store new video
+                    await currentProvider.putVideo(video);
                     processedCount++;
 
                     // Report progress every 10 videos
-                    if (processedCount % 10 === 0 && funcProgress) {
-                        funcProgress({
+                    if (processedCount % 10 === 0 && onProgress) {
+                        onProgress({
                             strProgress: `processed ${processedCount} liked videos`,
                         });
                     }
                 } catch (error) {
-                    console.error(`Error storing liked video ${video.strIdent}:`, JSON.stringify({
-                        error: error.message,
-                        errorName: error.name,
-                        errorStack: error.stack,
-                        videoId: video.strIdent
-                    }, null, 2));
+                    logger.error(`Error storing video ${video.strIdent}:`, error);
                 }
             }
 
@@ -485,98 +414,86 @@ export const Youtube = {
             const result = {
                 objVideos: objVideos,
                 videoCount: processedCount,
-                updatedCount: 0,
                 newCount: processedCount,
                 skippedCount: skippedCount
             };
 
-            console.log(`YouTube liked videos sync completed: ${processedCount} videos processed (${processedCount} new, ${skippedCount} skipped)`);
-            funcResponse(result);
+            logger.info(`Liked videos sync completed: Found ${objVideos.length} total videos, ${processedCount} new added, ${skippedCount} already in database`);
+            return result;
 
         } catch (error) {
-            console.error("YouTube liked videos synchronization error:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            funcResponse(null);
+            logger.error("Liked videos synchronization error:", error);
+            throw error;
         }
-    },
+    }
 
-    lookup: async function (objRequest, funcResponse) {
+    /**
+     * Look up a video in the database
+     * @param {string} videoId - Video ID to look up
+     * @returns {Promise<Object|null>} Video object or null if not found
+     */
+    async lookup(videoId) {
         try {
-            // Use the database provider factory instead of direct IndexedDB access
-            const extensionManager = globalThis.extensionManager;
-            if (!extensionManager || !extensionManager.providerFactory) {
-                console.error("Database provider factory not available");
-                funcResponse(null);
-                return;
+            // Validate video ID
+            if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+                throw new Error(`Invalid video ID: ${videoId}`);
             }
 
-            const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-            if (!currentProvider) {
-                console.error("No current database provider available");
-                funcResponse(null);
-                return;
-            }
+            const currentProvider = this.getProvider();
 
             // Get the specific video from the current provider
-            const video = await currentProvider.getVideo(objRequest.strIdent);
+            const video = await currentProvider.getVideo(videoId);
 
             if (video) {
-                funcResponse({
+                return {
                     strIdent: video.strIdent,
                     intTimestamp: video.intTimestamp || Date.now(),
                     strTitle: video.strTitle || "",
                     intCount: video.intCount || 1,
-                });
-            } else {
-                funcResponse(null);
+                };
             }
+
+            return null;
 
         } catch (error) {
-            console.error("YouTube lookup error:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            funcResponse(null);
+            logger.error("YouTube lookup error:", error);
+            throw error;
         }
-    },
+    }
 
-    ensure: async function (objRequest, funcResponse) {
+    /**
+     * Ensure a video exists in the database
+     * @param {string} videoId - Video ID
+     * @param {string} [title] - Video title
+     * @param {number} [timestamp] - Timestamp
+     * @param {number} [count] - View count
+     * @returns {Promise<Object>} Video object
+     */
+    async ensure(videoId, title = "", timestamp = null, count = null) {
         try {
-            // Use the database provider factory instead of direct IndexedDB access
-            const extensionManager = globalThis.extensionManager;
-            if (!extensionManager || !extensionManager.providerFactory) {
-                console.error("Database provider factory not available");
-                funcResponse(null);
-                return;
+            // Validate video ID
+            if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+                throw new Error(`Invalid video ID: ${videoId}`);
             }
 
-            const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-            if (!currentProvider) {
-                console.error("No current database provider available");
-                funcResponse(null);
-                return;
-            }
+            const currentProvider = this.getProvider();
 
             // Check if video already exists in the database
-            const existingVideo = await currentProvider.getVideo(objRequest.strIdent);
+            const existingVideo = await currentProvider.getVideo(videoId);
 
             let videoToReturn;
             if (existingVideo) {
                 // Prefer valid titles when updating existing videos
                 let titleToUse = existingVideo.strTitle || "";
-                if (objRequest.strTitle && isValidVideoTitle(objRequest.strTitle)) {
-                    titleToUse = objRequest.strTitle;
-                } else if (!isValidVideoTitle(titleToUse) && objRequest.strTitle) {
+                if (title && isValidVideoTitle(title)) {
+                    titleToUse = title;
+                } else if (!isValidVideoTitle(titleToUse) && title) {
                     // If existing title is invalid but new title exists, use new title
-                    titleToUse = objRequest.strTitle;
+                    titleToUse = title;
                 }
 
                 // Return existing video data with potentially updated title
-                console.debug("Returning existing video data for:", objRequest.strIdent);
+                logger.debug("Returning existing video data for:", videoId);
                 videoToReturn = {
                     strIdent: existingVideo.strIdent,
                     intTimestamp: existingVideo.intTimestamp,
@@ -590,14 +507,14 @@ export const Youtube = {
                 }
             } else {
                 // Create new video entry only with valid titles
-                const titleToUse = objRequest.strTitle && isValidVideoTitle(objRequest.strTitle) ? objRequest.strTitle : "";
+                const titleToUse = title && isValidVideoTitle(title) ? title : "";
 
-                console.debug("Creating new video entry for:", objRequest.strIdent);
+                logger.debug("Creating new video entry for:", videoId);
                 const newVideo = {
-                    strIdent: objRequest.strIdent,
-                    intTimestamp: objRequest.intTimestamp || Date.now(),
+                    strIdent: videoId,
+                    intTimestamp: timestamp || Date.now(),
                     strTitle: titleToUse,
-                    intCount: objRequest.intCount || 1,
+                    intCount: count || 1,
                 };
 
                 // Store the new video in the current provider
@@ -605,37 +522,33 @@ export const Youtube = {
                 videoToReturn = newVideo;
             }
 
-            funcResponse(videoToReturn);
+            return videoToReturn;
 
         } catch (error) {
-            console.error("YouTube ensure error:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            funcResponse(null);
+            logger.error("YouTube ensure error:", error);
+            throw error;
         }
-    },
+    }
 
-    mark: async function (objRequest, funcResponse) {
+    /**
+     * Mark a video as watched
+     * @param {string} videoId - Video ID
+     * @param {string} [title] - Video title
+     * @param {number} [timestamp] - Timestamp
+     * @param {number} [count] - View count
+     * @returns {Promise<Object>} Video object
+     */
+    async mark(videoId, title = "", timestamp = null, count = null) {
         try {
-            // Use the database provider factory instead of direct IndexedDB access
-            const extensionManager = globalThis.extensionManager;
-            if (!extensionManager || !extensionManager.providerFactory) {
-                console.error("Database provider factory not available");
-                funcResponse(null);
-                return;
+            // Validate video ID
+            if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+                throw new Error(`Invalid video ID: ${videoId}`);
             }
 
-            const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-            if (!currentProvider) {
-                console.error("No current database provider available");
-                funcResponse(null);
-                return;
-            }
+            const currentProvider = this.getProvider();
 
             // Check if video already exists in the database
-            const existingVideo = await currentProvider.getVideo(objRequest.strIdent);
+            const existingVideo = await currentProvider.getVideo(videoId);
             const currentTime = Date.now();
 
             let videoToStore;
@@ -649,43 +562,42 @@ export const Youtube = {
 
                 // Prefer valid titles over invalid ones
                 let titleToUse = existingVideo.strTitle || "";
-                if (objRequest.strTitle && isValidVideoTitle(objRequest.strTitle)) {
-                    titleToUse = objRequest.strTitle;
-                } else if (!isValidVideoTitle(titleToUse) && objRequest.strTitle) {
+                if (title && isValidVideoTitle(title)) {
+                    titleToUse = title;
+                } else if (!isValidVideoTitle(titleToUse) && title) {
                     // If existing title is invalid but new title exists, use new title even if not ideal
-                    titleToUse = objRequest.strTitle;
+                    titleToUse = title;
                 }
 
                 videoToStore = {
                     strIdent: existingVideo.strIdent,
-                    intTimestamp: objRequest.intTimestamp || currentTime,
+                    intTimestamp: timestamp || currentTime,
                     strTitle: titleToUse,
                     intCount: shouldIncrementCount ? (existingVideo.intCount + 1 || 1) : (existingVideo.intCount || 1),
                 };
             } else {
                 // Create new video entry only if title is valid or no title is provided
-                const titleToUse = objRequest.strTitle && isValidVideoTitle(objRequest.strTitle) ? objRequest.strTitle : "";
+                const titleToUse = title && isValidVideoTitle(title) ? title : "";
 
                 videoToStore = {
-                    strIdent: objRequest.strIdent,
-                    intTimestamp: objRequest.intTimestamp || currentTime,
+                    strIdent: videoId,
+                    intTimestamp: timestamp || currentTime,
                     strTitle: titleToUse,
-                    intCount: objRequest.intCount || 1,
+                    intCount: count || 1,
                 };
             }
 
             // Store the video in the current provider
             await currentProvider.putVideo(videoToStore);
 
-            funcResponse(videoToStore);
+            return videoToStore;
 
         } catch (error) {
-            console.error("YouTube mark error:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            funcResponse(null);
+            logger.error("YouTube mark error:", error);
+            throw error;
         }
-    },
-};
+    }
+}
+
+// Global instance
+export const Youtube = new YoutubeManager();

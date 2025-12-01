@@ -1,4 +1,9 @@
-// Error handling system - no imports needed from constants currently
+/**
+ * Error handling system for YouTube Watchmarker
+ * Simplified to essential error types with integrated logging
+ */
+
+import { logger } from './logger.js';
 
 /**
  * Custom error types for the YouTube Watchmarker extension
@@ -31,51 +36,8 @@ export class ValidationError extends ExtensionError {
     }
 }
 
-export class SyncError extends ExtensionError {
-    constructor(message, details = {}) {
-        super(message, 'SYNC_ERROR', details);
-    }
-}
-
-export class ProviderError extends ExtensionError {
-    constructor(message, details = {}) {
-        super(message, 'PROVIDER_ERROR', details);
-    }
-}
-
-/**
- * @typedef {Object} ErrorEntry
- * @property {string} timestamp - ISO timestamp of when error occurred
- * @property {string} message - Error message
- * @property {string} code - Error code
- * @property {string} stack - Error stack trace
- * @property {Object} context - Additional context information
- * @property {string} type - Error type/class name
- */
-
-/**
- * @typedef {Object} ErrorStatistics
- * @property {number} totalErrors - Total number of errors logged
- * @property {Object.<string, number>} errorsByType - Count of errors by type
- * @property {Object.<string, number>} errorsByCode - Count of errors by code
- * @property {ErrorEntry[]} recentErrors - Recent error entries
- */
-
 /**
  * Centralized error handler for the extension
- * 
- * @class ErrorHandler
- * @description Provides centralized error handling, logging, and reporting
- * @version 1.0.0
- * 
- * @example
- * import { errorHandler } from './error-handler.js';
- * 
- * try {
- *   // Some operation
- * } catch (error) {
- *   errorHandler.handle(error, { operation: 'database-sync' });
- * }
  */
 export class ErrorHandler {
     constructor() {
@@ -88,17 +50,7 @@ export class ErrorHandler {
      * @param {Error} error - The error to handle
      * @param {Object} [context={}] - Additional context information
      * @param {boolean} [shouldThrow=false] - Whether to re-throw the error
-     * @returns {ErrorEntry} The created error entry
-     * 
-     * @example
-     * try {
-     *   await someAsyncOperation();
-     * } catch (error) {
-     *   errorHandler.handle(error, { 
-     *     operation: 'sync', 
-     *     userId: 'user123' 
-     *   });
-     * }
+     * @returns {Object} The created error entry
      */
     handle(error, context = {}, shouldThrow = false) {
         const errorEntry = {
@@ -116,11 +68,8 @@ export class ErrorHandler {
             this.errorLog.pop();
         }
 
-        // Log to console with appropriate level
+        // Log using the logger
         this.logError(error, context);
-
-        // Send to background analytics if configured
-        this.reportError(errorEntry);
 
         if (shouldThrow) {
             throw error;
@@ -130,66 +79,19 @@ export class ErrorHandler {
     }
 
     /**
-     * Log error to console with appropriate level
+     * Log error with appropriate level
      * @param {Error} error - The error to log
      * @param {Object} context - Additional context
      */
     logError(error, context) {
-        const logMessage = `[${error.constructor.name}] ${error.message}`;
+        const logMessage = `${error.constructor.name}: ${error.message}`;
 
         if (error instanceof ValidationError) {
-            console.warn(logMessage, { error, context });
-        } else if (error instanceof NetworkError) {
-            console.error(logMessage, JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack,
-                context: context
-            }, null, 2));
-        } else if (error instanceof DatabaseError) {
-            console.error(logMessage, JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack,
-                context: context
-            }, null, 2));
-        } else if (error instanceof SyncError) {
-            console.warn(logMessage, { error, context });
+            logger.warn(logMessage, context);
+        } else if (error instanceof NetworkError || error instanceof DatabaseError) {
+            logger.error(logMessage, { context, stack: error.stack });
         } else {
-            console.error(logMessage, JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack,
-                context: context
-            }, null, 2));
-        }
-    }
-
-    /**
-     * Report error to analytics/monitoring service
-     * @param {Object} errorEntry - The error entry to report
-     */
-    reportError(errorEntry) {
-        // In a real implementation, this could send to analytics
-        // For now, we'll just store it locally
-        try {
-            chrome.storage.local.get(['errorReports'], (result) => {
-                const reports = result.errorReports || [];
-                reports.unshift(errorEntry);
-
-                // Keep only last 50 error reports
-                if (reports.length > 50) {
-                    reports.splice(50);
-                }
-
-                chrome.storage.local.set({ errorReports: reports });
-            });
-        } catch (storageError) {
-            console.error('Failed to store error report:', JSON.stringify({
-                error: storageError.message,
-                errorName: storageError.name,
-                errorStack: storageError.stack
-            }, null, 2));
+            logger.error(logMessage, { context, stack: error.stack });
         }
     }
 
@@ -214,30 +116,6 @@ export class ErrorHandler {
     }
 
     /**
-     * Create a safe wrapper for callback-style functions
-     * @param {Function} fn - The function to wrap
-     * @returns {Function} Wrapped function
-     */
-    wrapCallback(fn) {
-        return (...args) => {
-            try {
-                return fn(...args);
-            } catch (error) {
-                this.handle(error, {
-                    function: fn.name,
-                    arguments: args.map(arg => typeof arg === 'object' ? '[Object]' : arg)
-                });
-
-                // If last argument is a callback, call it with error
-                const lastArg = args[args.length - 1];
-                if (typeof lastArg === 'function') {
-                    lastArg(null);
-                }
-            }
-        };
-    }
-
-    /**
      * Validate required parameters
      * @param {Object} params - Parameters to validate
      * @param {Array} required - Required parameter names
@@ -250,7 +128,8 @@ export class ErrorHandler {
 
         if (missing.length > 0) {
             throw new ValidationError(
-                `Missing required parameters: ${missing.join(', ')}`, { missing, provided: Object.keys(params) }
+                `Missing required parameters: ${missing.join(', ')}`,
+                { missing, provided: Object.keys(params) }
             );
         }
     }
@@ -267,31 +146,10 @@ export class ErrorHandler {
 
         if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
             throw new ValidationError(
-                'Invalid video ID format', { videoId, expected: '11 character alphanumeric string' }
+                'Invalid video ID format',
+                { videoId, expected: '11 character alphanumeric string' }
             );
         }
-    }
-
-    /**
-     * Get recent error reports
-     * @param {number} limit - Maximum number of reports to return
-     * @returns {Promise<Array>} Recent error reports
-     */
-    async getRecentErrors(limit = 10) {
-        return new Promise((resolve) => {
-            chrome.storage.local.get(['errorReports'], (result) => {
-                const reports = result.errorReports || [];
-                resolve(reports.slice(0, limit));
-            });
-        });
-    }
-
-    /**
-     * Clear error logs
-     */
-    clearLogs() {
-        this.errorLog = [];
-        chrome.storage.local.remove(['errorReports']);
     }
 
     /**
@@ -314,6 +172,13 @@ export class ErrorHandler {
             recentErrors: this.errorLog.slice(0, 5)
         };
     }
+
+    /**
+     * Clear error logs
+     */
+    clearLogs() {
+        this.errorLog = [];
+    }
 }
 
 // Create and export singleton instance
@@ -328,12 +193,15 @@ export const ErrorUtils = {
      * @param {Error} error - The error that occurred
      * @param {string} operation - The operation that failed
      * @param {Object} context - Additional context
+     * @returns {Object} Error response
      */
     handleDatabaseError(error, operation, context = {}) {
         const dbError = new DatabaseError(
-            `Database ${operation} failed: ${error.message}`, { operation, originalError: error.message, ...context }
+            `Database ${operation} failed: ${error.message}`,
+            { operation, originalError: error.message, ...context }
         );
-        return errorHandler.handle(dbError, context);
+        errorHandler.handle(dbError, context);
+        return this.createErrorResponse(dbError);
     },
 
     /**
@@ -341,25 +209,15 @@ export const ErrorUtils = {
      * @param {Error} error - The error that occurred
      * @param {string} url - The URL that failed
      * @param {Object} context - Additional context
+     * @returns {Object} Error response
      */
     handleNetworkError(error, url, context = {}) {
         const networkError = new NetworkError(
-            `Network request failed: ${error.message}`, { url, originalError: error.message, ...context }
+            `Network request failed: ${error.message}`,
+            { url, originalError: error.message, ...context }
         );
-        return errorHandler.handle(networkError, context);
-    },
-
-    /**
-     * Handle sync operation errors
-     * @param {Error} error - The error that occurred
-     * @param {string} operation - The sync operation that failed
-     * @param {Object} context - Additional context
-     */
-    handleSyncError(error, operation, context = {}) {
-        const syncError = new SyncError(
-            `Sync ${operation} failed: ${error.message}`, { operation, originalError: error.message, ...context }
-        );
-        return errorHandler.handle(syncError, context);
+        errorHandler.handle(networkError, context);
+        return this.createErrorResponse(networkError);
     },
 
     /**

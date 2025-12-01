@@ -8,7 +8,7 @@ import {
     getSyncStorageAsync,
     setSyncStorageAsync,
     setDefaultInSyncStorageIfNull
-} from './utils.js';
+} from './storage-utils.js';
 
 /**
  * Settings configuration

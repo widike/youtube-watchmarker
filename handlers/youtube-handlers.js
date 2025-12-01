@@ -8,7 +8,7 @@ import { ErrorUtils } from '../error-handler.js';
 
 /**
  * Lookup a video in the database
- * @param {Object} request - Request with strIdent and strTitle
+ * @param {Object} request - Request with videoId and optional title
  * @param {Object} youtube - Youtube module instance
  * @param {Function} cacheTitle - Function to cache titles
  * @returns {Promise<Object>} Lookup result
@@ -17,13 +17,20 @@ export async function handleYoutubeLookup(request, youtube, cacheTitle) {
     try {
         const { videoId, title } = request;
 
+        if (!videoId) {
+            return {
+                success: false,
+                error: 'Missing video ID'
+            };
+        }
+
         if (title) {
             cacheTitle(videoId, title);
         }
 
-        return await new Promise((resolve) => {
-            youtube.lookup({ strIdent: videoId, strTitle: title }, resolve);
-        });
+        const result = await youtube.lookup(videoId);
+        return result || { success: false, error: 'Video not found' };
+
     } catch (error) {
         logger.error('YouTube lookup error:', error);
         return ErrorUtils.createErrorResponse(error);
@@ -32,22 +39,29 @@ export async function handleYoutubeLookup(request, youtube, cacheTitle) {
 
 /**
  * Ensure a video exists in the database
- * @param {Object} request - Request with strIdent and strTitle
+ * @param {Object} request - Request with videoId and optional title, timestamp, count
  * @param {Object} youtube - Youtube module instance
  * @param {Function} cacheTitle - Function to cache titles
  * @returns {Promise<Object>} Ensure result
  */
 export async function handleYoutubeEnsure(request, youtube, cacheTitle) {
     try {
-        const { videoId, title } = request;
+        const { videoId, title, timestamp, count } = request;
+
+        if (!videoId) {
+            return {
+                success: false,
+                error: 'Missing video ID'
+            };
+        }
 
         if (title) {
             cacheTitle(videoId, title);
         }
 
-        return await new Promise((resolve) => {
-            youtube.ensure({ strIdent: videoId, strTitle: title }, resolve);
-        });
+        const result = await youtube.ensure(videoId, title, timestamp, count);
+        return { success: true, data: result };
+
     } catch (error) {
         logger.error('YouTube ensure error:', error);
         return ErrorUtils.createErrorResponse(error);
@@ -62,12 +76,8 @@ export async function handleYoutubeEnsure(request, youtube, cacheTitle) {
  */
 export async function handleYoutubeSynchronize(request, youtube) {
     try {
-        const result = await new Promise((resolve) => {
-            youtube.synchronize(
-                { intThreshold: 512 },
-                resolve,
-                (progress) => logger.debug('YouTube sync progress:', progress)
-            );
+        const result = await youtube.synchronize((progress) => {
+            logger.debug('YouTube sync progress:', progress);
         });
 
         const videoCount = result.videoCount || (result.objVideos?.length) || 0;
@@ -90,12 +100,8 @@ export async function handleYoutubeSynchronize(request, youtube) {
  */
 export async function handleYoutubeLikedVideos(request, youtube) {
     try {
-        const result = await new Promise((resolve) => {
-            youtube.synchronizeLikedVideos(
-                { intThreshold: 512 },
-                resolve,
-                (progress) => logger.debug('Liked videos sync progress:', progress)
-            );
+        const result = await youtube.synchronizeLikedVideos((progress) => {
+            logger.debug('Liked videos sync progress:', progress);
         });
 
         return {
@@ -105,6 +111,32 @@ export async function handleYoutubeLikedVideos(request, youtube) {
         };
     } catch (error) {
         logger.error('YouTube liked videos sync error:', error);
+        return ErrorUtils.createErrorResponse(error);
+    }
+}
+
+/**
+ * Mark a video as watched
+ * @param {Object} request - Request with videoId and optional title, timestamp, count
+ * @param {Object} youtube - Youtube module instance
+ * @returns {Promise<Object>} Mark result
+ */
+export async function handleYoutubeMark(request, youtube) {
+    try {
+        const { videoId, title, timestamp, count } = request;
+
+        if (!videoId) {
+            return {
+                success: false,
+                error: 'Missing video ID'
+            };
+        }
+
+        const result = await youtube.mark(videoId, title, timestamp, count);
+        return { success: true, data: result };
+
+    } catch (error) {
+        logger.error('YouTube mark error:', error);
         return ErrorUtils.createErrorResponse(error);
     }
 }

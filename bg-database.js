@@ -7,6 +7,7 @@ import { logger } from "./logger.js";
 
 /**
  * Database management class for YouTube watch history
+ * All methods now return Promises for modern async/await usage
  */
 export class DatabaseManager {
     constructor() {
@@ -21,12 +22,10 @@ export class DatabaseManager {
 
     /**
      * Initialize the database
-     * @param {Object} request - Request object (optional)
-     * @param {Function} response - Response callback (optional)
+     * @returns {Promise<void>}
      */
-    async init(request = {}, response = null) {
+    async init() {
         if (this.isInitialized) {
-            if (response) response({});
             return;
         }
 
@@ -41,11 +40,10 @@ export class DatabaseManager {
             await this.syncManager.init();
 
             this.isInitialized = true;
-            if (response) response({});
+            logger.info('Database initialized successfully');
         } catch (error) {
             logger.error("Failed to initialize database:", error);
-            if (response) response(null);
-            throw error; // Re-throw if no callback
+            throw error;
         }
     }
 
@@ -62,7 +60,7 @@ export class DatabaseManager {
     }
 
     /**
-     * Opens the IndexedDB database (async version)
+     * Opens the IndexedDB database
      * @returns {Promise<void>}
      */
     async openDatabaseAsync() {
@@ -115,7 +113,7 @@ export class DatabaseManager {
     /**
      * Get object store for database operations
      * @param {string} mode - Transaction mode
-     * @returns {Object} Object store
+     * @returns {IDBObjectStore} Object store
      */
     getObjectStore(mode = 'readwrite') {
         if (!this.database) {
@@ -128,368 +126,270 @@ export class DatabaseManager {
 
     /**
      * Export database data
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<Object>} Export data with metadata
      */
-    async export(request, response) {
+    async export() {
         try {
             const provider = this.providerFactory.getCurrentProvider();
             if (!provider) {
-                response({ success: false, error: ERRORS.PROVIDER_NOT_FOUND });
-                return;
+                throw new Error(ERRORS.PROVIDER_NOT_FOUND);
             }
 
             const data = await provider.getAllVideos();
-            const exportData = {
+            return {
                 version: this.DB_VERSION,
                 timestamp: Date.now(),
                 provider: this.providerFactory.getCurrentProviderType(),
                 data: data
             };
-
-            response({ success: true, data: exportData });
         } catch (error) {
-            console.error("Failed to export data:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to export data:", error);
+            throw error;
         }
     }
 
     /**
      * Import database data
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @param {Array} videos - Array of video records to import
+     * @returns {Promise<Object>} Import result with count
      */
-    async import(request, response) {
+    async import(videos) {
         try {
-            const { data } = request;
-            if (!data || !data.data) {
-                response({ success: false, error: ERRORS.INVALID_REQUEST });
-                return;
+            if (!videos || !Array.isArray(videos)) {
+                throw new Error(ERRORS.INVALID_REQUEST);
             }
 
             const provider = this.providerFactory.getCurrentProvider();
             if (!provider) {
-                response({ success: false, error: ERRORS.PROVIDER_NOT_FOUND });
-                return;
+                throw new Error(ERRORS.PROVIDER_NOT_FOUND);
             }
 
-            await provider.importVideos(data.data);
-            response({ success: true, message: `Imported ${data.data.length} videos` });
+            await provider.importVideos(videos);
+            return { count: videos.length };
         } catch (error) {
-            console.error("Failed to import data:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to import data:", error);
+            throw error;
         }
     }
 
     /**
-     * Reset database
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * Reset database (clear all data)
+     * @returns {Promise<void>}
      */
-    async reset(request, response) {
+    async reset() {
         try {
             const provider = this.providerFactory.getCurrentProvider();
             if (!provider) {
-                response({ success: false, error: ERRORS.PROVIDER_NOT_FOUND });
-                return;
+                throw new Error(ERRORS.PROVIDER_NOT_FOUND);
             }
 
             await provider.clearAllVideos();
-            response({ success: true, message: 'Database reset successfully' });
+            logger.info('Database reset successfully');
         } catch (error) {
-            console.error("Failed to reset database:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to reset database:", error);
+            throw error;
         }
     }
 
     /**
      * Enable sync
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @param {string} provider - Provider type
+     * @param {number} interval - Sync interval in milliseconds
+     * @returns {Promise<void>}
      */
-    async enableSync(request, response) {
+    async enableSync(provider, interval) {
         try {
-            const { provider, interval } = request;
             await this.syncManager.enableSync(provider, interval);
-            response({ success: true, message: 'Sync enabled' });
+            logger.info('Sync enabled');
         } catch (error) {
-            console.error("Failed to enable sync:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to enable sync:", error);
+            throw error;
         }
     }
 
     /**
      * Disable sync
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<void>}
      */
-    async disableSync(request, response) {
+    async disableSync() {
         try {
             await this.syncManager.disableSync();
-            response({ success: true, message: 'Sync disabled' });
+            logger.info('Sync disabled');
         } catch (error) {
-            console.error("Failed to disable sync:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to disable sync:", error);
+            throw error;
         }
     }
 
     /**
      * Sync now
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<void>}
      */
-    async syncNow(request, response) {
+    async syncNow() {
         try {
             await this.syncManager.syncNow();
-            response({ success: true, message: 'Sync completed' });
+            logger.info('Sync completed');
         } catch (error) {
-            console.error("Failed to sync:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to sync:", error);
+            throw error;
         }
     }
 
     /**
      * Get sync status
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<Object>} Sync status information
      */
-    async getSyncStatus(request, response) {
+    async getSyncStatus() {
         try {
-            const status = await this.syncManager.getStatus();
-            response({ success: true, data: status });
+            return await this.syncManager.getStatus();
         } catch (error) {
-            console.error("Failed to get sync status:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to get sync status:", error);
+            throw error;
         }
     }
 
     /**
      * Switch database provider
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @param {string} provider - Provider name
+     * @returns {Promise<boolean>} Success status
      */
-    async switchProvider(request, response) {
+    async switchProvider(provider) {
         try {
-            const { provider } = request;
             const success = await this.providerFactory.switchProvider(provider);
-
             if (success) {
-                response({ success: true, message: `Switched to ${provider} provider` });
-            } else {
-                response({ success: false, error: 'Failed to switch provider' });
+                logger.info(`Switched to ${provider} provider`);
             }
+            return success;
         } catch (error) {
-            console.error("Failed to switch provider:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to switch provider:", error);
+            throw error;
         }
     }
 
     /**
      * Get provider status
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<Object>} Provider status information
      */
-    async getProviderStatus(request, response) {
+    async getProviderStatus() {
         try {
-            const status = this.providerFactory.getProviderStatus();
-            response({ success: true, status: status });
+            return this.providerFactory.getProviderStatus();
         } catch (error) {
-            console.error("Failed to get provider status:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to get provider status:", error);
+            throw error;
         }
     }
 
     /**
      * Get available providers
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<Array>} List of available providers
      */
-    async getAvailableProviders(request, response) {
+    async getAvailableProviders() {
         try {
-            const providers = this.providerFactory.getAvailableProviders();
-            response({ success: true, data: providers });
+            return this.providerFactory.getAvailableProviders();
         } catch (error) {
-            console.error("Failed to get available providers:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to get available providers:", error);
+            throw error;
         }
     }
 
     /**
      * Migrate data between providers
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @param {string} fromProvider - Source provider
+     * @param {string} toProvider - Target provider
+     * @returns {Promise<boolean>} Success status
      */
-    async migrateData(request, response) {
+    async migrateData(fromProvider, toProvider) {
         try {
-            const { fromProvider, toProvider } = request;
             const success = await this.providerFactory.migrateData(fromProvider, toProvider);
-
             if (success) {
-                response({ success: true, message: `Migrated data from ${fromProvider} to ${toProvider}` });
-            } else {
-                response({ success: false, error: 'Migration failed' });
+                logger.info(`Migrated data from ${fromProvider} to ${toProvider}`);
             }
+            return success;
         } catch (error) {
-            console.error("Failed to migrate data:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to migrate data:", error);
+            throw error;
         }
     }
 
     /**
      * Configure Supabase
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @param {string} url - Supabase URL
+     * @param {string} apiKey - Supabase API key
+     * @returns {Promise<void>}
      */
-    async configureSupabase(request, response) {
+    async configureSupabase(url, apiKey) {
         try {
-            const { url, apiKey } = request;
             await credentialStorage.storeCredentials({
                 supabaseUrl: url,
                 apiKey: apiKey
             });
-            response({ success: true, message: 'Supabase configured successfully' });
+            logger.info('Supabase configured successfully');
         } catch (error) {
-            console.error("Failed to configure Supabase:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to configure Supabase:", error);
+            throw error;
         }
     }
 
     /**
      * Test Supabase connection
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<boolean>} Connection test result
      */
-    async testSupabase(request, response) {
+    async testSupabase() {
         try {
-            const result = await supabaseDatabaseProvider.testConnection();
-            if (result) {
-                response({ success: true, message: 'Supabase connection successful' });
-            } else {
-                response({ success: false, error: ERRORS.CONNECTION_FAILED });
-            }
+            return await supabaseDatabaseProvider.testConnection();
         } catch (error) {
-            console.error("Failed to test Supabase:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to test Supabase:", error);
+            throw error;
         }
     }
 
     /**
      * Check Supabase table existence
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<boolean>} Table existence status
      */
-    async checkSupabaseTable(request, response) {
+    async checkSupabaseTable() {
         try {
-            const exists = await supabaseDatabaseProvider.checkTableExists();
-            response({ success: true, tableExists: exists });
+            return await supabaseDatabaseProvider.checkTableExists();
         } catch (error) {
-            console.error("Failed to check Supabase table:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to check Supabase table:", error);
+            throw error;
         }
     }
 
     /**
      * Clear Supabase credentials
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<void>}
      */
-    async clearSupabase(request, response) {
+    async clearSupabase() {
         try {
-            await credentialStorage.clearSupabaseCredentials();
-            response({ success: true, message: 'Supabase credentials cleared' });
+            await credentialStorage.clearCredentials();
+            logger.info('Supabase credentials cleared');
         } catch (error) {
-            console.error("Failed to clear Supabase credentials:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to clear Supabase credentials:", error);
+            throw error;
         }
     }
 
     /**
-     * Get Supabase credentials
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * Get Supabase credentials (masked)
+     * @returns {Promise<Object>} Masked credentials
      */
-    async getSupabaseCredentials(request, response) {
+    async getSupabaseCredentials() {
         try {
-            const credentials = await credentialStorage.getMaskedCredentials();
-            response({ success: true, credentials: credentials });
+            return await credentialStorage.getMaskedCredentials();
         } catch (error) {
-            console.error("Failed to get Supabase credentials:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to get Supabase credentials:", error);
+            throw error;
         }
     }
 
     /**
      * Get Supabase status
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @returns {Promise<Object>} Supabase status information
      */
-    async getSupabaseStatus(request, response) {
+    async getSupabaseStatus() {
         try {
-            const hasCredentials = await credentialStorage.hasSupabaseCredentials();
+            const hasCredentials = await credentialStorage.hasCredentials();
             const isConfigured = hasCredentials;
             let isConnected = false;
 
@@ -497,28 +397,21 @@ export class DatabaseManager {
                 try {
                     isConnected = await supabaseDatabaseProvider.testConnection();
                 } catch (error) {
-                    console.warn("Supabase connection test failed:", error);
+                    logger.warn("Supabase connection test failed:", error);
                 }
             }
 
-            response({
-                success: true,
-                data: {
-                    configured: isConfigured,
-                    connected: isConnected,
-                    hasCredentials: hasCredentials
-                }
-            });
+            return {
+                configured: isConfigured,
+                connected: isConnected,
+                hasCredentials: hasCredentials
+            };
         } catch (error) {
-            console.error("Failed to get Supabase status:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response({ success: false, error: error.message });
+            logger.error("Failed to get Supabase status:", error);
+            throw error;
         }
     }
 }
 
-// Global instances
+// Global instance
 export const Database = new DatabaseManager();

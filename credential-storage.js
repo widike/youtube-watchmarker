@@ -163,14 +163,20 @@ class WebEncryption {
 
             // Convert back to text
             const decoder = new TextDecoder();
-            return decoder.decode(decrypted);
+            const decryptedText = decoder.decode(decrypted);
+
+            if (!decryptedText) {
+                throw new Error('Decryption produced empty result');
+            }
+
+            return decryptedText;
         } catch (error) {
             console.error('Decryption failed:', JSON.stringify({
                 error: error.message,
                 errorName: error.name,
                 errorStack: error.stack
             }, null, 2));
-            return '';
+            throw error; // Re-throw instead of silently returning empty string
         }
     }
 
@@ -242,9 +248,17 @@ export class CredentialStorage {
             }
 
             // Decrypt sensitive data
+            const supabaseUrl = await this.encryption.decrypt(encryptedCredentials.supabaseUrl);
+            const apiKey = await this.encryption.decrypt(encryptedCredentials.apiKey);
+
+            // Validate decrypted values
+            if (!supabaseUrl || !apiKey) {
+                throw new Error('Failed to decrypt credentials');
+            }
+
             const credentials = {
-                supabaseUrl: await this.encryption.decrypt(encryptedCredentials.supabaseUrl),
-                apiKey: await this.encryption.decrypt(encryptedCredentials.apiKey),
+                supabaseUrl,
+                apiKey,
                 projectRef: encryptedCredentials.projectRef ? await this.encryption.decrypt(encryptedCredentials.projectRef) : null,
                 stored_at: encryptedCredentials.stored_at
             };
@@ -266,20 +280,19 @@ export class CredentialStorage {
      */
     async testConnection() {
         try {
-            console.log('🔄 Testing Supabase connection...');
-
             const credentials = await this.getCredentials();
             if (!credentials) {
-                console.log('❌ No credentials found for connection test');
                 throw new Error('No credentials found');
             }
 
             if (!credentials.supabaseUrl || !credentials.apiKey) {
-                console.log('❌ Invalid credentials: missing URL or API key');
                 throw new Error('Invalid credentials: missing URL or API key');
             }
 
-            console.log('🔗 Connecting to:', credentials.supabaseUrl.replace(/https:\/\/([^.]+).*/, 'https://$1...'));
+            // Validate URL format
+            if (!credentials.supabaseUrl.startsWith('https://')) {
+                throw new Error('Invalid URL format: must start with https://');
+            }
 
             // Test connection with a simple request and timeout
             const controller = new AbortController();
@@ -300,17 +313,14 @@ export class CredentialStorage {
 
                 if (response.ok || response.status === 404) {
                     // 404 is expected for root path, but means API is reachable
-                    console.log('✅ Supabase connection test successful');
                     return true;
                 }
 
                 const errorText = await response.text();
 
                 if (response.status === 401) {
-                    console.error('❌ Authentication failed: Invalid API key');
                     throw new Error('Invalid API key - check your Supabase service role key');
                 } else if (response.status === 403) {
-                    console.error('❌ Access forbidden: Check API key permissions');
                     throw new Error('API key does not have sufficient permissions');
                 }
 
@@ -319,34 +329,13 @@ export class CredentialStorage {
                 clearTimeout(timeoutId);
 
                 if (fetchError.name === 'AbortError') {
-                    console.error('❌ Connection test timed out after 15 seconds');
                     throw new Error('Connection timeout - check your network and Supabase URL');
                 }
 
                 throw fetchError;
             }
         } catch (error) {
-            console.error('❌ Supabase connection test failed:', {
-                error: error.message,
-                type: error.name
-            });
-
-            // Provide helpful error messages based on error type
-            if (error.message.includes('Failed to fetch') || error.message.includes('TypeError')) {
-                console.error('💡 Network error - possible causes:', [
-                    'Invalid Supabase URL',
-                    'CORS policy blocking the request',
-                    'Network connectivity issues',
-                    'Extension permissions not configured'
-                ]);
-            } else if (error.message.includes('timeout')) {
-                console.error('💡 Connection timeout - possible causes:', [
-                    'Slow network connection',
-                    'Supabase service issues',
-                    'Firewall blocking the connection'
-                ]);
-            }
-
+            console.error('Supabase connection test failed:', error.message);
             return false;
         }
     }

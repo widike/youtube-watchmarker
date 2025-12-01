@@ -4,8 +4,7 @@
  */
 
 import { logger } from './logger.js';
-import { getSyncStorageAsync, getStorageAsync, setStorageAsync } from './utils.js';
-import { ErrorHandler } from './error-handler.js';
+import { getSyncStorageAsync, setSyncStorageAsync, getStorageAsync, setStorageAsync } from './storage-utils.js';
 
 /**
  * Alarm configuration

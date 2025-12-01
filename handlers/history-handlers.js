@@ -8,34 +8,26 @@ import { ErrorUtils } from '../error-handler.js';
 
 /**
  * Synchronize browser history
- * @param {Object} request - Request object
+ * @param {Object} request - Request with intTimestamp and skipExisting
  * @param {Object} history - History module instance
  * @returns {Promise<Object>} Synchronization result
  */
 export async function handleHistorySynchronize(request, history) {
     try {
-        const result = await new Promise((resolve, reject) => {
-            history.synchronize(
-                { intTimestamp: 0, skipExisting: true },
-                (response) => {
-                    if (response === null) {
-                        reject(new Error('History synchronization failed'));
-                    } else {
-                        resolve(response);
-                    }
-                },
-                (progress) => logger.debug('History sync progress:', progress)
-            );
+        const { intTimestamp = 0, skipExisting = false } = request;
+
+        const result = await history.synchronize(intTimestamp, skipExisting, (progress) => {
+            logger.debug('History sync progress:', progress);
         });
 
-        const videoCount = result.videoCount || (result.objVideos?.length) || 0;
         return {
             success: true,
             response: result,
-            videoCount
+            videoCount: result.videoCount || 0,
+            skippedCount: result.skippedCount || 0
         };
     } catch (error) {
-        logger.error('Error synchronizing history:', error);
+        logger.error('History synchronize error:', error);
         return ErrorUtils.createErrorResponse(error);
     }
 }

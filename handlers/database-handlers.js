@@ -4,8 +4,9 @@
  */
 
 import { logger } from '../logger.js';
-import { ErrorHandler, ErrorUtils } from '../error-handler.js';
+import { ErrorUtils } from '../error-handler.js';
 import { isValidBase64 } from '../validation.js';
+import { IMPORT_EXPORT, TIMEOUTS } from '../constants.js';
 
 /**
  * Export database data
@@ -15,13 +16,7 @@ import { isValidBase64 } from '../validation.js';
  */
 export async function handleDatabaseExport(request, database) {
     try {
-        const store = database.getObjectStore("readonly");
-        const data = await new Promise((resolve, reject) => {
-            const req = store.getAll();
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(new Error('Failed to export database'));
-        });
-
+        const data = await database.export();
         return {
             success: true,
             data: JSON.stringify(data)
@@ -82,14 +77,15 @@ export async function handleDatabaseImport(request, database) {
         logger.info(`Importing ${videoData.length} videos`);
 
         // Process in chunks for large datasets
-        const chunkSize = videoData.length > 50000 ? 500 :
-            videoData.length > 10000 ? 750 : 1000;
+        const chunkSize = videoData.length > IMPORT_EXPORT.LARGE_DATASET_THRESHOLD ? IMPORT_EXPORT.CHUNK_SIZE_LARGE :
+            videoData.length > IMPORT_EXPORT.MEDIUM_DATASET_THRESHOLD ? IMPORT_EXPORT.CHUNK_SIZE_MEDIUM :
+                IMPORT_EXPORT.CHUNK_SIZE_SMALL;
 
         if (videoData.length > chunkSize) {
             return await processChunksSequentially(videoData, chunkSize, database);
         } else {
             // For smaller datasets, use single-pass import
-            await database.import({ data: parsedData }, () => { });
+            await database.import(videoData);
             return {
                 success: true,
                 message: `Successfully imported ${videoData.length} videos`
@@ -117,18 +113,10 @@ async function processChunksSequentially(videoData, chunkSize, database) {
 
         logger.info(`Processing chunk ${chunkNumber}/${totalChunks}`);
 
-        await new Promise((resolve, reject) => {
-            database.import({ data: { data: chunk } }, (response) => {
-                if (response && response.success) {
-                    resolve();
-                } else {
-                    reject(new Error(`Failed to import chunk ${chunkNumber}`));
-                }
-            });
-        });
+        await database.import(chunk);
 
         // Small delay between chunks
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, TIMEOUTS.CHUNK_PROCESSING_DELAY));
     }
 
     return {
@@ -145,16 +133,7 @@ async function processChunksSequentially(videoData, chunkSize, database) {
  */
 export async function handleDatabaseReset(request, database) {
     try {
-        await new Promise((resolve, reject) => {
-            database.reset({}, (response) => {
-                if (response && response.success) {
-                    resolve();
-                } else {
-                    reject(new Error('Reset failed'));
-                }
-            });
-        });
-
+        await database.reset();
         return { success: true, message: 'Database reset successfully' };
     } catch (error) {
         return ErrorUtils.handleDatabaseError(error, 'reset');

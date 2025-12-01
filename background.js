@@ -1,7 +1,7 @@
 /**
  * Background Service Worker
  * Main entry point for the YouTube Watchmarker extension
- * Refactored to use modular architecture with message router
+ * Fully modernized with async/await patterns
  */
 
 "use strict";
@@ -35,7 +35,8 @@ import {
     handleYoutubeLookup,
     handleYoutubeEnsure,
     handleYoutubeSynchronize,
-    handleYoutubeLikedVideos
+    handleYoutubeLikedVideos,
+    handleYoutubeMark
 } from "./handlers/youtube-handlers.js";
 import {
     handleSearchVideos,
@@ -62,7 +63,7 @@ import {
     handleSetSetting
 } from "./handlers/settings-handlers.js";
 
-import { getSyncStorageAsync } from "./utils.js";
+import { getSyncStorageAsync } from "./storage-utils.js";
 
 /**
  * Extension Manager
@@ -109,7 +110,7 @@ class ExtensionManager {
             // Phase 5: Setup alarms and video tracking
             await alarmManager.initialize();
             this.registerAlarmHandlers();
-            
+
             await videoTracker.initialize(Youtube);
 
             // Phase 6: Setup action handler for icon clicks
@@ -130,16 +131,8 @@ class ExtensionManager {
      * Initialize database
      */
     async initializeDatabase() {
-        return new Promise((resolve, reject) => {
-            Database.init({}, (result) => {
-                if (result === null) {
-                    reject(new Error('Database initialization failed'));
-                } else {
-                    globalThis.Database = Database;
-                    resolve();
-                }
-            });
-        });
+        await Database.init();
+        globalThis.Database = Database;
     }
 
     /**
@@ -159,22 +152,10 @@ class ExtensionManager {
      * Initialize other modules
      */
     async initializeModules() {
-        const initModule = (module, name) => {
-            return new Promise((resolve, reject) => {
-                module.init({}, (result) => {
-                    if (result === null) {
-                        reject(new Error(`${name} initialization failed`));
-                    } else {
-                        resolve();
-                    }
-                });
-            });
-        };
-
         await Promise.all([
-            initModule(History, 'History'),
-            initModule(Youtube, 'Youtube'),
-            initModule(Search, 'Search')
+            History.init(),
+            Youtube.init(),
+            Search.init()
         ]);
 
         logger.info('All modules initialized');
@@ -185,45 +166,47 @@ class ExtensionManager {
      */
     registerMessageHandlers() {
         // Database handlers
-        messageRouter.register('database-export', (req) => 
+        messageRouter.register('database-export', (req) =>
             handleDatabaseExport(req, Database));
-        messageRouter.register('database-import', (req) => 
+        messageRouter.register('database-import', (req) =>
             handleDatabaseImport(req, Database));
-        messageRouter.register('database-reset', (req) => 
+        messageRouter.register('database-reset', (req) =>
             handleDatabaseReset(req, Database));
-        messageRouter.register('database-size', (req) => 
+        messageRouter.register('database-size', (req) =>
             handleDatabaseSize(req, this.providerFactory));
 
         // YouTube handlers
-        messageRouter.register('youtube-lookup', (req) => 
+        messageRouter.register('youtube-lookup', (req) =>
             handleYoutubeLookup(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)));
-        messageRouter.register('youtube-ensure', (req) => 
+        messageRouter.register('youtube-ensure', (req) =>
             handleYoutubeEnsure(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)));
-        messageRouter.register('youtube-synchronize', (req) => 
+        messageRouter.register('youtube-mark', (req) =>
+            handleYoutubeMark(req, Youtube));
+        messageRouter.register('youtube-synchronize', (req) =>
             handleYoutubeSynchronize(req, Youtube));
-        messageRouter.register('youtube-liked-videos', (req) => 
+        messageRouter.register('youtube-liked-videos', (req) =>
             handleYoutubeLikedVideos(req, Youtube));
 
         // Search handlers
-        messageRouter.register('search-videos', (req) => 
+        messageRouter.register('search-videos', (req) =>
             handleSearchVideos(req, Search, Database));
-        messageRouter.register('search-delete', (req) => 
+        messageRouter.register('search-delete', (req) =>
             handleSearchDelete(req, Search));
 
         // History handlers
-        messageRouter.register('history-synchronize', (req) => 
+        messageRouter.register('history-synchronize', (req) =>
             handleHistorySynchronize(req, History));
 
         // Provider handlers
-        messageRouter.register('database-provider-status', (req) => 
+        messageRouter.register('database-provider-status', (req) =>
             handleProviderStatus(req, this.providerFactory));
-        messageRouter.register('database-provider-switch', (req) => 
+        messageRouter.register('database-provider-switch', (req) =>
             handleProviderSwitch(req, this.providerFactory));
-        messageRouter.register('database-provider-list', (req) => 
+        messageRouter.register('database-provider-list', (req) =>
             handleProviderList(req, this.providerFactory));
-        messageRouter.register('database-provider-migrate', (req) => 
+        messageRouter.register('database-provider-migrate', (req) =>
             handleProviderMigrate(req, this.providerFactory));
-        messageRouter.register('database-provider-sync', (req) => 
+        messageRouter.register('database-provider-sync', (req) =>
             handleProviderSync(req, this.providerFactory));
 
         // Supabase handlers
@@ -232,7 +215,7 @@ class ExtensionManager {
         messageRouter.register('supabase-clear', handleSupabaseClear);
         messageRouter.register('supabase-get-credentials', handleSupabaseGetCredentials);
         messageRouter.register('supabase-get-status', handleSupabaseGetStatus);
-        messageRouter.register('supabase-check-table', (req) => 
+        messageRouter.register('supabase-check-table', (req) =>
             handleSupabaseCheckTable(req, this.providerFactory));
 
         // Settings handlers
@@ -326,36 +309,34 @@ class ExtensionManager {
      * Sync browser history
      */
     async syncHistory() {
-        return new Promise((resolve, reject) => {
-            History.synchronize(
-                { intTimestamp: 0, skipExisting: true },
-                (response) => {
-                    if (response === null) {
-                        reject(new Error('History synchronization failed'));
-                    } else {
-                        logger.info('History sync completed');
-                        resolve(response);
-                    }
-                },
+        try {
+            const result = await History.synchronize(
+                0,
+                true,
                 (progress) => logger.debug('History sync progress:', progress)
             );
-        });
+            logger.info('History sync completed:', result);
+            return result;
+        } catch (error) {
+            logger.error('History synchronization failed:', error);
+            throw error;
+        }
     }
 
     /**
      * Sync YouTube history
      */
     async syncYoutube() {
-        return new Promise((resolve) => {
-            Youtube.synchronize(
-                { intThreshold: 512 },
-                (response) => {
-                    logger.info('YouTube sync completed');
-                    resolve(response);
-                },
+        try {
+            const result = await Youtube.synchronize(
                 (progress) => logger.debug('YouTube sync progress:', progress)
             );
-        });
+            logger.info('YouTube sync completed:', result);
+            return result;
+        } catch (error) {
+            logger.error('YouTube synchronization failed:', error);
+            throw error;
+        }
     }
 
     /**

@@ -84,7 +84,19 @@ export class Logger {
      */
     error(message, ...args) {
         if (this.minLevel <= LogLevel.ERROR) {
-            console.error(...this.format('ERROR', message, ...args));
+            // Handle Error objects and DOMException specially
+            const formattedArgs = args.map(arg => {
+                if (arg instanceof Error || arg instanceof DOMException) {
+                    return {
+                        name: arg.name,
+                        message: arg.message,
+                        code: arg.code,
+                        stack: arg.stack
+                    };
+                }
+                return arg;
+            });
+            console.error(...this.format('ERROR', message, ...formattedArgs));
         }
     }
 
