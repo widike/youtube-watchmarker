@@ -1,22 +1,18 @@
-import {
-    createResponseCallback,
-    BackgroundUtils,
-    AsyncSeries
-} from "./utils.js";
+import { logger } from "./logger.js";
 
 export const Search = {
-    init: function(objRequest, funcResponse) {
-        AsyncSeries.run({
-                objMessaging: BackgroundUtils.messaging('search', {
-                    'search-lookup': Search.lookup,
-                    'search-delete': Search.delete
-                }),
-            },
-            createResponseCallback(() => {}, funcResponse),
-        );
+    init: function (objRequest = {}, funcResponse = null) {
+        try {
+            // Initialization complete - messaging is now handled by message router
+            logger.debug('Search module initialized');
+            if (funcResponse) funcResponse({});
+        } catch (error) {
+            logger.error('Failed to initialize search module:', error);
+            if (funcResponse) funcResponse(null);
+        }
     },
 
-    lookup: async function(objRequest, funcResponse) {
+    lookup: async function (objRequest, funcResponse) {
         try {
             // Use the database provider factory instead of direct IndexedDB access
             const extensionManager = globalThis.extensionManager;
@@ -73,7 +69,7 @@ export const Search = {
         }
     },
 
-    delete: async function(objRequest, funcResponse, funcProgress) {
+    delete: async function (objRequest, funcResponse, funcProgress) {
         try {
             // Use the database provider factory instead of direct IndexedDB access
             const extensionManager = globalThis.extensionManager;
@@ -105,10 +101,10 @@ export const Search = {
             // Search for YouTube URLs containing this video ID
             const historyResults = await new Promise((resolve) => {
                 chrome.history.search({
-                        text: objRequest.strIdent,
-                        startTime: 0,
-                        maxResults: 1000000,
-                    },
+                    text: objRequest.strIdent,
+                    startTime: 0,
+                    maxResults: 1000000,
+                },
                     resolve
                 );
             });

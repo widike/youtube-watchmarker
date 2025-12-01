@@ -1,25 +1,20 @@
 import {
-    createResponseCallback,
-    BackgroundUtils,
-    AsyncSeries,
     decodeHtmlEntitiesAndFixEncoding,
     isValidVideoTitle
 } from "./utils.js";
 import { TIMEOUTS } from "./constants.js";
+import { logger } from "./logger.js";
 
 export const Youtube = {
-    init: function (objRequest, funcResponse) {
-        AsyncSeries.run({
-            objMessaging: BackgroundUtils.messaging('youtube', {
-                'youtube-synchronize': Youtube.synchronize,
-                'youtube-synchronize-liked': Youtube.synchronizeLikedVideos,
-                'youtube-lookup': Youtube.lookup,
-                'youtube-ensure': Youtube.ensure,
-                'youtube-mark': Youtube.mark
-            }),
-        },
-            createResponseCallback(() => { }, funcResponse),
-        );
+    init: function (objRequest = {}, funcResponse = null) {
+        try {
+            // Initialization complete - messaging is now handled by message router
+            logger.debug('YouTube module initialized');
+            if (funcResponse) funcResponse({});
+        } catch (error) {
+            logger.error('Failed to initialize YouTube module:', error);
+            if (funcResponse) funcResponse(null);
+        }
     },
 
     synchronize: async function (objRequest, funcResponse, funcProgress) {

@@ -1,20 +1,21 @@
 import {
-    createResponseCallback,
-    BackgroundUtils,
-    AsyncSeries,
     decodeHtmlEntitiesAndFixEncoding
 } from "./utils.js";
+import { logger } from "./logger.js";
 
 export const History = {
-    init: function(objRequest, funcResponse) {
-        AsyncSeries.run({
-                objMessaging: BackgroundUtils.messaging('history', { 'history-synchronize': History.synchronize }),
-            },
-            createResponseCallback(() => {}, funcResponse),
-        );
+    init: function (objRequest = {}, funcResponse = null) {
+        try {
+            // Initialization complete - messaging is now handled by message router
+            logger.debug('History module initialized');
+            if (funcResponse) funcResponse({});
+        } catch (error) {
+            logger.error('Failed to initialize history module:', error);
+            if (funcResponse) funcResponse(null);
+        }
     },
 
-    synchronize: async function(objRequest, funcResponse, funcProgress) {
+    synchronize: async function (objRequest, funcResponse, funcProgress) {
         try {
             // Validate request
             if (!objRequest || typeof objRequest.intTimestamp !== 'number') {
@@ -41,11 +42,11 @@ export const History = {
             // Search Chrome history for YouTube videos
             const historyResults = await new Promise((resolve, reject) => {
                 chrome.history.search({
-                        text: "youtube.com",
-                        startTime: objRequest.intTimestamp,
-                        maxResults: 1000000,
-                    },
-                    function(objResults) {
+                    text: "youtube.com",
+                    startTime: objRequest.intTimestamp,
+                    maxResults: 1000000,
+                },
+                    function (objResults) {
                         if (chrome.runtime.lastError) {
                             console.error("Chrome history search error:", chrome.runtime.lastError);
                             reject(chrome.runtime.lastError);

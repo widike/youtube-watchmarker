@@ -1,9 +1,5 @@
-import {
-    AsyncSeries,
-    createResponseCallback,
-    BackgroundUtils,
-} from "./utils.js";
 import { databaseProviderFactory } from "./database-provider-factory.js";
+import { logger } from "./logger.js";
 
 /**
  * Sync manager for automatic synchronization between databases
@@ -20,44 +16,40 @@ export class SyncManager {
 
     /**
      * Initialize the sync manager
+     * @param {Object} request - Request object (optional)
+     * @param {Function} response - Response callback (optional)
      */
-    async init(request, response) {
+    async init(request = {}, response = null) {
         if (this.isInitialized) {
-            response({});
+            if (response) response({});
             return;
         }
 
         try {
-            await AsyncSeries.run({
-                    loadConfig: this.loadConfiguration.bind(this),
-                    setupMessaging: BackgroundUtils.messaging('sync-manager', {
-                        'sync-manager-start': this.startAutoSync.bind(this),
-                        'sync-manager-stop': this.stopAutoSync.bind(this),
-                        'sync-manager-sync-now': this.syncNow.bind(this),
-                        'sync-manager-config': this.updateConfiguration.bind(this),
-                        'sync-manager-status': this.getStatus.bind(this)
-                    }),
-                    startAutoSync: this.conditionalStartAutoSync.bind(this),
-                },
-                createResponseCallback(() => {
-                    this.isInitialized = true;
+            // Load configuration
+            await this.loadConfigurationAsync();
 
-                    // Set up storage change listener
-                    chrome.storage.onChanged.addListener(this.onStorageChanged.bind(this));
+            // Start auto sync if enabled
+            if (this.autoSyncEnabled) {
+                await this.startAutoSyncInternal();
+            }
 
-                    return {};
-                }, response)
-            );
+            // Set up storage change listener
+            chrome.storage.onChanged.addListener(this.onStorageChanged.bind(this));
+
+            this.isInitialized = true;
+            if (response) response({});
         } catch (error) {
-            console.error("Failed to initialize sync manager:", error);
-            response(null);
+            logger.error("Failed to initialize sync manager:", error);
+            if (response) response(null);
+            throw error; // Re-throw if no callback
         }
     }
 
     /**
-     * Load configuration from storage
+     * Load configuration from storage (async version)
      */
-    async loadConfiguration(args, callback) {
+    async loadConfigurationAsync() {
         try {
             const result = await chrome.storage.sync.get([
                 'auto_sync_enabled',
@@ -68,22 +60,10 @@ export class SyncManager {
             this.autoSyncEnabled = result.auto_sync_enabled || false;
             this.syncIntervalMinutes = result.sync_interval_minutes || 60;
             this.lastSyncTimestamp = result.sync_last_timestamp || 0;
-
-            callback({});
         } catch (error) {
-            console.error('Failed to load sync manager configuration:', error);
-            callback(null);
+            logger.error('Failed to load sync manager configuration:', error);
+            throw error;
         }
-    }
-
-    /**
-     * Start auto sync if enabled
-     */
-    async conditionalStartAutoSync(args, callback) {
-        if (this.autoSyncEnabled) {
-            await this.startAutoSyncInternal();
-        }
-        callback({});
     }
 
     /**
@@ -375,9 +355,9 @@ export class SyncManager {
                 const newValue = changes.auto_sync_enabled.newValue;
                 if (newValue !== this.autoSyncEnabled) {
                     if (newValue) {
-                        this.startAutoSync({}, () => {});
+                        this.startAutoSync({}, () => { });
                     } else {
-                        this.stopAutoSync({}, () => {});
+                        this.stopAutoSync({}, () => { });
                     }
                 }
             }

@@ -295,194 +295,54 @@ export const setDefaultInSyncStorageIfNull = async (key, defaultValue) => {
     }
 };
 
+// AsyncSeries class has been removed - use async/await instead
+
+
+
 /**
- * Utility class for handling asynchronous series operations
+ * YouTube authentication utilities (simplified from BackgroundUtils)
  */
-export class AsyncSeries {
-    /**
-     * Executes functions in series, passing results between them
-     * @param {Object} functions - Object containing functions to execute
-     * @param {Function} callback - Final callback function
-     */
-    static async run(functions, callback) {
-        if (typeof callback !== 'function') {
-            console.error('AsyncSeries.run: callback is not a function', callback);
-            return;
-        }
 
-        const functionNames = Object.keys(functions);
-        const workspace = {};
+/**
+ * Gets YouTube cookies
+ * @returns {Promise<Object>} Object containing cookie values
+ */
+export async function getYouTubeCookies() {
+    const cookieNames = ["SAPISID", "__Secure-3PAPISID"];
+    const cookies = {};
 
-        const executeNext = async (args, overwrite) => {
-            if (args === null) {
-                return callback(null);
-            }
-
-            workspace[functionNames[0]] = args;
-            functionNames.shift();
-
-            if (overwrite !== undefined) {
-                if (typeof overwrite === "string") {
-                    const allNames = Object.keys(functions);
-                    const index = allNames.indexOf(overwrite);
-                    if (index !== -1) {
-                        functionNames.splice(0, functionNames.length, ...allNames.slice(index));
-                    }
-                } else if (Array.isArray(overwrite)) {
-                    functionNames.splice(0, functionNames.length, ...overwrite);
-                }
-            }
-
-            if (functionNames.length === 0) {
-                return callback(workspace);
-            }
-
-            try {
-                await functions[functionNames[0]](workspace, executeNext);
-            } catch (error) {
-                console.error("Error in series step:", functionNames[0], JSON.stringify({
-                    error: error.message,
-                    errorName: error.name,
-                    errorStack: error.stack,
-                    functionName: functionNames[0]
-                }, null, 2));
-                callback(null);
-            }
-        };
-
-        try {
-            await functions[functionNames[0]](workspace, executeNext);
-        } catch (error) {
-            console.error("Error in initial series step:", functionNames[0], JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack,
-                functionName: functionNames[0]
-            }, null, 2));
-            callback(null);
-        }
+    for (const cookieName of cookieNames) {
+        const cookie = await chrome.cookies.get({
+            url: "https://www.youtube.com",
+            name: cookieName,
+        });
+        cookies[cookieName] = cookie ? cookie.value : null;
     }
+
+    return cookies;
 }
 
-
-
 /**
- * Background script utilities for Chrome extension
+ * Creates YouTube authentication header
+ * @param {Object} cookies - Cookie object from getYouTubeCookies
+ * @returns {Promise<string>} SAPISIDHASH authentication string
  */
-export class BackgroundUtils {
-    /**
-     * Creates a messaging handler for background scripts
-     * @param {string} portName - Name of the port to listen on
-     * @param {Object} messageHandlers - Object mapping message types to handlers
-     * @returns {Function} Function that can be used in AsyncSeries
-     */
-    static messaging(portName, messageHandlers) {
-        return (args, callback) => {
-            chrome.runtime.onConnect.addListener((port) => {
-                if (port.name === portName) {
-                    port.onMessage.addListener((data) => {
-                        const { action, ...request } = data;
+export async function createYouTubeAuthHeader(cookies) {
+    const time = Math.round(Date.now() / 1000);
+    const cookie = cookies["SAPISID"] || cookies["__Secure-3PAPISID"];
+    const origin = "https://www.youtube.com";
 
-                        const sendResponse = (response) => {
-                            port.postMessage({
-                                action: action,
-                                response: response,
-                            });
-                        };
+    const hash = await crypto.subtle.digest(
+        "SHA-1",
+        new TextEncoder().encode(`${time} ${cookie} ${origin}`)
+    );
 
-                        const sendProgress = (response) => {
-                            port.postMessage({
-                                action: `${action}-progress`,
-                                response: response,
-                            });
-                        };
+    const hashArray = Array.from(new Uint8Array(hash));
+    const hashHex = hashArray
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
 
-                        const handler = messageHandlers[action];
-                        if (handler) {
-                            handler(request, sendResponse, sendProgress);
-                        } else {
-                            console.error(`[${portName}] Received unexpected action:`, action);
-                        }
-                    });
-                }
-            });
-
-            if (typeof callback === 'function') {
-                return callback({});
-            }
-        };
-    }
-
-
-
-
-
-    /**
-     * Sets current timestamp in storage
-     * @param {string} key - Storage key for timestamp
-     * @returns {Function} Function for AsyncSeries
-     */
-    static time(key) {
-        return async (args, callback) => {
-            await setStorageAsync(key, String(Date.now()));
-            return callback({});
-        };
-    }
-
-    /**
-     * Gets YouTube cookies
-     * @returns {Function} Function for AsyncSeries
-     */
-    static cookies() {
-        return (args, callback) => {
-            const cookieNames = ["SAPISID", "__Secure-3PAPISID"];
-            const cookies = {};
-
-            const getCookie = () => {
-                if (cookieNames.length === 0) {
-                    return callback(cookies);
-                }
-
-                const cookieName = cookieNames.shift();
-                chrome.cookies.get({
-                        url: "https://www.youtube.com",
-                        name: cookieName,
-                    },
-                    (cookie) => {
-                        cookies[cookieName] = cookie ? cookie.value : null;
-                        getCookie();
-                    }
-                );
-            };
-
-            getCookie();
-        };
-    }
-
-    /**
-     * Creates YouTube authentication header
-     * @returns {Function} Function for AsyncSeries
-     */
-    static contauth() {
-        return (args, callback) => {
-            const time = Math.round(Date.now() / 1000);
-            const cookie = args.objCookies["SAPISID"] || args.objCookies["__Secure-3PAPISID"];
-            const origin = "https://www.youtube.com";
-
-            crypto.subtle
-                .digest("SHA-1", new TextEncoder().encode(`${time} ${cookie} ${origin}`))
-                .then((hash) => {
-                    const hashArray = Array.from(new Uint8Array(hash));
-                    const hashHex = hashArray
-                        .map((byte) => byte.toString(16).padStart(2, "0"))
-                        .join("");
-
-                    return callback({
-                        strAuth: `SAPISIDHASH ${time}_${hashHex}`,
-                    });
-                });
-        };
-    }
+    return `SAPISIDHASH ${time}_${hashHex}`;
 }
 
 /**
@@ -584,61 +444,6 @@ export const decodeHtmlEntitiesAndFixEncoding = (text) => {
     return decoded;
 };
 
-/**
- * Validates if a video title is meaningful and not a generic placeholder
- * @param {string} title - Video title to validate
- * @returns {boolean} True if title is valid and meaningful
- */
-export const isValidVideoTitle = (title) => {
-    if (!title || typeof title !== 'string') {
-        return false;
-    }
-
-    const trimmedTitle = title.trim();
-
-    // Check if title is empty or too short
-    if (trimmedTitle.length < 2) {
-        return false;
-    }
-
-    // List of generic/invalid titles to avoid
-    const invalidTitles = [
-        'YouTube',
-        'Youtube',
-        'YOUTUBE',
-        'Video',
-        'Untitled',
-        'Loading...',
-        'Loading',
-        '...',
-        'Private video',
-        'Deleted video',
-        '[Deleted video]',
-        '[Private video]',
-        'Video unavailable'
-    ];
-
-    // Check for exact matches with invalid titles
-    if (invalidTitles.includes(trimmedTitle)) {
-        return false;
-    }
-
-    // Check for generic patterns
-    const genericPatterns = [
-        /^Video \d+$/i, // "Video 123"
-        /^Untitled( \d+)?$/i, // "Untitled" or "Untitled 1"
-        /^Loading\.{3,}$/i, // "Loading..."
-        /^\[.*\]$/, // Anything in brackets like "[Private video]"
-        /^\.{3,}$/, // Just dots
-        /^-+$/, // Just dashes
-        /^_+$/, // Just underscores
-    ];
-
-    // Check if title matches any generic pattern
-    if (genericPatterns.some(pattern => pattern.test(trimmedTitle))) {
-        return false;
-    }
-
-    // Title seems valid
-    return true;
-};
+// Video title validation has been moved to validation.js
+// Re-export for backward compatibility
+export { isValidVideoTitle } from './validation.js';

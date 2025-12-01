@@ -1,13 +1,9 @@
-import {
-    AsyncSeries,
-    createResponseCallback,
-    BackgroundUtils,
-} from "./utils.js";
 import { databaseProviderFactory } from "./database-provider-factory.js";
 import { credentialStorage } from "./credential-storage.js";
 import { supabaseDatabaseProvider } from "./supabase-database-provider.js";
 import { SyncManagerInstance } from "./bg-sync-manager.js";
 import { DATABASE, ERRORS } from "./constants.js";
+import { logger } from "./logger.js";
 
 /**
  * Database management class for YouTube watch history
@@ -25,59 +21,31 @@ export class DatabaseManager {
 
     /**
      * Initialize the database
-     * @param {Object} request - Request object
-     * @param {Function} response - Response callback
+     * @param {Object} request - Request object (optional)
+     * @param {Function} response - Response callback (optional)
      */
-    async init(request, response) {
+    async init(request = {}, response = null) {
         if (this.isInitialized) {
-            response({});
+            if (response) response({});
             return;
         }
 
         try {
-            await AsyncSeries.run({
-                    openDatabase: this.openDatabase.bind(this),
-                    notifyProviders: async (args, callback) => {
-                        // Notify providers that database is ready
-                        this.notifyProvidersReady();
-                        callback({});
-                    },
-                    initSync: async (args, callback) => {
-                        await this.syncManager.init();
-                        callback({});
-                    },
-                    setupMessaging: BackgroundUtils.messaging('database', {
-                        'database-export': this.export.bind(this),
-                        'database-import': this.import.bind(this),
-                        'database-reset': this.reset.bind(this),
-                        'database-sync-enable': this.enableSync.bind(this),
-                        'database-sync-disable': this.disableSync.bind(this),
-                        'database-sync-now': this.syncNow.bind(this),
-                        'database-sync-status': this.getSyncStatus.bind(this),
-                        'database-provider-switch': this.switchProvider.bind(this),
-                        'database-provider-status': this.getProviderStatus.bind(this),
-                        'database-provider-list': this.getAvailableProviders.bind(this),
-                        'database-provider-migrate': this.migrateData.bind(this),
-                        'supabase-configure': this.configureSupabase.bind(this),
-                        'supabase-test': this.testSupabase.bind(this),
-                        'supabase-clear': this.clearSupabase.bind(this),
-                        'supabase-get-credentials': this.getSupabaseCredentials.bind(this),
-                        'supabase-get-status': this.getSupabaseStatus.bind(this),
-                        'supabase-check-table': this.checkSupabaseTable.bind(this)
-                    }),
-                },
-                createResponseCallback(() => {
-                    this.isInitialized = true;
-                    return {};
-                }, response)
-            );
+            // Open database
+            await this.openDatabaseAsync();
+
+            // Notify providers that database is ready
+            this.notifyProvidersReady();
+
+            // Initialize sync manager
+            await this.syncManager.init();
+
+            this.isInitialized = true;
+            if (response) response({});
         } catch (error) {
-            console.error("Failed to initialize database:", JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            response(null);
+            logger.error("Failed to initialize database:", error);
+            if (response) response(null);
+            throw error; // Re-throw if no callback
         }
     }
 
@@ -94,53 +62,54 @@ export class DatabaseManager {
     }
 
     /**
-     * Opens the IndexedDB database
-     * @param {Object} args - Arguments object
-     * @param {Function} callback - Callback function
+     * Opens the IndexedDB database (async version)
+     * @returns {Promise<void>}
      */
-    openDatabase(args, callback) {
-        const openRequest = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+    async openDatabaseAsync() {
+        return new Promise((resolve, reject) => {
+            const openRequest = indexedDB.open(this.DB_NAME, this.DB_VERSION);
 
-        openRequest.onupgradeneeded = () => {
-            const db = openRequest.result;
-            let store = null;
+            openRequest.onupgradeneeded = () => {
+                const db = openRequest.result;
+                let store = null;
 
-            if (db.objectStoreNames.contains(this.STORE_NAME)) {
-                store = openRequest.transaction.objectStore(this.STORE_NAME);
-            } else {
-                store = db.createObjectStore(this.STORE_NAME, {
-                    keyPath: DATABASE.INDEXES.IDENT,
+                if (db.objectStoreNames.contains(this.STORE_NAME)) {
+                    store = openRequest.transaction.objectStore(this.STORE_NAME);
+                } else {
+                    store = db.createObjectStore(this.STORE_NAME, {
+                        keyPath: DATABASE.INDEXES.IDENT,
+                    });
+                }
+
+                // Create indexes if they don't exist
+                if (!store.indexNames.contains(DATABASE.INDEXES.IDENT)) {
+                    store.createIndex(DATABASE.INDEXES.IDENT, DATABASE.INDEXES.IDENT, { unique: true });
+                }
+
+                if (!store.indexNames.contains(DATABASE.INDEXES.TIMESTAMP)) {
+                    store.createIndex(DATABASE.INDEXES.TIMESTAMP, DATABASE.INDEXES.TIMESTAMP, { unique: false });
+                }
+
+                // Remove old timestamp index if it exists (renamed to intTimestamp)
+                if (store.indexNames.contains("longTimestamp")) {
+                    store.deleteIndex("longTimestamp");
+                }
+            };
+
+            openRequest.onerror = () => {
+                logger.error("Failed to open database:", {
+                    error: openRequest.error?.message || 'Unknown database error',
+                    errorName: openRequest.error?.name || 'DatabaseError'
                 });
-            }
+                this.database = null;
+                reject(new Error('Failed to open database'));
+            };
 
-            // Create indexes if they don't exist
-            if (!store.indexNames.contains(DATABASE.INDEXES.IDENT)) {
-                store.createIndex(DATABASE.INDEXES.IDENT, DATABASE.INDEXES.IDENT, { unique: true });
-            }
-
-            if (!store.indexNames.contains(DATABASE.INDEXES.TIMESTAMP)) {
-                store.createIndex(DATABASE.INDEXES.TIMESTAMP, DATABASE.INDEXES.TIMESTAMP, { unique: false });
-            }
-
-            // Remove old timestamp index if it exists (renamed to intTimestamp)
-            if (store.indexNames.contains("longTimestamp")) {
-                store.deleteIndex("longTimestamp");
-            }
-        };
-
-        openRequest.onerror = () => {
-            console.error("Failed to open database:", JSON.stringify({
-                error: openRequest.error?.message || 'Unknown database error',
-                errorName: openRequest.error?.name || 'DatabaseError'
-            }, null, 2));
-            this.database = null;
-            callback(null);
-        };
-
-        openRequest.onsuccess = () => {
-            this.database = openRequest.result;
-            callback({});
-        };
+            openRequest.onsuccess = () => {
+                this.database = openRequest.result;
+                resolve();
+            };
+        });
     }
 
     /**
@@ -162,7 +131,7 @@ export class DatabaseManager {
      * @param {Object} request - Request object
      * @param {Function} response - Response callback
      */
-    async export (request, response) {
+    async export(request, response) {
         try {
             const provider = this.providerFactory.getCurrentProvider();
             if (!provider) {

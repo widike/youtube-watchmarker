@@ -109,7 +109,7 @@ class ExtensionManager {
             // Phase 5: Setup alarms and video tracking
             await alarmManager.initialize();
             this.registerAlarmHandlers();
-            
+
             await videoTracker.initialize(Youtube);
 
             // Phase 6: Setup action handler for icon clicks
@@ -185,45 +185,45 @@ class ExtensionManager {
      */
     registerMessageHandlers() {
         // Database handlers
-        messageRouter.register('database-export', (req) => 
+        messageRouter.register('database-export', (req) =>
             handleDatabaseExport(req, Database));
-        messageRouter.register('database-import', (req) => 
+        messageRouter.register('database-import', (req) =>
             handleDatabaseImport(req, Database));
-        messageRouter.register('database-reset', (req) => 
+        messageRouter.register('database-reset', (req) =>
             handleDatabaseReset(req, Database));
-        messageRouter.register('database-size', (req) => 
+        messageRouter.register('database-size', (req) =>
             handleDatabaseSize(req, this.providerFactory));
 
         // YouTube handlers
-        messageRouter.register('youtube-lookup', (req) => 
+        messageRouter.register('youtube-lookup', (req) =>
             handleYoutubeLookup(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)));
-        messageRouter.register('youtube-ensure', (req) => 
+        messageRouter.register('youtube-ensure', (req) =>
             handleYoutubeEnsure(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)));
-        messageRouter.register('youtube-synchronize', (req) => 
+        messageRouter.register('youtube-synchronize', (req) =>
             handleYoutubeSynchronize(req, Youtube));
-        messageRouter.register('youtube-liked-videos', (req) => 
+        messageRouter.register('youtube-liked-videos', (req) =>
             handleYoutubeLikedVideos(req, Youtube));
 
         // Search handlers
-        messageRouter.register('search-videos', (req) => 
+        messageRouter.register('search-videos', (req) =>
             handleSearchVideos(req, Search, Database));
-        messageRouter.register('search-delete', (req) => 
+        messageRouter.register('search-delete', (req) =>
             handleSearchDelete(req, Search));
 
         // History handlers
-        messageRouter.register('history-synchronize', (req) => 
+        messageRouter.register('history-synchronize', (req) =>
             handleHistorySynchronize(req, History));
 
         // Provider handlers
-        messageRouter.register('database-provider-status', (req) => 
+        messageRouter.register('database-provider-status', (req) =>
             handleProviderStatus(req, this.providerFactory));
-        messageRouter.register('database-provider-switch', (req) => 
+        messageRouter.register('database-provider-switch', (req) =>
             handleProviderSwitch(req, this.providerFactory));
-        messageRouter.register('database-provider-list', (req) => 
+        messageRouter.register('database-provider-list', (req) =>
             handleProviderList(req, this.providerFactory));
-        messageRouter.register('database-provider-migrate', (req) => 
+        messageRouter.register('database-provider-migrate', (req) =>
             handleProviderMigrate(req, this.providerFactory));
-        messageRouter.register('database-provider-sync', (req) => 
+        messageRouter.register('database-provider-sync', (req) =>
             handleProviderSync(req, this.providerFactory));
 
         // Supabase handlers
@@ -232,7 +232,7 @@ class ExtensionManager {
         messageRouter.register('supabase-clear', handleSupabaseClear);
         messageRouter.register('supabase-get-credentials', handleSupabaseGetCredentials);
         messageRouter.register('supabase-get-status', handleSupabaseGetStatus);
-        messageRouter.register('supabase-check-table', (req) => 
+        messageRouter.register('supabase-check-table', (req) =>
             handleSupabaseCheckTable(req, this.providerFactory));
 
         // Settings handlers
