@@ -32,7 +32,7 @@ const Utils = {
                     const decoded = decodeURIComponent(redirectParam[1]);
                     const nested = parseFromUrl(decoded);
                     if (nested) return nested;
-                } catch (_) {}
+                } catch (_) { }
             }
             // Thumbnails domain
             const thumbMatch = url.match(/\/vi\/([a-zA-Z0-9_-]{11})\//);
@@ -165,29 +165,33 @@ const Utils = {
     /**
      * Get video selectors for finding video elements
      */
-  getVideoSelectors() {
-    return [
-      'a.ytd-thumbnail[href^="/watch?v="]',
-      // New lockup-based home/shelf UI (A/B tested, rolled out Aug 2025)
-      // Be permissive: anchors inside the lockup that navigate to watch/shorts
-      'yt-lockup-view-model a.yt-simple-endpoint[href^="/watch?v="]',
-      'yt-lockup-view-model a[href^="/watch?v="]',
-      'yt-lockup-view-model a.yt-simple-endpoint[href^="/shorts/"]',
-      'yt-lockup-view-model a[href^="/shorts/"]',
-      // Legacy/other experimental class name that sometimes appears
-      'a.yt-lockup-view-model-wiz__content-image[href^="/watch?v="]',
-      'ytd-compact-video-renderer a.yt-simple-endpoint[href^="/watch?v="]',
-      'ytd-compact-video-renderer a[href^="/watch?v="]',
-      'a.ytp-ce-covering-overlay[href*="/watch?v="]',
-      'a.ytp-videowall-still[href*="/watch?v="]',
-      'a.ytd-thumbnail[href^="/shorts/"]',
-      'a.ShortsLockupViewModelHostEndpoint[href^="/shorts/"]',
-      'a.reel-item-endpoint[href^="/shorts/"]',
-      'a.media-item-thumbnail-container[href^="/watch?v="]',
-      // Notification panel entries
-      'ytd-notification-renderer a',
-      'ytd-notification-renderer .thumbnail-container img'
-      ];
+    getVideoSelectors() {
+        return [
+            'a.ytd-thumbnail[href^="/watch?v="]',
+            // New lockup-based home/shelf UI (A/B tested, rolled out Aug 2025)
+            // Be permissive: anchors inside the lockup that navigate to watch/shorts
+            'yt-lockup-view-model a.yt-simple-endpoint[href^="/watch?v="]',
+            'yt-lockup-view-model a[href^="/watch?v="]',
+            'yt-lockup-view-model a.yt-lockup-view-model__content-image[href^="/watch?v="]',
+            'yt-lockup-view-model a.yt-simple-endpoint[href^="/shorts/"]',
+            'yt-lockup-view-model a[href^="/shorts/"]',
+            // Watch page sidebar specific selectors
+            'ytd-watch-next-secondary-results-renderer a[href^="/watch?v="]',
+            'ytd-item-section-renderer a[href^="/watch?v="]',
+            // Legacy/other experimental class name that sometimes appears
+            'a.yt-lockup-view-model-wiz__content-image[href^="/watch?v="]',
+            'ytd-compact-video-renderer a.yt-simple-endpoint[href^="/watch?v="]',
+            'ytd-compact-video-renderer a[href^="/watch?v="]',
+            'a.ytp-ce-covering-overlay[href*="/watch?v="]',
+            'a.ytp-videowall-still[href*="/watch?v="]',
+            'a.ytd-thumbnail[href^="/shorts/"]',
+            'a.ShortsLockupViewModelHostEndpoint[href^="/shorts/"]',
+            'a.reel-item-endpoint[href^="/shorts/"]',
+            'a.media-item-thumbnail-container[href^="/watch?v="]',
+            // Notification panel entries
+            'ytd-notification-renderer a',
+            'ytd-notification-renderer .thumbnail-container img'
+        ];
     },
 
     /**
@@ -399,8 +403,8 @@ class BackgroundManager {
         } catch (error) {
             // Check if this is an extension context invalidation error
             if (error.message && (error.message.includes("Extension context invalidated") ||
-                    error.message.includes("context invalidated") ||
-                    error.message.includes("Receiving end does not exist"))) {
+                error.message.includes("context invalidated") ||
+                error.message.includes("Receiving end does not exist"))) {
                 Utils.logError("Extension context invalidated during connection:", error);
                 console.log("Extension context invalidated - attempting reconnection with longer delay");
                 // Use longer delay for context invalidation as it might need more time to recover
@@ -426,8 +430,8 @@ class BackgroundManager {
                 this.port.postMessage(message);
             } catch (error) {
                 if (error.message && (error.message.includes("Extension context invalidated") ||
-                        error.message.includes("context invalidated") ||
-                        error.message.includes("Receiving end does not exist"))) {
+                    error.message.includes("context invalidated") ||
+                    error.message.includes("Receiving end does not exist"))) {
                     console.log("Extension context invalidated during postMessage - clearing port");
                     this.port = null;
                 } else {
@@ -448,8 +452,8 @@ class BackgroundManager {
             await chrome.runtime.sendMessage(message);
         } catch (error) {
             if (error.message && (error.message.includes("Extension context invalidated") ||
-                    error.message.includes("context invalidated") ||
-                    error.message.includes("Receiving end does not exist"))) {
+                error.message.includes("context invalidated") ||
+                error.message.includes("Receiving end does not exist"))) {
                 console.log("Extension context invalidated during sendMessage - retrying once");
                 // Try once more in case it was a temporary issue
                 try {
@@ -601,63 +605,63 @@ class VideoMarkerManager {
     /**
      * Mark video as watched or unwatched
      */
-  markVideo(videoElement, videoId) {
-    const isWatched = this.watchDates.hasOwnProperty(videoId);
+    markVideo(videoElement, videoId) {
+        const isWatched = this.watchDates.hasOwnProperty(videoId);
 
-    // Prefer marking only the thumbnail within notifications
-    let markTarget = videoElement;
-    try {
-      const notification = videoElement.closest && videoElement.closest('ytd-notification-renderer');
-      if (notification) {
-        markTarget =
-          notification.querySelector('.thumbnail-container') ||
-          notification.querySelector('yt-img-shadow') ||
-          notification.querySelector('img') ||
-          videoElement;
-        // Ensure we don't keep the class on the outer notification link
-        if (markTarget !== videoElement && videoElement.classList?.contains('youwatch-mark')) {
-          videoElement.classList.remove('youwatch-mark');
-          if (videoElement.hasAttribute && videoElement.hasAttribute('watchdate')) {
-            videoElement.removeAttribute('watchdate');
-          }
-        }
-      }
-
-      // Normalize within lockup/compact renderers: apply to the thumbnail link only
-      const container =
-        videoElement.closest &&
-        videoElement.closest('yt-lockup-view-model, ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer');
-      if (container) {
-        let thumbLink = null;
-        // Prefer :has() if supported
+        // Prefer marking only the thumbnail within notifications
+        let markTarget = videoElement;
         try {
-          thumbLink = container.querySelector(
-            'a[href^="/watch?v="]:has(yt-collection-thumbnail-view-model, yt-thumbnail-view-model, yt-image, yt-img-shadow, yt-collections-stack, img),\n' +
-            'a[href^="/shorts/"]:has(yt-collection-thumbnail-view-model, yt-thumbnail-view-model, yt-image, yt-img-shadow, yt-collections-stack, img)'
-          );
-        } catch (_) {
-          // Fallback without :has(): find an image/thumbnail then climb to anchor
-          const imgLike =
-            container.querySelector('yt-collection-thumbnail-view-model, yt-thumbnail-view-model, yt-image, yt-img-shadow, yt-collections-stack, img');
-          thumbLink = imgLike?.closest?.('a[href^="/watch?v="], a[href^="/shorts/"]') ||
-            container.querySelector('a.ytd-thumbnail[href^="/watch?v="], a#thumbnail[href^="/watch?v="]');
-        }
-
-        if (thumbLink) {
-          markTarget = thumbLink;
-        }
-
-        // Remove marks from other watch/shorts links in the same card to avoid duplicates
-        container.querySelectorAll('a[href^="/watch?v="], a[href^="/shorts/"]').forEach(a => {
-          if (a !== markTarget && a.classList?.contains('youwatch-mark')) {
-            a.classList.remove('youwatch-mark');
-            if (a.hasAttribute && a.hasAttribute('watchdate')) {
-              a.removeAttribute('watchdate');
+            const notification = videoElement.closest && videoElement.closest('ytd-notification-renderer');
+            if (notification) {
+                markTarget =
+                    notification.querySelector('.thumbnail-container') ||
+                    notification.querySelector('yt-img-shadow') ||
+                    notification.querySelector('img') ||
+                    videoElement;
+                // Ensure we don't keep the class on the outer notification link
+                if (markTarget !== videoElement && videoElement.classList?.contains('youwatch-mark')) {
+                    videoElement.classList.remove('youwatch-mark');
+                    if (videoElement.hasAttribute && videoElement.hasAttribute('watchdate')) {
+                        videoElement.removeAttribute('watchdate');
+                    }
+                }
             }
-          }
-        });
-      }
-    } catch (_) {}
+
+            // Normalize within lockup/compact renderers: apply to the thumbnail link only
+            const container =
+                videoElement.closest &&
+                videoElement.closest('yt-lockup-view-model, ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer');
+            if (container) {
+                let thumbLink = null;
+                // Prefer :has() if supported
+                try {
+                    thumbLink = container.querySelector(
+                        'a[href^="/watch?v="]:has(yt-collection-thumbnail-view-model, yt-thumbnail-view-model, yt-image, yt-img-shadow, yt-collections-stack, img),\n' +
+                        'a[href^="/shorts/"]:has(yt-collection-thumbnail-view-model, yt-thumbnail-view-model, yt-image, yt-img-shadow, yt-collections-stack, img)'
+                    );
+                } catch (_) {
+                    // Fallback without :has(): find an image/thumbnail then climb to anchor
+                    const imgLike =
+                        container.querySelector('yt-collection-thumbnail-view-model, yt-thumbnail-view-model, yt-image, yt-img-shadow, yt-collections-stack, img');
+                    thumbLink = imgLike?.closest?.('a[href^="/watch?v="], a[href^="/shorts/"]') ||
+                        container.querySelector('a.ytd-thumbnail[href^="/watch?v="], a#thumbnail[href^="/watch?v="], a.yt-lockup-view-model__content-image[href^="/watch?v="]');
+                }
+
+                if (thumbLink) {
+                    markTarget = thumbLink;
+                }
+
+                // Remove marks from other watch/shorts links in the same card to avoid duplicates
+                container.querySelectorAll('a[href^="/watch?v="], a[href^="/shorts/"]').forEach(a => {
+                    if (a !== markTarget && a.classList?.contains('youwatch-mark')) {
+                        a.classList.remove('youwatch-mark');
+                        if (a.hasAttribute && a.hasAttribute('watchdate')) {
+                            a.removeAttribute('watchdate');
+                        }
+                    }
+                });
+            }
+        } catch (_) { }
 
         const hasWatchedClass = markTarget.classList.contains("youwatch-mark");
 
@@ -1306,7 +1310,7 @@ if (document.readyState === 'loading') {
 }
 
 // Debug function
-window.clearPublishDateCache = function() {
+window.clearPublishDateCache = function () {
     if (youtubeWatchMarker) {
         youtubeWatchMarker.publicationDateManager.publishDates = {};
         youtubeWatchMarker.publicationDateManager.publishDatesCacheTime = {};
