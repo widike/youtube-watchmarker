@@ -6,7 +6,6 @@
  */
 
 import { logger } from './logger.js';
-import { syncStorage } from './storage-utils.js';
 
 /**
  * Settings configuration
@@ -95,33 +94,57 @@ export class SettingsManager {
      * Initialize integer settings
      */
     async initializeIntegerSettings() {
-        await Promise.all(
-            SETTINGS_CONFIG.integers.map(({ key, defaultValue }) =>
-                syncStorage.setDefaultIfNull(key, defaultValue)
-            )
-        );
+        const keys = SETTINGS_CONFIG.integers.map(s => s.key);
+        const existing = await chrome.storage.sync.get(keys);
+
+        const toSet = {};
+        for (const { key, defaultValue } of SETTINGS_CONFIG.integers) {
+            if (existing[key] === undefined) {
+                toSet[key] = defaultValue;
+            }
+        }
+
+        if (Object.keys(toSet).length > 0) {
+            await chrome.storage.sync.set(toSet);
+        }
     }
 
     /**
      * Initialize boolean settings
      */
     async initializeBooleanSettings() {
-        await Promise.all(
-            SETTINGS_CONFIG.booleans.map(({ key, defaultValue }) =>
-                syncStorage.setDefaultIfNull(key, defaultValue)
-            )
-        );
+        const keys = SETTINGS_CONFIG.booleans.map(s => s.key);
+        const existing = await chrome.storage.sync.get(keys);
+
+        const toSet = {};
+        for (const { key, defaultValue } of SETTINGS_CONFIG.booleans) {
+            if (existing[key] === undefined) {
+                toSet[key] = defaultValue;
+            }
+        }
+
+        if (Object.keys(toSet).length > 0) {
+            await chrome.storage.sync.set(toSet);
+        }
     }
 
     /**
      * Initialize stylesheet settings
      */
     async initializeStylesheetSettings() {
-        await Promise.all(
-            SETTINGS_CONFIG.stylesheets.map(({ key, defaultValue }) =>
-                syncStorage.setDefaultIfNull(key, defaultValue)
-            )
-        );
+        const keys = SETTINGS_CONFIG.stylesheets.map(s => s.key);
+        const existing = await chrome.storage.sync.get(keys);
+
+        const toSet = {};
+        for (const { key, defaultValue } of SETTINGS_CONFIG.stylesheets) {
+            if (existing[key] === undefined) {
+                toSet[key] = defaultValue;
+            }
+        }
+
+        if (Object.keys(toSet).length > 0) {
+            await chrome.storage.sync.set(toSet);
+        }
     }
 
     /**
@@ -129,17 +152,17 @@ export class SettingsManager {
      */
     async migrateOldSettings() {
         try {
-            const youtubeAutoSyncEnabled = await syncStorage.get('youtube_auto_sync_enabled');
-            if (youtubeAutoSyncEnabled === true) {
+            const result = await chrome.storage.sync.get(['youtube_auto_sync_enabled', 'idCondition_Youhist']);
+
+            if (result.youtube_auto_sync_enabled === true) {
                 // Enable YouTube History condition if it's not already set
-                const currentYouHistCondition = await syncStorage.get('idCondition_Youhist');
-                if (currentYouHistCondition === undefined || currentYouHistCondition === null) {
-                    await syncStorage.set('idCondition_Youhist', true);
+                if (result.idCondition_Youhist === undefined || result.idCondition_Youhist === null) {
+                    await chrome.storage.sync.set({ idCondition_Youhist: true });
                     this.logger.info('Migrated youtube_auto_sync_enabled to idCondition_Youhist');
                 }
 
                 // Remove the old setting
-                await syncStorage.remove('youtube_auto_sync_enabled');
+                await chrome.storage.sync.remove(['youtube_auto_sync_enabled']);
                 this.logger.info('Removed old youtube_auto_sync_enabled setting');
             }
         } catch (error) {
@@ -153,7 +176,8 @@ export class SettingsManager {
      * @returns {Promise<any>} Setting value
      */
     async getSetting(key) {
-        return await syncStorage.get(key);
+        const result = await chrome.storage.sync.get([key]);
+        return result[key];
     }
 
     /**
@@ -162,7 +186,7 @@ export class SettingsManager {
      * @param {any} value - Setting value
      */
     async setSetting(key, value) {
-        await syncStorage.set(key, value);
+        await chrome.storage.sync.set({ [key]: value });
         this.logger.debug(`Setting "${key}" updated to:`, value);
     }
 

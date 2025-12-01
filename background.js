@@ -65,8 +65,6 @@ import {
     handleSetSetting
 } from "./handlers/settings-handlers.js";
 
-import { syncStorage } from "./storage-utils.js";
-
 /**
  * Extension Manager
  * Coordinates initialization and lifecycle of all extension components
@@ -170,31 +168,31 @@ class ExtensionManager {
         // Register all handlers using registerMultiple for cleaner code
         messageRouter.registerMultiple({
             // Database handlers
-            'database-export': (req) => handleDatabaseExport(req, Database),
-            'database-import': (req) => handleDatabaseImport(req, Database),
-            'database-reset': (req) => handleDatabaseReset(req, Database),
-            'database-size': (req) => handleDatabaseSize(req, this.providerFactory),
+            'database-export': handleDatabaseExport,
+            'database-import': handleDatabaseImport,
+            'database-reset': handleDatabaseReset,
+            'database-size': handleDatabaseSize,
 
             // YouTube handlers
-            'youtube-lookup': (req) => handleYoutubeLookup(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)),
-            'youtube-ensure': (req) => handleYoutubeEnsure(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)),
-            'youtube-mark': (req) => handleYoutubeMark(req, Youtube),
-            'youtube-synchronize': (req) => handleYoutubeSynchronize(req, Youtube),
-            'youtube-liked-videos': (req) => handleYoutubeLikedVideos(req, Youtube),
+            'youtube-lookup': handleYoutubeLookup,
+            'youtube-ensure': handleYoutubeEnsure,
+            'youtube-mark': handleYoutubeMark,
+            'youtube-synchronize': handleYoutubeSynchronize,
+            'youtube-liked-videos': handleYoutubeLikedVideos,
 
             // Search handlers
-            'search-videos': (req) => handleSearchVideos(req, Search, Database),
-            'search-delete': (req) => handleSearchDelete(req, Search),
+            'search-videos': handleSearchVideos,
+            'search-delete': handleSearchDelete,
 
             // History handlers
-            'history-synchronize': (req) => handleHistorySynchronize(req, History),
+            'history-synchronize': handleHistorySynchronize,
 
             // Provider handlers
-            'database-provider-status': (req) => handleProviderStatus(req, this.providerFactory),
-            'database-provider-switch': (req) => handleProviderSwitch(req, this.providerFactory),
-            'database-provider-list': (req) => handleProviderList(req, this.providerFactory),
-            'database-provider-migrate': (req) => handleProviderMigrate(req, this.providerFactory),
-            'database-provider-sync': (req) => handleProviderSync(req, this.providerFactory),
+            'database-provider-status': handleProviderStatus,
+            'database-provider-switch': handleProviderSwitch,
+            'database-provider-list': handleProviderList,
+            'database-provider-migrate': handleProviderMigrate,
+            'database-provider-sync': handleProviderSync,
 
             // Supabase handlers
             'supabase-configure': handleSupabaseConfigure,
@@ -202,7 +200,7 @@ class ExtensionManager {
             'supabase-clear': handleSupabaseClear,
             'supabase-get-credentials': handleSupabaseGetCredentials,
             'supabase-get-status': handleSupabaseGetStatus,
-            'supabase-check-table': (req) => handleSupabaseCheckTable(req, this.providerFactory),
+            'supabase-check-table': handleSupabaseCheckTable,
 
             // Settings handlers
             'get-setting': handleGetSetting,
@@ -251,7 +249,8 @@ class ExtensionManager {
         logger.info('Starting startup synchronization...');
 
         try {
-            const shouldSyncYoutube = await syncStorage.get('idCondition_Youhist') === true;
+            const result = await chrome.storage.sync.get(['idCondition_Youhist']);
+            const shouldSyncYoutube = result.idCondition_Youhist === true;
 
             if (shouldSyncYoutube) {
                 logger.info('Syncing YouTube history on startup');
@@ -273,8 +272,9 @@ class ExtensionManager {
         logger.info('Starting periodic synchronization...');
 
         try {
-            const shouldSyncHistory = await syncStorage.get('idCondition_Browhist') === true;
-            const shouldSyncYoutube = await syncStorage.get('idCondition_Youhist') === true;
+            const result = await chrome.storage.sync.get(['idCondition_Browhist', 'idCondition_Youhist']);
+            const shouldSyncHistory = result.idCondition_Browhist === true;
+            const shouldSyncYoutube = result.idCondition_Youhist === true;
 
             if (shouldSyncHistory) {
                 logger.info('Syncing browser history');

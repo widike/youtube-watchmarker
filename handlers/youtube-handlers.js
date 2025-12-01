@@ -7,15 +7,15 @@
 
 import { logger } from '../logger.js';
 import { ErrorUtils } from '../error-handler.js';
+import { Youtube } from '../bg-youtube.js';
+import { videoTracker } from '../video-tracker.js';
 
 /**
  * Lookup a video in the database
  * @param {Object} request - Request with videoId and optional title
- * @param {Object} youtube - Youtube module instance
- * @param {Function} cacheTitle - Function to cache titles
  * @returns {Promise<Object>} Lookup result
  */
-export async function handleYoutubeLookup(request, youtube, cacheTitle) {
+export async function handleYoutubeLookup(request) {
     try {
         const { videoId, title } = request;
 
@@ -27,10 +27,10 @@ export async function handleYoutubeLookup(request, youtube, cacheTitle) {
         }
 
         if (title) {
-            cacheTitle(videoId, title);
+            videoTracker.cacheTitle(videoId, title);
         }
 
-        const result = await youtube.lookup(videoId);
+        const result = await Youtube.lookup(videoId);
         return result || { success: false, error: 'Video not found' };
 
     } catch (error) {
@@ -42,11 +42,9 @@ export async function handleYoutubeLookup(request, youtube, cacheTitle) {
 /**
  * Ensure a video exists in the database
  * @param {Object} request - Request with videoId and optional title, timestamp, count
- * @param {Object} youtube - Youtube module instance
- * @param {Function} cacheTitle - Function to cache titles
  * @returns {Promise<Object>} Ensure result
  */
-export async function handleYoutubeEnsure(request, youtube, cacheTitle) {
+export async function handleYoutubeEnsure(request) {
     try {
         const { videoId, title, timestamp, count } = request;
 
@@ -58,10 +56,10 @@ export async function handleYoutubeEnsure(request, youtube, cacheTitle) {
         }
 
         if (title) {
-            cacheTitle(videoId, title);
+            videoTracker.cacheTitle(videoId, title);
         }
 
-        const result = await youtube.ensure(videoId, title, timestamp, count);
+        const result = await Youtube.ensure(videoId, title, timestamp, count);
         return { success: true, data: result };
 
     } catch (error) {
@@ -72,13 +70,11 @@ export async function handleYoutubeEnsure(request, youtube, cacheTitle) {
 
 /**
  * Synchronize YouTube history
- * @param {Object} request - Request object
- * @param {Object} youtube - Youtube module instance
  * @returns {Promise<Object>} Synchronization result
  */
-export async function handleYoutubeSynchronize(request, youtube) {
+export async function handleYoutubeSynchronize() {
     try {
-        const result = await youtube.synchronize((progress) => {
+        const result = await Youtube.synchronize((progress) => {
             logger.debug('YouTube sync progress:', progress);
         });
 
@@ -96,13 +92,11 @@ export async function handleYoutubeSynchronize(request, youtube) {
 
 /**
  * Synchronize YouTube liked videos
- * @param {Object} request - Request object
- * @param {Object} youtube - Youtube module instance
  * @returns {Promise<Object>} Synchronization result
  */
-export async function handleYoutubeLikedVideos(request, youtube) {
+export async function handleYoutubeLikedVideos() {
     try {
-        const result = await youtube.synchronizeLikedVideos((progress) => {
+        const result = await Youtube.synchronizeLikedVideos((progress) => {
             logger.debug('Liked videos sync progress:', progress);
         });
 
@@ -120,10 +114,9 @@ export async function handleYoutubeLikedVideos(request, youtube) {
 /**
  * Mark a video as watched
  * @param {Object} request - Request with videoId and optional title, timestamp, count
- * @param {Object} youtube - Youtube module instance
  * @returns {Promise<Object>} Mark result
  */
-export async function handleYoutubeMark(request, youtube) {
+export async function handleYoutubeMark(request) {
     try {
         const { videoId, title, timestamp, count } = request;
 
@@ -134,7 +127,7 @@ export async function handleYoutubeMark(request, youtube) {
             };
         }
 
-        const result = await youtube.mark(videoId, title, timestamp, count);
+        const result = await Youtube.mark(videoId, title, timestamp, count);
         return { success: true, data: result };
 
     } catch (error) {

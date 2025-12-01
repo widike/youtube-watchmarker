@@ -9,33 +9,29 @@ import { logger } from '../logger.js';
 import { ErrorUtils } from '../error-handler.js';
 import { isValidBase64 } from '../validation.js';
 import { processInChunks, shouldProcessInChunks } from '../chunk-utils.js';
+import { Database } from '../bg-database.js';
+import { databaseProviderFactory } from '../database-provider-factory.js';
+import { createSimpleHandler, createHandlerWithErrorHandler } from '../handler-wrapper.js';
 
 /**
  * Export database data
- * @param {Object} request - Request object
- * @param {Object} database - Database instance
  * @returns {Promise<Object>} Export result
  */
-export async function handleDatabaseExport(request, database) {
-    try {
-        const data = await database.export();
-        return {
-            success: true,
-            data: JSON.stringify(data)
-        };
-    } catch (error) {
-        return ErrorUtils.handleDatabaseError(error, 'export');
-    }
-}
+export const handleDatabaseExport = createSimpleHandler(
+    async () => {
+        const data = await Database.export();
+        return { data: JSON.stringify(data) };
+    },
+    'handleDatabaseExport'
+);
 
 /**
  * Import database data
  * @param {Object} request - Request object with data field
- * @param {Object} database - Database instance
  * @returns {Promise<Object>} Import result
  */
-export async function handleDatabaseImport(request, database) {
-    try {
+export const handleDatabaseImport = createHandlerWithErrorHandler(
+    async (request) => {
         logger.info('Database import started');
 
         let parsedData;
@@ -82,7 +78,7 @@ export async function handleDatabaseImport(request, database) {
         if (shouldProcessInChunks(videoData)) {
             const result = await processInChunks(
                 videoData,
-                async (chunk) => await database.import(chunk),
+                async (chunk) => await Database.import(chunk),
                 {
                     progressCallback: (progress) => {
                         logger.info(`Import progress: ${progress.percentage}% (${progress.itemsProcessed}/${progress.totalItems})`);
@@ -92,48 +88,43 @@ export async function handleDatabaseImport(request, database) {
             return result;
         } else {
             // For smaller datasets, use single-pass import
-            await database.import(videoData);
+            await Database.import(videoData);
             return {
-                success: true,
                 message: `Successfully imported ${videoData.length} videos`
             };
         }
-    } catch (error) {
-        return ErrorUtils.handleDatabaseError(error, 'import');
-    }
-}
+    },
+    (error) => ErrorUtils.handleDatabaseError(error, 'import'),
+    'handleDatabaseImport'
+);
 
 /**
  * Reset database
- * @param {Object} request - Request object
- * @param {Object} database - Database instance
  * @returns {Promise<Object>} Reset result
  */
-export async function handleDatabaseReset(request, database) {
-    try {
-        await database.reset();
-        return { success: true, message: 'Database reset successfully' };
-    } catch (error) {
-        return ErrorUtils.handleDatabaseError(error, 'reset');
-    }
-}
+export const handleDatabaseReset = createHandlerWithErrorHandler(
+    async () => {
+        await Database.reset();
+        return { message: 'Database reset successfully' };
+    },
+    (error) => ErrorUtils.handleDatabaseError(error, 'reset'),
+    'handleDatabaseReset'
+);
 
 /**
  * Get database size
- * @param {Object} request - Request object
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Size result
  */
-export async function handleDatabaseSize(request, providerFactory) {
-    try {
-        const currentProvider = providerFactory.getCurrentProvider();
+export const handleDatabaseSize = createHandlerWithErrorHandler(
+    async () => {
+        const currentProvider = databaseProviderFactory.getCurrentProvider();
         if (!currentProvider) {
             return { success: false, error: 'No database provider available' };
         }
 
         const count = await currentProvider.getVideoCount();
-        return { success: true, size: count.toString() };
-    } catch (error) {
-        return ErrorUtils.handleDatabaseError(error, 'get size');
-    }
-}
+        return { size: count.toString() };
+    },
+    (error) => ErrorUtils.handleDatabaseError(error, 'get size'),
+    'handleDatabaseSize'
+);

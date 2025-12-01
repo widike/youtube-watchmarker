@@ -7,15 +7,14 @@
 
 import { logger } from '../logger.js';
 import { ErrorUtils } from '../error-handler.js';
+import { Search } from '../bg-search.js';
 
 /**
  * Search for videos
  * @param {Object} request - Request with query/strQuery, page/intSkip, pageSize/intLength
- * @param {Object} search - Search module instance
- * @param {Object} database - Database instance (unused but kept for compatibility)
  * @returns {Promise<Object>} Search result
  */
-export async function handleSearchVideos(request, search, database) {
+export async function handleSearchVideos(request) {
     try {
         // Support both old and new parameter names
         const query = request.query !== undefined ? request.query : (request.strQuery || '');
@@ -34,7 +33,7 @@ export async function handleSearchVideos(request, search, database) {
             length = request.intLength || 0;
         }
 
-        const result = await search.lookup(query, skip, length);
+        const result = await Search.lookup(query, skip, length);
 
         return {
             success: true,
@@ -50,10 +49,9 @@ export async function handleSearchVideos(request, search, database) {
 /**
  * Delete a video from database and history
  * @param {Object} request - Request with videoId/strIdent
- * @param {Object} search - Search module instance
  * @returns {Promise<Object>} Delete result
  */
-export async function handleSearchDelete(request, search) {
+export async function handleSearchDelete(request) {
     try {
         // Support both old and new parameter names
         const videoId = request.videoId || request.strIdent;
@@ -65,7 +63,7 @@ export async function handleSearchDelete(request, search) {
             };
         }
 
-        const success = await search.delete(videoId, (progress) => {
+        const success = await Search.delete(videoId, (progress) => {
             logger.debug('Delete progress:', progress);
         });
 

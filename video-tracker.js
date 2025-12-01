@@ -6,7 +6,6 @@
  */
 
 import { logger } from './logger.js';
-import { syncStorage } from './storage-utils.js';
 import { sendMessageToTab } from './browser-utils.js';
 import { isValidVideoTitle } from './validation.js';
 import { decodeHtmlEntitiesAndFixEncoding } from './text-utils.js';
@@ -59,7 +58,8 @@ export class VideoTracker {
                     return;
                 }
 
-                const shouldTrackNavigation = await syncStorage.get('idCondition_Brownav') === true;
+                const result = await chrome.storage.sync.get(['idCondition_Brownav']);
+                const shouldTrackNavigation = result.idCondition_Brownav === true;
 
                 if (shouldTrackNavigation) {
                     await this.handleTabNavigation(tabId, changeInfo, tab);
@@ -74,7 +74,8 @@ export class VideoTracker {
      * Setup request hook for tracking video progress
      */
     async setupRequestHook() {
-        const shouldTrackProgress = await syncStorage.get('idCondition_Youprog') === true;
+        const result = await chrome.storage.sync.get(['idCondition_Youprog']);
+        const shouldTrackProgress = result.idCondition_Youprog === true;
 
         if (shouldTrackProgress) {
             chrome.webRequest.onSendHeaders.addListener(

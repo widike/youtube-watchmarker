@@ -137,24 +137,6 @@ export class ErrorHandler {
     }
 
     /**
-     * Validate video ID format
-     * @param {string} videoId - Video ID to validate
-     * @throws {ValidationError} If validation fails
-     */
-    validateVideoId(videoId) {
-        if (!videoId || typeof videoId !== 'string') {
-            throw new ValidationError('Video ID must be a non-empty string');
-        }
-
-        if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-            throw new ValidationError(
-                'Invalid video ID format',
-                { videoId, expected: '11 character alphanumeric string' }
-            );
-        }
-    }
-
-    /**
      * Get error statistics
      * @returns {Object} Error statistics
      */

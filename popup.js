@@ -49,8 +49,8 @@ class PopupSearchManager {
     async waitForBootstrap() {
         return new Promise((resolve) => {
             const checkBootstrap = () => {
-                if (typeof bootstrap !== 'undefined') {
-                    this.bootstrap = bootstrap;
+                if (typeof window.bootstrap !== 'undefined') {
+                    this.bootstrap = window.bootstrap;
                     resolve();
                 } else {
                     setTimeout(checkBootstrap, 100);
@@ -217,7 +217,7 @@ class PopupSearchManager {
                 // Try once more in case it was a temporary issue
                 try {
                     return await chrome.runtime.sendMessage(message);
-                } catch (retryError) {
+                } catch (_retryError) {
                     console.log("Retry also failed, extension context may be permanently invalidated");
                     throw new Error("Extension context invalidated");
                 }
@@ -243,50 +243,18 @@ class PopupSearchManager {
             this.searchState.currentQuery = '';
             this.searchState.currentPage = 1;
 
-            // Add retry logic for database initialization timing
-            const maxRetries = 3;
-            let retryCount = 0;
-            let response = null;
-
-            while (retryCount < maxRetries) {
-                try {
-                    response = await this.safeSendMessage({
-                        action: 'search-videos',
-                        query: '', // Empty query to show all videos
-                        page: 1,
-                        pageSize: this.searchState.pageSize
-                    });
-
-                    // If successful, break out of retry loop
-                    if (response && response.success) {
-                        break;
-                    }
-
-                    // If failed but not due to database issues, don't retry
-                    if (response && response.error && !response.error.includes('Database')) {
-                        break;
-                    }
-                } catch (error) {
-                    console.warn(`Initial search attempt ${retryCount + 1} failed:`, error);
-                }
-
-                retryCount++;
-                if (retryCount < maxRetries) {
-                    // Wait before retrying (exponential backoff)
-                    await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
-                }
-            }
+            const response = await this.safeSendMessage({
+                action: 'search-videos',
+                query: '', // Empty query to show all videos
+                page: 1,
+                pageSize: this.searchState.pageSize
+            });
 
             if (response && response.success) {
                 const videos = response.objVideos || response.results || [];
                 this.searchState.totalResults = response.totalResults || 0;
                 this.hideInitialLoading();
                 this.displaySearchResults(videos);
-
-                // Show a subtle message if it took multiple retries
-                if (retryCount > 0) {
-                    // Search successful after multiple attempts
-                }
             } else {
                 // Don't show error on initial load, just show empty state
                 this.hideInitialLoading();

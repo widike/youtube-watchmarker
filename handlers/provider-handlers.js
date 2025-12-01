@@ -8,16 +8,15 @@
 import { logger } from '../logger.js';
 import { ErrorUtils } from '../error-handler.js';
 import { credentialStorage } from '../credential-storage.js';
+import { databaseProviderFactory } from '../database-provider-factory.js';
 
 /**
  * Get database provider status
- * @param {Object} request - Request object
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Provider status
  */
-export async function handleProviderStatus(request, providerFactory) {
+export async function handleProviderStatus() {
     try {
-        const status = providerFactory.getProviderStatus();
+        const status = databaseProviderFactory.getProviderStatus();
         return { success: true, status };
     } catch (error) {
         logger.error('Failed to get provider status:', error);
@@ -28,10 +27,9 @@ export async function handleProviderStatus(request, providerFactory) {
 /**
  * Switch database provider
  * @param {Object} request - Request with provider field
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Switch result
  */
-export async function handleProviderSwitch(request, providerFactory) {
+export async function handleProviderSwitch(request) {
     try {
         const { provider } = request;
 
@@ -40,14 +38,14 @@ export async function handleProviderSwitch(request, providerFactory) {
         }
 
         if (provider === 'indexeddb') {
-            const success = await providerFactory.switchToIndexedDB();
+            const success = await databaseProviderFactory.switchToIndexedDB();
             if (success) {
                 return { success: true, message: `Successfully switched to ${provider}` };
             } else {
                 return { success: false, error: `Failed to switch to ${provider}` };
             }
         } else if (provider === 'supabase') {
-            await providerFactory.switchToSupabase();
+            await databaseProviderFactory.switchToSupabase();
             return { success: true, message: `Successfully switched to ${provider}` };
         }
     } catch (error) {
@@ -58,13 +56,11 @@ export async function handleProviderSwitch(request, providerFactory) {
 
 /**
  * Get available providers
- * @param {Object} request - Request object
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Available providers
  */
-export async function handleProviderList(request, providerFactory) {
+export async function handleProviderList() {
     try {
-        const providers = await providerFactory.getAvailableProviders();
+        const providers = await databaseProviderFactory.getAvailableProviders();
         return { success: true, providers };
     } catch (error) {
         logger.error('Failed to get available providers:', error);
@@ -75,10 +71,9 @@ export async function handleProviderList(request, providerFactory) {
 /**
  * Migrate data between providers
  * @param {Object} request - Request with fromProvider and toProvider
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Migration result
  */
-export async function handleProviderMigrate(request, providerFactory) {
+export async function handleProviderMigrate(request) {
     try {
         const { fromProvider, toProvider } = request;
 
@@ -86,7 +81,7 @@ export async function handleProviderMigrate(request, providerFactory) {
             return { success: false, error: 'Missing source or target provider' };
         }
 
-        const success = await providerFactory.migrateData(fromProvider, toProvider);
+        const success = await databaseProviderFactory.migrateData(fromProvider, toProvider);
         if (success) {
             return {
                 success: true,
@@ -104,10 +99,9 @@ export async function handleProviderMigrate(request, providerFactory) {
 /**
  * Sync data between providers
  * @param {Object} request - Request with providers array
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Sync result
  */
-export async function handleProviderSync(request, providerFactory) {
+export async function handleProviderSync(request) {
     try {
         const { providers } = request;
 
@@ -115,7 +109,7 @@ export async function handleProviderSync(request, providerFactory) {
             return { success: false, error: 'Invalid providers array' };
         }
 
-        const success = await providerFactory.syncProviders(providers[0], providers[1]);
+        const success = await databaseProviderFactory.syncProviders(providers[0], providers[1]);
         if (success) {
             return {
                 success: true,
@@ -136,6 +130,7 @@ export async function handleProviderSync(request, providerFactory) {
  * @returns {Promise<Object>} Configuration result
  */
 export async function handleSupabaseConfigure(request) {
+    // Note: request parameter is used in this function
     try {
         const { credentials } = request;
 
@@ -153,10 +148,9 @@ export async function handleSupabaseConfigure(request) {
 
 /**
  * Test Supabase connection
- * @param {Object} request - Request object
  * @returns {Promise<Object>} Test result
  */
-export async function handleSupabaseTest(request) {
+export async function handleSupabaseTest() {
     try {
         const success = await credentialStorage.testConnection();
         if (success) {
@@ -172,10 +166,9 @@ export async function handleSupabaseTest(request) {
 
 /**
  * Clear Supabase configuration
- * @param {Object} request - Request object
  * @returns {Promise<Object>} Clear result
  */
-export async function handleSupabaseClear(request) {
+export async function handleSupabaseClear() {
     try {
         await credentialStorage.clearCredentials();
         return { success: true, message: 'Supabase configuration cleared successfully' };
@@ -187,10 +180,9 @@ export async function handleSupabaseClear(request) {
 
 /**
  * Get Supabase credentials (masked)
- * @param {Object} request - Request object
  * @returns {Promise<Object>} Credentials result
  */
-export async function handleSupabaseGetCredentials(request) {
+export async function handleSupabaseGetCredentials() {
     try {
         const credentials = await credentialStorage.getMaskedCredentials();
         return { success: true, credentials };
@@ -202,10 +194,9 @@ export async function handleSupabaseGetCredentials(request) {
 
 /**
  * Get Supabase status
- * @param {Object} request - Request object
  * @returns {Promise<Object>} Status result
  */
-export async function handleSupabaseGetStatus(request) {
+export async function handleSupabaseGetStatus() {
     try {
         const status = await credentialStorage.getCredentialStatus();
         return { success: true, status };
@@ -217,13 +208,11 @@ export async function handleSupabaseGetStatus(request) {
 
 /**
  * Check if Supabase table exists
- * @param {Object} request - Request object
- * @param {Object} providerFactory - Provider factory instance
  * @returns {Promise<Object>} Table check result
  */
-export async function handleSupabaseCheckTable(request, providerFactory) {
+export async function handleSupabaseCheckTable() {
     try {
-        const currentProvider = providerFactory.getCurrentProvider();
+        const currentProvider = databaseProviderFactory.getCurrentProvider();
         if (!currentProvider || !currentProvider.checkTableExists) {
             return { success: false, error: 'Supabase provider not available' };
         }
