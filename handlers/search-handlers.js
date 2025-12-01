@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Search action handlers
  * Handles video search and deletion

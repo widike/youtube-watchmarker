@@ -1,10 +1,12 @@
+// @ts-check
+
 /**
  * Alarm Manager
  * Manages Chrome alarms for periodic synchronization and keep-alive
  */
 
 import { logger } from './logger.js';
-import { getSyncStorageAsync, setSyncStorageAsync, getStorageAsync, setStorageAsync } from './storage-utils.js';
+import { syncStorage, localStorage } from './storage-utils.js';
 
 /**
  * Alarm configuration
@@ -99,7 +101,7 @@ export class AlarmManager {
             await chrome.alarms.clear(ALARM_CONFIG.SYNC.name);
 
             // Get sync interval from settings
-            const syncInterval = await getSyncStorageAsync('sync_interval_minutes')
+            const syncInterval = await syncStorage.get('sync_interval_minutes')
                 || ALARM_CONFIG.SYNC.defaultIntervalMinutes;
 
             // Create alarm with minimum interval
@@ -153,7 +155,7 @@ export class AlarmManager {
      */
     async updateSyncInterval(intervalMinutes) {
         this.logger.info(`Updating sync interval to ${intervalMinutes} minutes`);
-        await setSyncStorageAsync('sync_interval_minutes', intervalMinutes);
+        await syncStorage.set('sync_interval_minutes', intervalMinutes);
         await this.setupSynchronizationAlarm();
     }
 
@@ -172,7 +174,7 @@ export class AlarmManager {
             };
 
             // Store in local storage for debugging
-            const existingLogs = await getStorageAsync('alarm_failure_logs') || '[]';
+            const existingLogs = await localStorage.get('alarm_failure_logs') || '[]';
             const logs = JSON.parse(existingLogs);
             logs.push(failureLog);
 
@@ -181,7 +183,7 @@ export class AlarmManager {
                 logs.splice(0, logs.length - 10);
             }
 
-            await setStorageAsync('alarm_failure_logs', JSON.stringify(logs));
+            await localStorage.set('alarm_failure_logs', JSON.stringify(logs));
         } catch (logError) {
             this.logger.error('Error logging alarm failure:', logError);
         }
@@ -193,7 +195,7 @@ export class AlarmManager {
      */
     async getAlarmFailureLogs() {
         try {
-            const logs = await getStorageAsync('alarm_failure_logs') || '[]';
+            const logs = await localStorage.get('alarm_failure_logs') || '[]';
             return JSON.parse(logs);
         } catch (error) {
             this.logger.error('Error getting alarm failure logs:', error);
@@ -206,7 +208,7 @@ export class AlarmManager {
      */
     async clearAlarmFailureLogs() {
         try {
-            await setStorageAsync('alarm_failure_logs', '[]');
+            await localStorage.set('alarm_failure_logs', '[]');
             this.logger.info('Alarm failure logs cleared');
         } catch (error) {
             this.logger.error('Error clearing alarm failure logs:', error);

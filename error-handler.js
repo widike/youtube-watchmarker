@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Error handling system for YouTube Watchmarker
  * Simplified to essential error types with integrated logging

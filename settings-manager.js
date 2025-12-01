@@ -1,14 +1,12 @@
+// @ts-check
+
 /**
  * Settings Manager
  * Manages extension settings and configuration
  */
 
 import { logger } from './logger.js';
-import {
-    getSyncStorageAsync,
-    setSyncStorageAsync,
-    setDefaultInSyncStorageIfNull
-} from './storage-utils.js';
+import { syncStorage } from './storage-utils.js';
 
 /**
  * Settings configuration
@@ -99,7 +97,7 @@ export class SettingsManager {
     async initializeIntegerSettings() {
         await Promise.all(
             SETTINGS_CONFIG.integers.map(({ key, defaultValue }) =>
-                setDefaultInSyncStorageIfNull(key, defaultValue)
+                syncStorage.setDefaultIfNull(key, defaultValue)
             )
         );
     }
@@ -110,7 +108,7 @@ export class SettingsManager {
     async initializeBooleanSettings() {
         await Promise.all(
             SETTINGS_CONFIG.booleans.map(({ key, defaultValue }) =>
-                setDefaultInSyncStorageIfNull(key, defaultValue)
+                syncStorage.setDefaultIfNull(key, defaultValue)
             )
         );
     }
@@ -121,7 +119,7 @@ export class SettingsManager {
     async initializeStylesheetSettings() {
         await Promise.all(
             SETTINGS_CONFIG.stylesheets.map(({ key, defaultValue }) =>
-                setDefaultInSyncStorageIfNull(key, defaultValue)
+                syncStorage.setDefaultIfNull(key, defaultValue)
             )
         );
     }
@@ -131,17 +129,17 @@ export class SettingsManager {
      */
     async migrateOldSettings() {
         try {
-            const youtubeAutoSyncEnabled = await getSyncStorageAsync('youtube_auto_sync_enabled');
+            const youtubeAutoSyncEnabled = await syncStorage.get('youtube_auto_sync_enabled');
             if (youtubeAutoSyncEnabled === true) {
                 // Enable YouTube History condition if it's not already set
-                const currentYouHistCondition = await getSyncStorageAsync('idCondition_Youhist');
+                const currentYouHistCondition = await syncStorage.get('idCondition_Youhist');
                 if (currentYouHistCondition === undefined || currentYouHistCondition === null) {
-                    await setSyncStorageAsync('idCondition_Youhist', true);
+                    await syncStorage.set('idCondition_Youhist', true);
                     this.logger.info('Migrated youtube_auto_sync_enabled to idCondition_Youhist');
                 }
 
                 // Remove the old setting
-                await chrome.storage.sync.remove('youtube_auto_sync_enabled');
+                await syncStorage.remove('youtube_auto_sync_enabled');
                 this.logger.info('Removed old youtube_auto_sync_enabled setting');
             }
         } catch (error) {
@@ -155,7 +153,7 @@ export class SettingsManager {
      * @returns {Promise<any>} Setting value
      */
     async getSetting(key) {
-        return await getSyncStorageAsync(key);
+        return await syncStorage.get(key);
     }
 
     /**
@@ -164,7 +162,7 @@ export class SettingsManager {
      * @param {any} value - Setting value
      */
     async setSetting(key, value) {
-        await setSyncStorageAsync(key, value);
+        await syncStorage.set(key, value);
         this.logger.debug(`Setting "${key}" updated to:`, value);
     }
 

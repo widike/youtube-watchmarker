@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * YouTube action handlers
  * Handles YouTube-related operations like lookup, ensure, synchronize

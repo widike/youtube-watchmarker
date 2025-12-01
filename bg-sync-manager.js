@@ -1,3 +1,5 @@
+// @ts-check
+
 import { databaseProviderFactory } from "./database-provider-factory.js";
 import { logger } from "./logger.js";
 
@@ -16,12 +18,10 @@ export class SyncManager {
 
     /**
      * Initialize the sync manager
-     * @param {Object} request - Request object (optional)
-     * @param {Function} response - Response callback (optional)
+     * @returns {Promise<void>}
      */
-    async init(request = {}, response = null) {
+    async init() {
         if (this.isInitialized) {
-            if (response) response({});
             return;
         }
 
@@ -38,11 +38,9 @@ export class SyncManager {
             chrome.storage.onChanged.addListener(this.onStorageChanged.bind(this));
 
             this.isInitialized = true;
-            if (response) response({});
         } catch (error) {
             logger.error("Failed to initialize sync manager:", error);
-            if (response) response(null);
-            throw error; // Re-throw if no callback
+            throw error;
         }
     }
 
@@ -68,8 +66,9 @@ export class SyncManager {
 
     /**
      * Start automatic synchronization
+     * @returns {Promise<{success: boolean, error?: string}>}
      */
-    async startAutoSync(request, response) {
+    async startAutoSync() {
         try {
             this.autoSyncEnabled = true;
 
@@ -78,10 +77,10 @@ export class SyncManager {
 
             await this.startAutoSyncInternal();
 
-            response({ success: true });
+            return { success: true };
         } catch (error) {
-            console.error("Failed to start auto sync:", error);
-            response({ success: false, error: error.message });
+            logger.error("Failed to start auto sync:", error);
+            return { success: false, error: error.message };
         }
     }
 
@@ -103,8 +102,9 @@ export class SyncManager {
 
     /**
      * Stop automatic synchronization
+     * @returns {Promise<{success: boolean, error?: string}>}
      */
-    async stopAutoSync(request, response) {
+    async stopAutoSync() {
         try {
             this.autoSyncEnabled = false;
 
@@ -117,31 +117,31 @@ export class SyncManager {
                 this.syncInterval = null;
             }
 
-            response({ success: true });
+            return { success: true };
         } catch (error) {
-            console.error("Failed to stop auto sync:", error);
-            response({ success: false, error: error.message });
+            logger.error("Failed to stop auto sync:", error);
+            return { success: false, error: error.message };
         }
     }
 
     /**
      * Perform synchronization now
+     * @returns {Promise<{success: boolean, result?: any, error?: string}>}
      */
-    async syncNow(request, response) {
+    async syncNow() {
         try {
             if (this.isManualSyncInProgress) {
-                response({ success: false, error: "Sync already in progress" });
-                return;
+                return { success: false, error: "Sync already in progress" };
             }
 
             this.isManualSyncInProgress = true;
 
             const result = await this.performSync();
 
-            response({ success: true, result });
+            return { success: true, result };
         } catch (error) {
-            console.error("Failed to perform manual sync:", error);
-            response({ success: false, error: error.message });
+            logger.error("Failed to perform manual sync:", error);
+            return { success: false, error: error.message };
         } finally {
             this.isManualSyncInProgress = false;
         }
@@ -187,8 +187,9 @@ export class SyncManager {
 
     /**
      * Get sync status
+     * @returns {Promise<{success: boolean, status?: Object, error?: string}>}
      */
-    async getStatus(request, response) {
+    async getStatus() {
         try {
             const status = {
                 isInitialized: this.isInitialized,
@@ -200,10 +201,10 @@ export class SyncManager {
                     new Date(Date.now() + (this.syncIntervalMinutes * 60 * 1000)).toISOString() : null
             };
 
-            response({ success: true, status });
+            return { success: true, status };
         } catch (error) {
-            console.error("Failed to get sync status:", error);
-            response({ success: false, error: error.message });
+            logger.error("Failed to get sync status:", error);
+            return { success: false, error: error.message };
         }
     }
 

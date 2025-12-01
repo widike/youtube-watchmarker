@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Text utilities for YouTube Watchmarker
  * Handles text encoding, decoding, and HTML entity processing

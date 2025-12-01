@@ -1,10 +1,12 @@
+// @ts-check
+
 /**
  * Video Tracker
  * Handles tracking video views from tabs and requests
  */
 
 import { logger } from './logger.js';
-import { getSyncStorageAsync } from './storage-utils.js';
+import { syncStorage } from './storage-utils.js';
 import { sendMessageToTab } from './browser-utils.js';
 import { isValidVideoTitle } from './validation.js';
 import { decodeHtmlEntitiesAndFixEncoding } from './text-utils.js';
@@ -57,7 +59,7 @@ export class VideoTracker {
                     return;
                 }
 
-                const shouldTrackNavigation = await getSyncStorageAsync('idCondition_Brownav') === true;
+                const shouldTrackNavigation = await syncStorage.get('idCondition_Brownav') === true;
 
                 if (shouldTrackNavigation) {
                     await this.handleTabNavigation(tabId, changeInfo, tab);
@@ -72,7 +74,7 @@ export class VideoTracker {
      * Setup request hook for tracking video progress
      */
     async setupRequestHook() {
-        const shouldTrackProgress = await getSyncStorageAsync('idCondition_Youprog') === true;
+        const shouldTrackProgress = await syncStorage.get('idCondition_Youprog') === true;
 
         if (shouldTrackProgress) {
             chrome.webRequest.onSendHeaders.addListener(

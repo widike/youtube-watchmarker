@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Browser utilities for YouTube Watchmarker
  * Handles browser detection, messaging, and JSON parsing

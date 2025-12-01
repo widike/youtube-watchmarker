@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Constants and configuration values for YouTube Watchmarker extension
  * Centralizes all magic numbers, storage keys, and configuration values

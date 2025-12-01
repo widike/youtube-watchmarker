@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Validation utilities for YouTube Watchmarker
  * Centralized validation logic to avoid duplication

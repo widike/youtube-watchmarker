@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * History action handlers
  * Handles browser history synchronization

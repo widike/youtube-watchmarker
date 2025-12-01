@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Database provider action handlers
  * Handles provider switching, status, syncing, and migration

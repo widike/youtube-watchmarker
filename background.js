@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Background Service Worker
  * Main entry point for the YouTube Watchmarker extension
@@ -63,7 +65,7 @@ import {
     handleSetSetting
 } from "./handlers/settings-handlers.js";
 
-import { getSyncStorageAsync } from "./storage-utils.js";
+import { syncStorage } from "./storage-utils.js";
 
 /**
  * Extension Manager
@@ -165,68 +167,53 @@ class ExtensionManager {
      * Register all message handlers
      */
     registerMessageHandlers() {
-        // Database handlers
-        messageRouter.register('database-export', (req) =>
-            handleDatabaseExport(req, Database));
-        messageRouter.register('database-import', (req) =>
-            handleDatabaseImport(req, Database));
-        messageRouter.register('database-reset', (req) =>
-            handleDatabaseReset(req, Database));
-        messageRouter.register('database-size', (req) =>
-            handleDatabaseSize(req, this.providerFactory));
+        // Register all handlers using registerMultiple for cleaner code
+        messageRouter.registerMultiple({
+            // Database handlers
+            'database-export': (req) => handleDatabaseExport(req, Database),
+            'database-import': (req) => handleDatabaseImport(req, Database),
+            'database-reset': (req) => handleDatabaseReset(req, Database),
+            'database-size': (req) => handleDatabaseSize(req, this.providerFactory),
 
-        // YouTube handlers
-        messageRouter.register('youtube-lookup', (req) =>
-            handleYoutubeLookup(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)));
-        messageRouter.register('youtube-ensure', (req) =>
-            handleYoutubeEnsure(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)));
-        messageRouter.register('youtube-mark', (req) =>
-            handleYoutubeMark(req, Youtube));
-        messageRouter.register('youtube-synchronize', (req) =>
-            handleYoutubeSynchronize(req, Youtube));
-        messageRouter.register('youtube-liked-videos', (req) =>
-            handleYoutubeLikedVideos(req, Youtube));
+            // YouTube handlers
+            'youtube-lookup': (req) => handleYoutubeLookup(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)),
+            'youtube-ensure': (req) => handleYoutubeEnsure(req, Youtube, (id, title) => videoTracker.cacheTitle(id, title)),
+            'youtube-mark': (req) => handleYoutubeMark(req, Youtube),
+            'youtube-synchronize': (req) => handleYoutubeSynchronize(req, Youtube),
+            'youtube-liked-videos': (req) => handleYoutubeLikedVideos(req, Youtube),
 
-        // Search handlers
-        messageRouter.register('search-videos', (req) =>
-            handleSearchVideos(req, Search, Database));
-        messageRouter.register('search-delete', (req) =>
-            handleSearchDelete(req, Search));
+            // Search handlers
+            'search-videos': (req) => handleSearchVideos(req, Search, Database),
+            'search-delete': (req) => handleSearchDelete(req, Search),
 
-        // History handlers
-        messageRouter.register('history-synchronize', (req) =>
-            handleHistorySynchronize(req, History));
+            // History handlers
+            'history-synchronize': (req) => handleHistorySynchronize(req, History),
 
-        // Provider handlers
-        messageRouter.register('database-provider-status', (req) =>
-            handleProviderStatus(req, this.providerFactory));
-        messageRouter.register('database-provider-switch', (req) =>
-            handleProviderSwitch(req, this.providerFactory));
-        messageRouter.register('database-provider-list', (req) =>
-            handleProviderList(req, this.providerFactory));
-        messageRouter.register('database-provider-migrate', (req) =>
-            handleProviderMigrate(req, this.providerFactory));
-        messageRouter.register('database-provider-sync', (req) =>
-            handleProviderSync(req, this.providerFactory));
+            // Provider handlers
+            'database-provider-status': (req) => handleProviderStatus(req, this.providerFactory),
+            'database-provider-switch': (req) => handleProviderSwitch(req, this.providerFactory),
+            'database-provider-list': (req) => handleProviderList(req, this.providerFactory),
+            'database-provider-migrate': (req) => handleProviderMigrate(req, this.providerFactory),
+            'database-provider-sync': (req) => handleProviderSync(req, this.providerFactory),
 
-        // Supabase handlers
-        messageRouter.register('supabase-configure', handleSupabaseConfigure);
-        messageRouter.register('supabase-test', handleSupabaseTest);
-        messageRouter.register('supabase-clear', handleSupabaseClear);
-        messageRouter.register('supabase-get-credentials', handleSupabaseGetCredentials);
-        messageRouter.register('supabase-get-status', handleSupabaseGetStatus);
-        messageRouter.register('supabase-check-table', (req) =>
-            handleSupabaseCheckTable(req, this.providerFactory));
+            // Supabase handlers
+            'supabase-configure': handleSupabaseConfigure,
+            'supabase-test': handleSupabaseTest,
+            'supabase-clear': handleSupabaseClear,
+            'supabase-get-credentials': handleSupabaseGetCredentials,
+            'supabase-get-status': handleSupabaseGetStatus,
+            'supabase-check-table': (req) => handleSupabaseCheckTable(req, this.providerFactory),
 
-        // Settings handlers
-        messageRouter.register('get-setting', handleGetSetting);
-        messageRouter.register('set-setting', handleSetSetting);
+            // Settings handlers
+            'get-setting': handleGetSetting,
+            'set-setting': handleSetSetting,
 
-        // Sync manager handlers
-        messageRouter.register('sync-manager-start', (req) => this.handleSyncManagerStart(req));
-        messageRouter.register('sync-manager-stop', (req) => this.handleSyncManagerStop(req));
-        messageRouter.register('sync-manager-sync-now', (req) => this.handleSyncManagerSyncNow(req));
-        messageRouter.register('sync-manager-status', (req) => this.handleSyncManagerStatus(req));
+            // Sync manager handlers
+            'sync-manager-start': (req) => this.handleSyncManagerStart(req),
+            'sync-manager-stop': (req) => this.handleSyncManagerStop(req),
+            'sync-manager-sync-now': (req) => this.handleSyncManagerSyncNow(req),
+            'sync-manager-status': (req) => this.handleSyncManagerStatus(req)
+        });
 
         // Setup listeners
         messageRouter.setupListeners();
@@ -264,7 +251,7 @@ class ExtensionManager {
         logger.info('Starting startup synchronization...');
 
         try {
-            const shouldSyncYoutube = await getSyncStorageAsync('idCondition_Youhist') === true;
+            const shouldSyncYoutube = await syncStorage.get('idCondition_Youhist') === true;
 
             if (shouldSyncYoutube) {
                 logger.info('Syncing YouTube history on startup');
@@ -286,8 +273,8 @@ class ExtensionManager {
         logger.info('Starting periodic synchronization...');
 
         try {
-            const shouldSyncHistory = await getSyncStorageAsync('idCondition_Browhist') === true;
-            const shouldSyncYoutube = await getSyncStorageAsync('idCondition_Youhist') === true;
+            const shouldSyncHistory = await syncStorage.get('idCondition_Browhist') === true;
+            const shouldSyncYoutube = await syncStorage.get('idCondition_Youhist') === true;
 
             if (shouldSyncHistory) {
                 logger.info('Syncing browser history');
@@ -342,28 +329,20 @@ class ExtensionManager {
     /**
      * Sync manager handlers
      */
-    async handleSyncManagerStart(request) {
-        return new Promise((resolve) => {
-            SyncManagerInstance.startAutoSync(request, resolve);
-        });
+    async handleSyncManagerStart() {
+        return await SyncManagerInstance.startAutoSync();
     }
 
-    async handleSyncManagerStop(request) {
-        return new Promise((resolve) => {
-            SyncManagerInstance.stopAutoSync(request, resolve);
-        });
+    async handleSyncManagerStop() {
+        return await SyncManagerInstance.stopAutoSync();
     }
 
-    async handleSyncManagerSyncNow(request) {
-        return new Promise((resolve) => {
-            SyncManagerInstance.syncNow(request, resolve);
-        });
+    async handleSyncManagerSyncNow() {
+        return await SyncManagerInstance.syncNow();
     }
 
-    async handleSyncManagerStatus(request) {
-        return new Promise((resolve) => {
-            SyncManagerInstance.getStatus(request, resolve);
-        });
+    async handleSyncManagerStatus() {
+        return await SyncManagerInstance.getStatus();
     }
 
     /**

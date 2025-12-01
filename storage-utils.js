@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Storage utilities for YouTube Watchmarker
  * Unified API for Chrome storage (local and sync)
@@ -148,25 +150,7 @@ export function createStorageAPI(type = 'local') {
 
 /**
  * Pre-created instances for convenience
+ * Use these for all storage operations throughout the codebase
  */
 export const localStorage = createStorageAPI('local');
 export const syncStorage = createStorageAPI('sync');
-
-// Legacy compatibility exports (to minimize breaking changes)
-export const getStorageAsync = (key) => localStorage.get(key);
-export const setStorageAsync = (key, value, errorMessage) => localStorage.set(key, value, errorMessage);
-export const getMultipleStorageAsync = (keys) => localStorage.getMultiple(keys);
-export const setMultipleStorageAsync = (items) => localStorage.setMultiple(items);
-export const removeStorageAsync = (key) => localStorage.remove(key);
-export const removeMultipleStorageAsync = (keys) => localStorage.removeMultiple(keys);
-export const clearStorageAsync = () => localStorage.clear();
-export const setDefaultInStorageIfNull = (key, defaultValue) => localStorage.setDefaultIfNull(key, defaultValue);
-export const getStorageKeysAsync = () => localStorage.getKeys();
-
-export const getSyncStorageAsync = (key) => syncStorage.get(key);
-export const setSyncStorageAsync = (key, value) => syncStorage.set(key, value);
-export const getMultipleSyncStorageAsync = (keys) => syncStorage.getMultiple(keys);
-export const setMultipleSyncStorageAsync = (items) => syncStorage.setMultiple(items);
-export const setDefaultInSyncStorageIfNull = (key, defaultValue) => syncStorage.setDefaultIfNull(key, defaultValue);
-export const getSyncStorageKeysAsync = () => syncStorage.getKeys();
-

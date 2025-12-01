@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Settings action handlers
  * Handles getting and setting extension settings

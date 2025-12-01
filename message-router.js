@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Message Router
  * Handles routing of messages between content scripts and background script

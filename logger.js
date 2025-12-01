@@ -1,3 +1,5 @@
+// @ts-check
+
 /**
  * Logging utility for YouTube Watchmarker
  * Provides consistent logging with levels and formatting
