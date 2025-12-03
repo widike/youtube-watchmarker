@@ -203,7 +203,23 @@ const Utils = {
                 selector.replace('"/watch?v="', `"/watch?v=${videoId}"`).replace('"/shorts/"', `"/shorts/${videoId}"`)) :
             this.getVideoSelectors();
 
-        return Array.from(document.querySelectorAll(selectors.join(", ")));
+        const elements = Array.from(document.querySelectorAll(selectors.join(", ")));
+
+        // Filter out elements that are inside comment sections or author thumbnails
+        return elements.filter(element => {
+            // Check if element is within a comment section
+            const isInCommentSection = element.closest('ytd-comment-renderer, ytd-comment-thread-renderer, #comments');
+
+            // Check if element is an author thumbnail/avatar
+            const isAuthorThumbnail = element.closest('#author-thumbnail, .ytd-comment-renderer #author-thumbnail, ytd-comment-avatar-renderer');
+
+            // Check if the element itself is an author thumbnail link
+            const isAuthorLink = element.id === 'author-thumbnail' ||
+                element.classList?.contains('ytd-comment-renderer') ||
+                element.parentElement?.id === 'author-thumbnail';
+
+            return !isInCommentSection && !isAuthorThumbnail && !isAuthorLink;
+        });
     },
 
     /**
