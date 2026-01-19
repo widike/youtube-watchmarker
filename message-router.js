@@ -6,8 +6,52 @@
  */
 
 import { logger } from './logger.js';
-import { errorHandler, ExtensionError, ErrorUtils } from './error-handler.js';
+import { errorHandler, ExtensionError, ErrorUtils, ValidationError } from './error-handler.js';
 import { ERRORS } from './constants.js';
+
+/**
+ * Actions that require a valid YouTube video ID
+ */
+const VIDEO_ID_ACTIONS = new Set([
+    'youtube-lookup',
+    'youtube-ensure',
+    'youtube-mark',
+    'search-delete'
+]);
+
+/**
+ * Validate a YouTube video ID
+ * @param {*} videoId - The value to validate
+ * @returns {{valid: boolean, error?: string}} Validation result
+ */
+function validateVideoId(videoId) {
+    if (videoId === undefined) {
+        // videoId not provided - let handler decide if required
+        return { valid: true };
+    }
+
+    if (videoId === null) {
+        return { valid: false, error: 'videoId is null' };
+    }
+
+    if (typeof videoId !== 'string') {
+        const typeDesc = videoId === null ? 'null' :
+            Array.isArray(videoId) ? 'array' : typeof videoId;
+        return {
+            valid: false,
+            error: `videoId must be a string, got ${typeDesc}: ${JSON.stringify(videoId).slice(0, 50)}`
+        };
+    }
+
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+        return {
+            valid: false,
+            error: `videoId must be 11 alphanumeric characters, got "${videoId.slice(0, 20)}${videoId.length > 20 ? '...' : ''}" (length: ${videoId.length})`
+        };
+    }
+
+    return { valid: true };
+}
 
 /**
  * Message Router class
@@ -76,6 +120,17 @@ export class MessageRouter {
             );
         }
 
+        // Validate videoId at message boundary for actions that need it
+        if (VIDEO_ID_ACTIONS.has(action)) {
+            const validation = validateVideoId(message.videoId);
+            if (!validation.valid) {
+                this.logger.warn(`Invalid videoId for action "${action}": ${validation.error}`);
+                return ErrorUtils.createErrorResponse(
+                    new ValidationError(validation.error, { action, videoId: message.videoId })
+                );
+            }
+        }
+
         try {
             this.logger.debug(`Handling action: ${action}`);
             const result = await handler(message, sender);
@@ -93,7 +148,7 @@ export class MessageRouter {
             return result;
         } catch (error) {
             this.logger.error(`Error handling action "${action}":`, error);
-            const errorEntry = errorHandler.handle(error, { action }, false);
+            errorHandler.handle(error, { action }, false);
             return ErrorUtils.createErrorResponse(error);
         }
     }

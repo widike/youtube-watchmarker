@@ -21,6 +21,86 @@ export class SupabaseDatabaseProvider {
         this.maxRetries = 3;
         this.retryDelay = 1000;
         this.activeControllers = new Set(); // Track active AbortControllers for cleanup
+
+        // Circuit breaker state - prevents cascading failures
+        this.circuitState = 'CLOSED';  // CLOSED (normal), OPEN (failing), HALF_OPEN (testing)
+        this.failureCount = 0;
+        this.lastFailureTime = 0;
+        this.failureThreshold = 3;      // Open circuit after 3 consecutive failures
+        this.resetTimeoutMs = 60000;    // Try again after 1 minute
+    }
+
+    /**
+     * Check if circuit breaker allows requests
+     * @returns {{allowed: boolean, reason?: string}}
+     */
+    checkCircuitBreaker() {
+        if (this.circuitState === 'CLOSED') {
+            return { allowed: true };
+        }
+
+        if (this.circuitState === 'OPEN') {
+            const timeSinceFailure = Date.now() - this.lastFailureTime;
+            if (timeSinceFailure >= this.resetTimeoutMs) {
+                // Transition to HALF_OPEN - allow one test request
+                this.circuitState = 'HALF_OPEN';
+                console.log('Circuit breaker: OPEN → HALF_OPEN (testing connection)');
+                return { allowed: true };
+            }
+            const remainingMs = this.resetTimeoutMs - timeSinceFailure;
+            return {
+                allowed: false,
+                reason: `Circuit breaker OPEN - Supabase disabled for ${Math.ceil(remainingMs / 1000)}s more`
+            };
+        }
+
+        // HALF_OPEN - allow the test request
+        return { allowed: true };
+    }
+
+    /**
+     * Record a successful request - reset circuit breaker
+     */
+    recordSuccess() {
+        if (this.circuitState === 'HALF_OPEN') {
+            console.log('Circuit breaker: HALF_OPEN → CLOSED (connection restored)');
+        }
+        this.circuitState = 'CLOSED';
+        this.failureCount = 0;
+    }
+
+    /**
+     * Record a failed request - may open circuit breaker
+     */
+    recordFailure() {
+        this.failureCount++;
+        this.lastFailureTime = Date.now();
+
+        if (this.circuitState === 'HALF_OPEN') {
+            // Test request failed - reopen circuit
+            this.circuitState = 'OPEN';
+            console.log('Circuit breaker: HALF_OPEN → OPEN (test request failed)');
+            return;
+        }
+
+        if (this.failureCount >= this.failureThreshold) {
+            this.circuitState = 'OPEN';
+            console.warn(`Circuit breaker: CLOSED → OPEN (${this.failureCount} consecutive failures)`);
+        }
+    }
+
+    /**
+     * Get circuit breaker status
+     * @returns {Object} Circuit breaker status
+     */
+    getCircuitBreakerStatus() {
+        return {
+            state: this.circuitState,
+            failureCount: this.failureCount,
+            lastFailureTime: this.lastFailureTime,
+            isAvailable: this.circuitState !== 'OPEN' ||
+                (Date.now() - this.lastFailureTime >= this.resetTimeoutMs)
+        };
     }
 
     createTimeoutSignal(timeoutMs) {
@@ -44,7 +124,7 @@ export class SupabaseDatabaseProvider {
         for (const controller of this.activeControllers) {
             try {
                 controller.abort();
-            } catch (error) {
+            } catch (_error) {
                 // Ignore cleanup errors
             }
         }
@@ -83,7 +163,7 @@ export class SupabaseDatabaseProvider {
             if (!isSupabase && !isLocalhost) return false;
 
             return true;
-        } catch (error) {
+        } catch (_error) {
             return false;
         }
     }
@@ -211,6 +291,7 @@ export class SupabaseDatabaseProvider {
 
     /**
      * Make HTTP request to Supabase PostgREST API
+     * Protected by circuit breaker to prevent cascading failures
      * @param {string} method - HTTP method
      * @param {string} path - API path
      * @param {Object} body - Request body
@@ -218,6 +299,12 @@ export class SupabaseDatabaseProvider {
      * @returns {Promise<Response>} Fetch response
      */
     async makeRequest(method, path, body = null, headers = {}) {
+        // Check circuit breaker before making request
+        const circuitCheck = this.checkCircuitBreaker();
+        if (!circuitCheck.allowed) {
+            throw new Error(circuitCheck.reason);
+        }
+
         const url = `${this.baseUrl}/rest/v1${path}`;
 
         // Security headers
@@ -236,8 +323,8 @@ export class SupabaseDatabaseProvider {
         const config = {
             method,
             headers: requestHeaders,
-            // Add timeout for better reliability - using manual AbortController for better compatibility
-            signal: this.createTimeoutSignal(60000) // 60 second timeout
+            // Reduced timeout from 60s to 15s for faster failure detection
+            signal: this.createTimeoutSignal(15000)
         };
 
         if (body && (method === 'POST' || method === 'PATCH')) {
@@ -253,8 +340,12 @@ export class SupabaseDatabaseProvider {
                     throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
                 }
 
+                // Success - reset circuit breaker
+                this.recordSuccess();
                 return response;
             } catch (error) {
+                // Record failure for circuit breaker
+                this.recordFailure();
                 throw error;
             }
         };
@@ -656,7 +747,8 @@ export class SupabaseDatabaseProvider {
             isConnected: this.isConnected,
             isInitialized: this.isInitialized,
             url: this.baseUrl,
-            tableName: this.tableName
+            tableName: this.tableName,
+            circuitBreaker: this.getCircuitBreakerStatus()
         };
     }
 }

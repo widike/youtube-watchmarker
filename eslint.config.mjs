@@ -20,7 +20,11 @@ export default defineConfig([
     plugins: { js },
     extends: ["js/recommended"],
     rules: {
-      'no-unused-vars': 'warn', // Change 'error' to 'warn' for unused variables
+      'no-unused-vars': ['warn', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_'
+      }],
     },
   },
   eslintConfigPrettier,

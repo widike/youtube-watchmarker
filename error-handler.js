@@ -169,6 +169,94 @@ export class ErrorHandler {
 export const errorHandler = new ErrorHandler();
 
 /**
+ * Serialize any error type to a consistent object format
+ * Prevents [object Object] in logs by handling all possible input types
+ * @param {*} error - The error to serialize (can be any type)
+ * @returns {Object} Serialized error with message, code, and optional details
+ */
+export function serializeError(error) {
+    // Handle null/undefined
+    if (error === null || error === undefined) {
+        return {
+            message: 'Unknown error (null or undefined)',
+            code: 'UNKNOWN_ERROR',
+            type: 'null'
+        };
+    }
+
+    // Handle string errors
+    if (typeof error === 'string') {
+        return {
+            message: error,
+            code: 'STRING_ERROR',
+            type: 'string'
+        };
+    }
+
+    // Handle Error instances (including custom ExtensionError subclasses)
+    if (error instanceof Error) {
+        return {
+            message: error.message || 'Unknown error',
+            code: error.code || 'ERROR',
+            type: error.name || error.constructor.name || 'Error',
+            stack: error.stack,
+            details: error.details || undefined
+        };
+    }
+
+    // Handle Response objects (from fetch)
+    if (error && typeof error.status === 'number' && typeof error.statusText === 'string') {
+        return {
+            message: `HTTP ${error.status}: ${error.statusText}`,
+            code: `HTTP_${error.status}`,
+            type: 'Response',
+            status: error.status
+        };
+    }
+
+    // Handle plain objects
+    if (typeof error === 'object') {
+        // Check for common error-like properties
+        if (error.message || error.error || error.msg) {
+            return {
+                message: error.message || error.error || error.msg || 'Unknown error',
+                code: error.code || error.errorCode || 'OBJECT_ERROR',
+                type: 'object',
+                details: error
+            };
+        }
+
+        // Fallback: stringify the object
+        try {
+            const stringified = JSON.stringify(error);
+            // Avoid huge objects in error messages
+            const truncated = stringified.length > 200 ? stringified.slice(0, 200) + '...' : stringified;
+            return {
+                message: `Object error: ${truncated}`,
+                code: 'OBJECT_ERROR',
+                type: 'object',
+                raw: error
+            };
+        } catch (_jsonError) {
+            // Circular reference or other JSON issues
+            return {
+                message: `Unserializable object: ${Object.prototype.toString.call(error)}`,
+                code: 'UNSERIALIZABLE_ERROR',
+                type: 'object',
+                keys: Object.keys(error).slice(0, 10)
+            };
+        }
+    }
+
+    // Handle primitives (numbers, booleans, etc.)
+    return {
+        message: String(error),
+        code: 'PRIMITIVE_ERROR',
+        type: typeof error
+    };
+}
+
+/**
  * Utility functions for common error scenarios
  */
 export const ErrorUtils = {
@@ -206,14 +294,17 @@ export const ErrorUtils = {
 
     /**
      * Create a standardized error response
-     * @param {Error} error - The error that occurred
+     * Handles any error type, preventing [object Object] in responses
+     * @param {*} error - The error that occurred (can be any type)
      * @returns {Object} Standardized error response
      */
     createErrorResponse(error) {
+        const serialized = serializeError(error);
         return {
             success: false,
-            error: error.message,
-            code: error.code || 'UNKNOWN_ERROR',
+            error: serialized.message,
+            code: serialized.code,
+            type: serialized.type,
             timestamp: new Date().toISOString()
         };
     },

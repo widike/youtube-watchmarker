@@ -1,10 +1,17 @@
 /**
  * Database Provider Factory
- * Manages switching between different database providers (IndexedDB, Supabase)
+ * Manages database providers with IndexedDB as primary and Supabase as write-behind backup.
+ *
+ * Architecture:
+ * - IndexedDB is ALWAYS the primary source of truth for reads
+ * - Writes go to IndexedDB first (immediate), then queued for Supabase (async)
+ * - This ensures the extension works offline and Supabase failures don't block operations
  */
 
 import { supabaseDatabaseProvider } from './supabase-database-provider.js';
 import { credentialStorage } from './credential-storage.js';
+import { syncQueue, SyncOperationType } from './sync-queue.js';
+import { logger } from './logger.js';
 
 /**
  * IndexedDB Provider Wrapper
@@ -349,7 +356,13 @@ class IndexedDBProvider {
 
 /**
  * Database Provider Factory
- * Manages different database providers and switching between them
+ * Manages different database providers with IndexedDB-first architecture.
+ *
+ * NEW ARCHITECTURE (simplified):
+ * - IndexedDB is ALWAYS the primary provider for reads
+ * - Writes go to IndexedDB first, then queued for Supabase
+ * - Supabase sync happens asynchronously via syncQueue
+ * - This provides offline resilience and prevents Supabase failures from blocking operations
  */
 export class DatabaseProviderFactory {
     constructor() {
@@ -357,6 +370,11 @@ export class DatabaseProviderFactory {
         this.providerType = null;
         this.indexedDBProvider = null;
         this.databaseManager = null;
+
+        // Supabase is now a secondary backup, not a primary provider
+        this.supabaseEnabled = false;
+        this.lastDeltaSyncTimestamp = 0;
+        this.deltaSyncStorageKey = 'last_delta_sync_timestamp';
     }
 
     /**
@@ -370,10 +388,13 @@ export class DatabaseProviderFactory {
 
     /**
      * Get the current active provider
+     * IndexedDB is always the primary provider for reads
      * @returns {Object} Current provider instance
      */
     getCurrentProvider() {
-        return this.currentProvider;
+        // Always return IndexedDB as the primary provider
+        // This ensures reads always work, even when Supabase is unavailable
+        return this.indexedDBProvider || this.currentProvider;
     }
 
     /**
@@ -382,6 +403,142 @@ export class DatabaseProviderFactory {
      */
     getCurrentProviderType() {
         return this.providerType;
+    }
+
+    /**
+     * Check if Supabase sync is enabled
+     * @returns {boolean} True if Supabase is configured and enabled
+     */
+    isSupabaseEnabled() {
+        return this.supabaseEnabled && supabaseDatabaseProvider.isConnected;
+    }
+
+    /**
+     * Write a video to IndexedDB and queue for Supabase sync
+     * This is the preferred method for writes - ensures local-first operation
+     * @param {Object} video - Video data to write
+     * @returns {Promise<boolean>} Success status
+     */
+    async writeVideo(video) {
+        // 1. Always write to IndexedDB first (fast, reliable, local)
+        await this.indexedDBProvider.putVideo(video);
+
+        // 2. Queue for Supabase sync (async, non-blocking)
+        if (this.supabaseEnabled && supabaseDatabaseProvider.isConnected) {
+            try {
+                await syncQueue.enqueue(SyncOperationType.PUT_VIDEO, video);
+            } catch (error) {
+                // Log but don't fail - local write succeeded
+                logger.warn('Failed to queue video for Supabase sync:', error.message);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Delete a video from IndexedDB and queue deletion for Supabase
+     * @param {string} videoId - Video ID to delete
+     * @returns {Promise<boolean>} Success status
+     */
+    async deleteVideo(videoId) {
+        // 1. Delete from IndexedDB first
+        await this.indexedDBProvider.deleteVideo(videoId);
+
+        // 2. Queue for Supabase deletion
+        if (this.supabaseEnabled && supabaseDatabaseProvider.isConnected) {
+            try {
+                await syncQueue.enqueue(SyncOperationType.DELETE_VIDEO, { strIdent: videoId });
+            } catch (error) {
+                logger.warn('Failed to queue video deletion for Supabase:', error.message);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Perform delta sync - only sync videos modified since last sync
+     * Much more efficient than full sync for large databases
+     * @returns {Promise<Object>} Sync result with stats
+     */
+    async performDeltaSync() {
+        if (!this.supabaseEnabled || !supabaseDatabaseProvider.isConnected) {
+            return { success: false, error: 'Supabase not available' };
+        }
+
+        try {
+            // Load last sync timestamp
+            const result = await chrome.storage.local.get([this.deltaSyncStorageKey]);
+            const lastSync = result[this.deltaSyncStorageKey] || 0;
+            const now = Date.now();
+
+            // Get videos modified since last sync from IndexedDB
+            const modifiedVideos = await this.indexedDBProvider.getVideosByDateRange(lastSync, now);
+
+            if (modifiedVideos.length === 0) {
+                logger.debug('Delta sync: no new videos to sync');
+                return { success: true, synced: 0 };
+            }
+
+            // Upload to Supabase in batches
+            const BATCH_SIZE = 100;
+            let synced = 0;
+
+            for (let i = 0; i < modifiedVideos.length; i += BATCH_SIZE) {
+                const batch = modifiedVideos.slice(i, i + BATCH_SIZE);
+                await supabaseDatabaseProvider.importVideos(batch);
+                synced += batch.length;
+            }
+
+            // Update last sync timestamp
+            await chrome.storage.local.set({
+                [this.deltaSyncStorageKey]: now
+            });
+
+            logger.info(`Delta sync complete: synced ${synced} videos`);
+            return { success: true, synced };
+        } catch (error) {
+            logger.error('Delta sync failed:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Perform initial full sync from Supabase to IndexedDB
+     * Used when setting up Supabase for the first time
+     * @returns {Promise<Object>} Sync result
+     */
+    async performInitialSync() {
+        if (!supabaseDatabaseProvider.isConnected) {
+            return { success: false, error: 'Supabase not connected' };
+        }
+
+        try {
+            logger.info('Starting initial sync from Supabase...');
+
+            // Get all videos from Supabase
+            const supabaseVideos = await supabaseDatabaseProvider.getAllVideos();
+
+            if (supabaseVideos.length === 0) {
+                logger.info('Initial sync: no videos in Supabase');
+                return { success: true, imported: 0 };
+            }
+
+            // Import to IndexedDB (will merge with existing)
+            await this.indexedDBProvider.importVideos(supabaseVideos);
+
+            // Update last sync timestamp to now
+            await chrome.storage.local.set({
+                [this.deltaSyncStorageKey]: Date.now()
+            });
+
+            logger.info(`Initial sync complete: imported ${supabaseVideos.length} videos from Supabase`);
+            return { success: true, imported: supabaseVideos.length };
+        } catch (error) {
+            logger.error('Initial sync failed:', error.message);
+            return { success: false, error: error.message };
+        }
     }
 
     /**
@@ -424,7 +581,9 @@ export class DatabaseProviderFactory {
     }
 
     /**
-     * Switch to Supabase provider
+     * Enable Supabase as a backup sync destination
+     * NOTE: IndexedDB remains the primary provider for reads/writes
+     * Supabase is used for write-behind sync (backup)
      * @returns {Promise<boolean>} Success status
      */
     async switchToSupabase() {
@@ -436,9 +595,9 @@ export class DatabaseProviderFactory {
                 throw new Error('No Supabase credentials found. Please configure Supabase credentials first using the "Save Configuration" button.');
             }
 
-            // Close current provider if different
-            if (this.currentProvider && this.providerType !== 'supabase') {
-                await this.currentProvider.close();
+            // Ensure IndexedDB is initialized as the primary provider
+            if (!this.indexedDBProvider || !this.indexedDBProvider.isConnected) {
+                await this.switchToIndexedDB(false);
             }
 
             // Initialize Supabase provider with retry logic
@@ -480,29 +639,56 @@ export class DatabaseProviderFactory {
                 throw new Error('Supabase connection test failed. Please verify your credentials and network connectivity.');
             }
 
-            this.currentProvider = supabaseDatabaseProvider;
-            this.providerType = 'supabase';
+            // Enable Supabase as backup (IndexedDB remains primary)
+            this.supabaseEnabled = true;
+            this.providerType = 'supabase';  // For UI display purposes
+
+            // Initialize sync queue with Supabase provider
+            await syncQueue.init(supabaseDatabaseProvider);
 
             // Store provider preference
             await chrome.storage.local.set({
                 database_provider: 'supabase'
             });
 
+            logger.info('Supabase enabled as backup sync destination');
             return true;
         } catch (error) {
-            console.error('Failed to switch to Supabase:', error.message);
+            logger.error('Failed to enable Supabase:', error.message);
 
-            // If we failed to switch, make sure we fall back to IndexedDB
-            if (this.providerType !== 'indexeddb') {
+            // Disable Supabase sync on failure
+            this.supabaseEnabled = false;
+
+            // Ensure IndexedDB is still working as primary
+            if (!this.indexedDBProvider || !this.indexedDBProvider.isConnected) {
                 try {
-                    await this.switchToIndexedDB(false); // Don't save preference when falling back
+                    await this.switchToIndexedDB(false);
                 } catch (fallbackError) {
-                    console.error('Fallback to IndexedDB also failed:', fallbackError.message);
+                    logger.error('IndexedDB fallback also failed:', fallbackError.message);
                 }
             }
 
             throw error;
         }
+    }
+
+    /**
+     * Disable Supabase sync (use IndexedDB only)
+     * @returns {Promise<boolean>} Success status
+     */
+    async disableSupabase() {
+        this.supabaseEnabled = false;
+        this.providerType = 'indexeddb';
+
+        // Stop sync queue
+        syncQueue.stopAutoSync();
+
+        await chrome.storage.local.set({
+            database_provider: 'indexeddb'
+        });
+
+        logger.info('Supabase sync disabled, using IndexedDB only');
+        return true;
     }
 
     /**
@@ -522,7 +708,7 @@ export class DatabaseProviderFactory {
                     if (success) {
                         return true;
                     }
-                } catch (error) {
+                } catch (_error) {
                     // Supabase initialization failed, falling back to IndexedDB
                 }
 
@@ -584,20 +770,39 @@ export class DatabaseProviderFactory {
      * @returns {Object} Provider status information
      */
     getProviderStatus() {
-        if (!this.currentProvider) {
-            return {
-                type: null,
-                isConnected: false,
-                isInitialized: false,
-                info: null
-            };
-        }
+        const indexedDBStatus = this.indexedDBProvider ? {
+            isConnected: this.indexedDBProvider.isConnected,
+            isInitialized: this.indexedDBProvider.isInitialized
+        } : null;
+
+        const supabaseStatus = supabaseDatabaseProvider ? {
+            isConnected: supabaseDatabaseProvider.isConnected,
+            isInitialized: supabaseDatabaseProvider.isInitialized,
+            circuitBreaker: supabaseDatabaseProvider.getCircuitBreakerStatus()
+        } : null;
 
         return {
+            // Architecture info
+            architecture: 'indexeddb-first',
+            primaryProvider: 'indexeddb',
+
+            // UI display type (what user selected)
             type: this.providerType,
-            isConnected: this.currentProvider.isConnected,
-            isInitialized: this.currentProvider.isInitialized,
-            info: this.currentProvider.getProviderInfo()
+
+            // IndexedDB (always primary)
+            indexedDB: indexedDBStatus,
+
+            // Supabase (backup sync)
+            supabaseEnabled: this.supabaseEnabled,
+            supabase: supabaseStatus,
+
+            // Sync queue status
+            syncQueue: syncQueue.getStatus(),
+
+            // Legacy compatibility
+            isConnected: indexedDBStatus?.isConnected || false,
+            isInitialized: indexedDBStatus?.isInitialized || false,
+            info: this.indexedDBProvider?.getProviderInfo() || null
         };
     }
 

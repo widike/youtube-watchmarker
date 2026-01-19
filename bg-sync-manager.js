@@ -162,9 +162,9 @@ export class SyncManager {
                 this.syncIntervalMinutes = syncIntervalMinutes;
             }
 
-            // Save configuration
+            // Save configuration (use consistent key names)
             await chrome.storage.sync.set({
-                sync_auto_enabled: this.autoSyncEnabled,
+                auto_sync_enabled: this.autoSyncEnabled,
                 sync_interval_minutes: this.syncIntervalMinutes
             });
 
@@ -225,7 +225,8 @@ export class SyncManager {
     }
 
     /**
-     * Perform the actual synchronization
+     * Perform the actual synchronization using delta sync
+     * This is more efficient than full bidirectional sync - only syncs changes since last sync
      */
     async performSync() {
         try {
@@ -237,43 +238,67 @@ export class SyncManager {
             // Check if auto-sync is enabled
             const settings = await chrome.storage.sync.get(['auto_sync_enabled']);
             if (!settings.auto_sync_enabled) {
-                console.log("Auto-sync is disabled, skipping sync");
-                return { success: true, synced: 0, conflicts: 0, message: "Auto-sync disabled" };
+                logger.debug("Auto-sync is disabled, skipping sync");
+                return { success: true, synced: 0, message: "Auto-sync disabled" };
             }
 
-            // Get available providers
-            const availableProviders = await databaseProviderFactory.getAvailableProviders();
-            const indexedDBProvider = availableProviders.find(p => p.id === 'indexeddb');
-            const supabaseProvider = availableProviders.find(p => p.id === 'supabase');
-
-            // Check if both providers are available
-            if (!indexedDBProvider || !indexedDBProvider.isAvailable) {
-                throw new Error("IndexedDB provider not available");
+            // Check if Supabase is enabled
+            if (!databaseProviderFactory.isSupabaseEnabled()) {
+                logger.debug("Supabase not enabled, skipping sync");
+                return { success: true, synced: 0, message: "Supabase not enabled" };
             }
 
-            if (!supabaseProvider || !supabaseProvider.isAvailable) {
-                console.log("Supabase provider not configured, skipping auto-sync");
-                return { success: true, synced: 0, conflicts: 0, message: "Supabase not configured" };
-            }
+            logger.info("Starting delta sync to Supabase...");
 
-            console.log("Starting automatic sync between IndexedDB and Supabase...");
+            // Use delta sync instead of full bidirectional sync
+            // This only syncs videos modified since last sync
+            const syncResult = await databaseProviderFactory.performDeltaSync();
 
-            // Perform bidirectional sync between IndexedDB and Supabase
-            const syncResult = await databaseProviderFactory.syncProviders('indexeddb', 'supabase');
-
-            if (syncResult) {
+            if (syncResult.success) {
                 // Update last sync timestamp
                 this.lastSyncTimestamp = Date.now();
                 await chrome.storage.sync.set({ sync_last_timestamp: this.lastSyncTimestamp });
+                await this.updateSyncStats(true);
 
-                console.log("Auto-sync completed successfully");
-                return { success: true, synced: 1, conflicts: 0, message: "Sync completed successfully" };
+                logger.info(`Delta sync completed: ${syncResult.synced} videos synced`);
+                return {
+                    success: true,
+                    synced: syncResult.synced,
+                    message: `Synced ${syncResult.synced} videos to Supabase`
+                };
             } else {
-                throw new Error("Sync operation returned false");
+                await this.updateSyncStats(false);
+                throw new Error(syncResult.error || "Delta sync failed");
             }
         } catch (error) {
-            console.error("Auto-sync failed:", error);
+            logger.error("Auto-sync failed:", error.message);
+            await this.updateSyncStats(false);
             throw error;
+        }
+    }
+
+    /**
+     * Perform initial full sync from Supabase (for first-time setup)
+     * @returns {Promise<Object>} Sync result
+     */
+    async performInitialSync() {
+        try {
+            if (!databaseProviderFactory.isSupabaseEnabled()) {
+                return { success: false, error: "Supabase not enabled" };
+            }
+
+            logger.info("Starting initial sync from Supabase...");
+            const result = await databaseProviderFactory.performInitialSync();
+
+            if (result.success) {
+                this.lastSyncTimestamp = Date.now();
+                await chrome.storage.sync.set({ sync_last_timestamp: this.lastSyncTimestamp });
+            }
+
+            return result;
+        } catch (error) {
+            logger.error("Initial sync failed:", error.message);
+            return { success: false, error: error.message };
         }
     }
 

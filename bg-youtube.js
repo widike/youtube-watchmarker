@@ -436,7 +436,9 @@ export class YoutubeManager {
         try {
             // Validate video ID
             if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
-                throw new Error(`Invalid video ID: ${videoId}`);
+                const received = videoId === null ? 'null' : videoId === undefined ? 'undefined' :
+                    `${typeof videoId} (${JSON.stringify(videoId).slice(0, 50)})`;
+                throw new Error(`Invalid video ID: expected 11-char string, got ${received}`);
             }
 
             const currentProvider = this.getProvider();
@@ -473,7 +475,9 @@ export class YoutubeManager {
         try {
             // Validate video ID
             if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
-                throw new Error(`Invalid video ID: ${videoId}`);
+                const received = videoId === null ? 'null' : videoId === undefined ? 'undefined' :
+                    `${typeof videoId} (${JSON.stringify(videoId).slice(0, 50)})`;
+                throw new Error(`Invalid video ID: expected 11-char string, got ${received}`);
             }
 
             const currentProvider = this.getProvider();
@@ -542,7 +546,9 @@ export class YoutubeManager {
         try {
             // Validate video ID
             if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
-                throw new Error(`Invalid video ID: ${videoId}`);
+                const received = videoId === null ? 'null' : videoId === undefined ? 'undefined' :
+                    `${typeof videoId} (${JSON.stringify(videoId).slice(0, 50)})`;
+                throw new Error(`Invalid video ID: expected 11-char string, got ${received}`);
             }
 
             const currentProvider = this.getProvider();
