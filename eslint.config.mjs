@@ -4,6 +4,12 @@ import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
+  {
+    ignores: [
+      "content/bootstrap.bundle.min.js",
+      "content/moment.js",
+    ],
+  },
   { files: ["**/*.{js,mjs,cjs}"] },
   {
     files: ["**/*.{js,mjs,cjs}"],

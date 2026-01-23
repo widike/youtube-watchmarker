@@ -65,7 +65,7 @@ export class Logger {
             if (arg !== null && typeof arg === 'object' && arg.constructor === Object) {
                 try {
                     return JSON.stringify(arg, null, 2);
-                } catch (e) {
+                } catch (_e) {
                     return `[Object: ${Object.keys(arg).join(', ')}]`;
                 }
             }

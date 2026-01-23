@@ -36,7 +36,7 @@ export function isValidBase64(str) {
         // Additional check: decoded content should look like JSON (start with [ or {)
         const trimmed = decoded.trim();
         return trimmed.startsWith('[') || trimmed.startsWith('{');
-    } catch (error) {
+    } catch (_error) {
         return false;
     }
 }

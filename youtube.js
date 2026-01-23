@@ -32,7 +32,9 @@ const Utils = {
                     const decoded = decodeURIComponent(redirectParam[1]);
                     const nested = parseFromUrl(decoded);
                     if (nested) return nested;
-                } catch (_) { }
+                } catch (_) {
+                    // Ignored - decoding may fail for non-redirect URLs
+                }
             }
             // Thumbnails domain
             const thumbMatch = url.match(/\/vi\/([a-zA-Z0-9_-]{11})\//);
@@ -250,7 +252,7 @@ const Utils = {
             // Check if extension context is still valid by accessing chrome.runtime.id
             // This will throw if the extension context has been invalidated
             return !!chrome.runtime.id;
-        } catch (error) {
+        } catch (_error) {
             // Extension context has been invalidated
             return false;
         }
@@ -293,7 +295,7 @@ class SettingsManager {
     isStorageAvailable() {
         try {
             return !!(chrome && chrome.storage && chrome.storage.sync && Utils.isRuntimeAvailable());
-        } catch (error) {
+        } catch (_error) {
             return false;
         }
     }
@@ -322,7 +324,7 @@ class SettingsManager {
      * Get setting value from cache or storage
      */
     async getSetting(key) {
-        if (this.cache.hasOwnProperty(key)) {
+        if (Object.hasOwn(this.cache, key)) {
             return this.cache[key] || false;
         }
 
@@ -474,7 +476,7 @@ class BackgroundManager {
                 // Try once more in case it was a temporary issue
                 try {
                     await chrome.runtime.sendMessage(message);
-                } catch (retryError) {
+                } catch (_retryError) {
                     console.log("Retry also failed, extension context may be permanently invalidated");
                     // Don't log this as an error since it's expected when extension is reloaded
                 }
@@ -622,7 +624,7 @@ class VideoMarkerManager {
      * Mark video as watched or unwatched
      */
     markVideo(videoElement, videoId) {
-        const isWatched = this.watchDates.hasOwnProperty(videoId);
+        const isWatched = Object.hasOwn(this.watchDates, videoId);
 
         // Prefer marking only the thumbnail within notifications
         let markTarget = videoElement;
@@ -677,7 +679,9 @@ class VideoMarkerManager {
                     }
                 });
             }
-        } catch (_) { }
+        } catch (_) {
+            // Ignored - DOM operations may fail on detached elements
+        }
 
         const hasWatchedClass = markTarget.classList.contains("youwatch-mark");
 
@@ -1054,7 +1058,7 @@ class InteractionManager {
         return ratingSelectors.some(selector => {
             try {
                 return element.matches(selector) || element.closest(selector);
-            } catch (e) {
+            } catch (_e) {
                 return false;
             }
         });
