@@ -219,19 +219,12 @@ export class VideoTracker {
      * @param {string} title - Video title
      */
     async markVideoAsWatched(videoId, title) {
-        return new Promise((resolve, reject) => {
-            this.youtubeModule.mark(
-                { strIdent: videoId, strTitle: title },
-                (response) => {
-                    if (response) {
-                        this.logger.debug('Video marked as watched:', videoId);
-                        resolve(response);
-                    } else {
-                        reject(new Error('Failed to mark video as watched'));
-                    }
-                }
-            );
-        });
+        const response = await this.youtubeModule.mark(videoId, title);
+        if (response) {
+            this.logger.debug('Video marked as watched:', videoId);
+            return response;
+        }
+        throw new Error('Failed to mark video as watched');
     }
 
     /**
@@ -240,25 +233,18 @@ export class VideoTracker {
      * @param {string} title - Video title
      */
     async ensureVideoTracked(videoId, title) {
-        return new Promise((resolve, reject) => {
-            try {
-                this.youtubeModule.ensure(
-                    { strIdent: videoId, strTitle: title },
-                    (response) => {
-                        if (response) {
-                            this.logger.debug('Video ensured:', videoId);
-                            resolve(response);
-                        } else {
-                            this.logger.error('Youtube.ensure returned null response for:', videoId, title);
-                            reject(new Error('Failed to ensure video'));
-                        }
-                    }
-                );
-            } catch (error) {
-                this.logger.error('Error in Youtube.ensure call:', error);
-                reject(error);
+        try {
+            const response = await this.youtubeModule.ensure(videoId, title);
+            if (response) {
+                this.logger.debug('Video ensured:', videoId);
+                return response;
             }
-        });
+            this.logger.error('Youtube.ensure returned null response for:', videoId, title);
+            throw new Error('Failed to ensure video');
+        } catch (error) {
+            this.logger.error('Error in Youtube.ensure call:', error);
+            throw error;
+        }
     }
 
     /**
