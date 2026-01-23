@@ -1,7 +1,7 @@
-import { decodeHtmlEntitiesAndFixEncoding } from "./text-utils.js";
-import { isValidVideoTitle } from "./validation.js";
+import { isValidVideoTitle, VIDEO_ID_LENGTH } from "./validation.js";
 import { TIMEOUTS } from "./constants.js";
 import { logger } from "./logger.js";
+import { parseHistoryPage, parseLikedVideosPage } from "./youtube-parser.js";
 
 /**
  * YouTube management class
@@ -10,6 +10,31 @@ import { logger } from "./logger.js";
 export class YoutubeManager {
     constructor() {
         this.isInitialized = false;
+        this.providerFactory = null;
+    }
+
+    /**
+     * Set the provider factory for dependency injection
+     * @param {Object} factory - Database provider factory instance
+     */
+    setProviderFactory(factory) {
+        this.providerFactory = factory;
+    }
+
+    /**
+     * Get the current database provider
+     * @returns {Object} Database provider
+     * @throws {Error} If provider factory not set
+     */
+    getProvider() {
+        if (!this.providerFactory) {
+            throw new Error('Provider factory not set. Call setProviderFactory() first.');
+        }
+        const provider = this.providerFactory.getCurrentProvider();
+        if (!provider) {
+            throw new Error('No current database provider available');
+        }
+        return provider;
     }
 
     /**
@@ -26,119 +51,6 @@ export class YoutubeManager {
     }
 
     /**
-     * Get the current database provider
-     * @returns {Object} Database provider
-     * @throws {Error} If provider is not available
-     */
-    getProvider() {
-        const extensionManager = globalThis.extensionManager;
-        if (!extensionManager || !extensionManager.providerFactory) {
-            throw new Error("Database provider factory not available");
-        }
-
-        const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-        if (!currentProvider) {
-            throw new Error("No current database provider available");
-        }
-
-        return currentProvider;
-    }
-
-    /**
-     * Helper function to safely extract nested property
-     * @param {Object} obj - Source object
-     * @param {string} path - Dot-separated path
-     * @returns {*} Value at path or null
-     */
-    getNestedProperty(obj, path) {
-        return path.split('.').reduce((current, key) => {
-            return current && current[key] !== undefined ? current[key] : null;
-        }, obj);
-    }
-
-    /**
-     * Extract video title from various YouTube data structures
-     * @param {Object} videoRenderer - Video renderer object
-     * @returns {string|null} Extracted title or null
-     */
-    extractVideoTitle(videoRenderer) {
-        const titlePaths = [
-            'title.runs.0.text',
-            'title.simpleText',
-            'title.text',
-            'headline.runs.0.text',
-            'headline.simpleText',
-            'longBylineText.runs.0.text',
-            'shortBylineText.runs.0.text',
-            'accessibility.accessibilityData.label'
-        ];
-
-        for (const path of titlePaths) {
-            const title = this.getNestedProperty(videoRenderer, path);
-            if (title && typeof title === 'string' && title.trim()) {
-                let cleanTitle = title.trim();
-                cleanTitle = cleanTitle.replace(/\s+by\s+[^,]*$/i, '').trim();
-                cleanTitle = cleanTitle.replace(/\s*-\s*YouTube\s*$/i, '').trim();
-                return cleanTitle;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extract videos from YouTube contents array
-     * @param {Array} contents - Contents array from YouTube data
-     * @returns {Array} Array of video objects
-     */
-    extractVideosFromContents(contents) {
-        const videos = [];
-        if (contents && Array.isArray(contents)) {
-            for (const section of contents) {
-                const items = this.getNestedProperty(section, 'itemSectionRenderer.contents');
-                if (items && Array.isArray(items)) {
-                    for (const item of items) {
-                        // Try lockupViewModel format first (new format)
-                        const lockupViewModel = item.lockupViewModel;
-                        if (lockupViewModel) {
-                            const contentId = lockupViewModel.contentId;
-                            const metadata = lockupViewModel.metadata?.lockupMetadataViewModel;
-                            const title = metadata?.title?.content || metadata?.title?.text;
-
-                            if (contentId && contentId.length === 11 && title) {
-                                videos.push({
-                                    strIdent: contentId,
-                                    intTimestamp: Date.now(),
-                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
-                                    intCount: 1,
-                                });
-                                continue;
-                            }
-                        }
-
-                        // Fallback to videoRenderer format (old format)
-                        const videoRenderer = item.videoRenderer;
-                        if (videoRenderer && videoRenderer.videoId) {
-                            const videoId = videoRenderer.videoId;
-                            const title = this.extractVideoTitle(videoRenderer);
-
-                            if (videoId && videoId.length === 11 && title) {
-                                videos.push({
-                                    strIdent: videoId,
-                                    intTimestamp: Date.now(),
-                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
-                                    intCount: 1,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return videos;
-    }
-
-    /**
      * Synchronize YouTube watch history
      * @param {Function} [onProgress] - Optional progress callback
      * @returns {Promise<Object>} Synchronization result
@@ -148,8 +60,6 @@ export class YoutubeManager {
             const currentProvider = this.getProvider();
             logger.info("Starting YouTube history sync (single page only)...");
 
-            let objVideos = [];
-
             // Fetch YouTube history page
             const response = await fetch("https://www.youtube.com/feed/history");
 
@@ -158,112 +68,9 @@ export class YoutubeManager {
             }
 
             const responseText = await response.text();
-            const cleanedText = responseText
-                .replaceAll('\\"', '\\u0022')
-                .replaceAll("\r", "")
-                .replaceAll("\n", "");
 
-            try {
-                // Try to find and parse the main data structure
-                const dataRegex = /var\s+ytInitialData\s*=\s*({.+?});/s;
-                const dataMatch = responseText.match(dataRegex);
-
-                if (dataMatch) {
-                    try {
-                        const ytInitialData = JSON.parse(dataMatch[1]);
-
-                        // Navigate through the YouTube data structure
-                        const contents = this.getNestedProperty(ytInitialData, 'contents.twoColumnBrowseResultsRenderer.tabs.0.tabRenderer.content.sectionListRenderer.contents');
-
-                        // Extract videos from first page
-                        const pageVideos = this.extractVideosFromContents(contents);
-                        objVideos.push(...pageVideos);
-                    } catch (jsonError) {
-                        logger.warn("Failed to parse ytInitialData:", jsonError);
-                    }
-                }
-
-                // Fallback: Parse new yt-lockup-view-model format from HTML
-                if (objVideos.length === 0) {
-                    const lockupRegex = /<yt-lockup-view-model[^>]*>[\s\S]*?content-id-([a-zA-Z0-9_-]{11})[\s\S]*?<\/yt-lockup-view-model>/g;
-                    let lockupMatch;
-
-                    while ((lockupMatch = lockupRegex.exec(responseText)) !== null) {
-                        try {
-                            const videoId = lockupMatch[1];
-                            const lockupHtml = lockupMatch[0];
-
-                            // Extract title from the link text
-                            const titleMatch = lockupHtml.match(/<span class="yt-core-attributed-string[^"]*"[^>]*>([^<]+)<\/span>/);
-                            let title = titleMatch ? titleMatch[1] : null;
-
-                            // Try alternative title extraction
-                            if (!title) {
-                                const altTitleMatch = lockupHtml.match(/title="([^"]+)"/);
-                                title = altTitleMatch ? altTitleMatch[1] : null;
-                            }
-
-                            if (title && !objVideos.some(video => video.strIdent === videoId)) {
-                                objVideos.push({
-                                    strIdent: videoId,
-                                    intTimestamp: Date.now(),
-                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
-                                    intCount: 1,
-                                });
-                            }
-                        } catch (error) {
-                            logger.warn("Error parsing yt-lockup-view-model:", error);
-                        }
-                    }
-                }
-
-                // Fallback: Use regex for old videoRenderer format
-                if (objVideos.length === 0) {
-                    const videoRendererRegex = /"videoRenderer":\s*({[^}]*"videoId"[^}]*})/g;
-                    let rendererMatch;
-
-                    while ((rendererMatch = videoRendererRegex.exec(cleanedText)) !== null) {
-                        try {
-                            const rendererStr = rendererMatch[1];
-
-                            // Extract video ID
-                            const videoIdMatch = rendererStr.match(/"videoId":\s*"([^"]{11})"/);
-                            if (!videoIdMatch) continue;
-
-                            const videoId = videoIdMatch[1];
-
-                            // Extract title using multiple patterns
-                            const titlePatterns = [
-                                /"title":\s*{\s*"runs":\s*\[{\s*"text":\s*"([^"]+)"/,
-                                /"title":\s*{\s*"simpleText":\s*"([^"]+)"/,
-                                /"text":\s*"([^"]+)"/
-                            ];
-
-                            let title = null;
-                            for (const pattern of titlePatterns) {
-                                const titleMatch = rendererStr.match(pattern);
-                                if (titleMatch && titleMatch[1]) {
-                                    title = titleMatch[1];
-                                    break;
-                                }
-                            }
-
-                            if (title && !objVideos.some(video => video.strIdent === videoId)) {
-                                objVideos.push({
-                                    strIdent: videoId,
-                                    intTimestamp: Date.now(),
-                                    strTitle: decodeHtmlEntitiesAndFixEncoding(title),
-                                    intCount: 1,
-                                });
-                            }
-                        } catch (error) {
-                            logger.warn("Error parsing video renderer:", error);
-                        }
-                    }
-                }
-            } catch (error) {
-                logger.error("Error in YouTube history parsing:", error);
-            }
+            // Use parser to extract videos from the page
+            const objVideos = parseHistoryPage(responseText);
 
             // Store videos in the current provider
             let processedCount = 0;
@@ -330,56 +137,9 @@ export class YoutubeManager {
             }
 
             const responseText = await response.text();
-            const cleanedText = responseText
-                .replaceAll('\\"', '\\u0022')
-                .replaceAll("\r", "")
-                .replaceAll("\n", "");
 
-            let objVideos = [];
-
-            try {
-                // Extract liked videos with detailed regex (with date)
-                const objVideoWithDate = new RegExp(
-                    '"playlistVideoRenderer":[^"]*"videoId":[^"]*"([^"]{11})"' + // videoId
-                    '.*?"title":[^"]*"runs":[^"]*"text":[^"]*"([^"]*)"' + // title
-                    '.*?"videoSecondaryInfoRenderer".*?"dateText":[^"]*"simpleText":[^"]*"([^"]*)"', // dateAdded
-                    "g"
-                );
-
-                let objMatch;
-                while ((objMatch = objVideoWithDate.exec(cleanedText)) !== null) {
-                    if (objMatch[1] && objMatch[2]) {
-                        objVideos.push({
-                            strIdent: objMatch[1],
-                            intTimestamp: Date.now(),
-                            strTitle: decodeHtmlEntitiesAndFixEncoding(objMatch[2]),
-                            intCount: 1,
-                        });
-                    }
-                }
-
-                // Fallback: Simpler pattern without date
-                if (objVideos.length === 0) {
-                    const objVideoSimple = new RegExp(
-                        '"playlistVideoRenderer":[^"]*"videoId":[^"]*"([^"]{11})"' + // videoId
-                        '.*?"title":[^"]*"runs":[^"]*"text":[^"]*"([^"]*)"', // title
-                        "g"
-                    );
-
-                    while ((objMatch = objVideoSimple.exec(cleanedText)) !== null) {
-                        if (objMatch[1] && objMatch[2]) {
-                            objVideos.push({
-                                strIdent: objMatch[1],
-                                intTimestamp: Date.now(),
-                                strTitle: decodeHtmlEntitiesAndFixEncoding(objMatch[2]),
-                                intCount: 1,
-                            });
-                        }
-                    }
-                }
-            } catch (error) {
-                logger.error("Error in liked videos parsing:", error);
-            }
+            // Use parser to extract videos from the page
+            const objVideos = parseLikedVideosPage(responseText);
 
             // Store videos in the current provider
             let processedCount = 0;
@@ -435,7 +195,7 @@ export class YoutubeManager {
     async lookup(videoId) {
         try {
             // Validate video ID
-            if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+            if (!videoId || typeof videoId !== 'string' || videoId.length !== VIDEO_ID_LENGTH) {
                 const received = videoId === null ? 'null' : videoId === undefined ? 'undefined' :
                     `${typeof videoId} (${JSON.stringify(videoId).slice(0, 50)})`;
                 throw new Error(`Invalid video ID: expected 11-char string, got ${received}`);
@@ -474,7 +234,7 @@ export class YoutubeManager {
     async ensure(videoId, title = "", timestamp = null, count = null) {
         try {
             // Validate video ID
-            if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+            if (!videoId || typeof videoId !== 'string' || videoId.length !== VIDEO_ID_LENGTH) {
                 const received = videoId === null ? 'null' : videoId === undefined ? 'undefined' :
                     `${typeof videoId} (${JSON.stringify(videoId).slice(0, 50)})`;
                 throw new Error(`Invalid video ID: expected 11-char string, got ${received}`);
@@ -545,7 +305,7 @@ export class YoutubeManager {
     async mark(videoId, title = "", timestamp = null, count = null) {
         try {
             // Validate video ID
-            if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) {
+            if (!videoId || typeof videoId !== 'string' || videoId.length !== VIDEO_ID_LENGTH) {
                 const received = videoId === null ? 'null' : videoId === undefined ? 'undefined' :
                     `${typeof videoId} (${JSON.stringify(videoId).slice(0, 50)})`;
                 throw new Error(`Invalid video ID: expected 11-char string, got ${received}`);

@@ -74,9 +74,9 @@ export class SettingsManager {
 
             // Initialize all setting types in parallel
             await Promise.all([
-                this.initializeIntegerSettings(),
-                this.initializeBooleanSettings(),
-                this.initializeStylesheetSettings()
+                this.initializeSettingsByType(SETTINGS_CONFIG.integers),
+                this.initializeSettingsByType(SETTINGS_CONFIG.booleans),
+                this.initializeSettingsByType(SETTINGS_CONFIG.stylesheets)
             ]);
 
             // Migrate old settings
@@ -91,56 +91,17 @@ export class SettingsManager {
     }
 
     /**
-     * Initialize integer settings
+     * Initialize settings by type from config
+     * Consolidated method that replaces separate integer/boolean/stylesheet init methods
+     * @param {Array<{key: string, defaultValue: any}>} config - Settings configuration array
      */
-    async initializeIntegerSettings() {
-        const keys = SETTINGS_CONFIG.integers.map(s => s.key);
+    async initializeSettingsByType(config) {
+        const keys = config.map(s => s.key);
         const existing = await chrome.storage.sync.get(keys);
 
-        const toSet = {};
-        for (const { key, defaultValue } of SETTINGS_CONFIG.integers) {
-            if (existing[key] === undefined) {
-                toSet[key] = defaultValue;
-            }
-        }
-
-        if (Object.keys(toSet).length > 0) {
-            await chrome.storage.sync.set(toSet);
-        }
-    }
-
-    /**
-     * Initialize boolean settings
-     */
-    async initializeBooleanSettings() {
-        const keys = SETTINGS_CONFIG.booleans.map(s => s.key);
-        const existing = await chrome.storage.sync.get(keys);
-
-        const toSet = {};
-        for (const { key, defaultValue } of SETTINGS_CONFIG.booleans) {
-            if (existing[key] === undefined) {
-                toSet[key] = defaultValue;
-            }
-        }
-
-        if (Object.keys(toSet).length > 0) {
-            await chrome.storage.sync.set(toSet);
-        }
-    }
-
-    /**
-     * Initialize stylesheet settings
-     */
-    async initializeStylesheetSettings() {
-        const keys = SETTINGS_CONFIG.stylesheets.map(s => s.key);
-        const existing = await chrome.storage.sync.get(keys);
-
-        const toSet = {};
-        for (const { key, defaultValue } of SETTINGS_CONFIG.stylesheets) {
-            if (existing[key] === undefined) {
-                toSet[key] = defaultValue;
-            }
-        }
+        const toSet = config
+            .filter(({ key }) => existing[key] === undefined)
+            .reduce((acc, { key, defaultValue }) => ({ ...acc, [key]: defaultValue }), {});
 
         if (Object.keys(toSet).length > 0) {
             await chrome.storage.sync.set(toSet);

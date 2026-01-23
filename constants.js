@@ -250,9 +250,15 @@ export const SELECTORS = {
     }
 };
 
+// Video ID Configuration
+export const VIDEO_ID = {
+    LENGTH: 11,
+    PATTERN: /^[a-zA-Z0-9_-]{11}$/
+};
+
 // Regular Expressions
 export const REGEX = {
-    VIDEO_ID: /^[a-zA-Z0-9_-]{11}$/,
+    VIDEO_ID: VIDEO_ID.PATTERN,
     YOUTUBE_URL: /^https:\/\/(www\.|m\.)?youtube\.com\/(watch\?v=|shorts\/)/,
     SUPABASE_URL: /^https:\/\/[a-zA-Z0-9-]+\.supabase\.co$/
 };

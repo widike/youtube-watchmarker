@@ -6,16 +6,14 @@
  */
 
 import { logger } from '../logger.js';
-import { ErrorUtils } from '../error-handler.js';
 import { Search } from '../bg-search.js';
+import { createHandler } from '../handler-wrapper.js';
 
 /**
  * Search for videos
- * @param {Object} request - Request with query/strQuery, page/intSkip, pageSize/intLength
- * @returns {Promise<Object>} Search result
  */
-export async function handleSearchVideos(request) {
-    try {
+export const handleSearchVideos = createHandler(
+    async (request) => {
         // Support both old and new parameter names
         const query = request.query !== undefined ? request.query : (request.strQuery || '');
 
@@ -36,42 +34,30 @@ export async function handleSearchVideos(request) {
         const result = await Search.lookup(query, skip, length);
 
         return {
-            success: true,
             objVideos: result.videos,
             totalResults: result.totalResults
         };
-    } catch (error) {
-        logger.error('Search videos error:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+    },
+    'handleSearchVideos'
+);
 
 /**
  * Delete a video from database and history
- * @param {Object} request - Request with videoId/strIdent
- * @returns {Promise<Object>} Delete result
  */
-export async function handleSearchDelete(request) {
-    try {
+export const handleSearchDelete = createHandler(
+    async (request) => {
         // Support both old and new parameter names
         const videoId = request.videoId || request.strIdent;
 
         if (!videoId) {
-            return {
-                success: false,
-                error: 'Missing video ID'
-            };
+            return { success: false, error: 'Missing video ID' };
         }
 
         const success = await Search.delete(videoId, (progress) => {
             logger.debug('Delete progress:', progress);
         });
 
-        return {
-            success: success
-        };
-    } catch (error) {
-        logger.error('Search delete error:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { success };
+    },
+    'handleSearchDelete'
+);

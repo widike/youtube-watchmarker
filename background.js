@@ -152,6 +152,11 @@ class ExtensionManager {
      * Initialize other modules
      */
     async initializeModules() {
+        // Inject provider factory into managers (dependency injection)
+        History.setProviderFactory(this.providerFactory);
+        Youtube.setProviderFactory(this.providerFactory);
+        Search.setProviderFactory(this.providerFactory);
+
         await Promise.all([
             History.init(),
             Youtube.init(),

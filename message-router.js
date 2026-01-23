@@ -7,7 +7,7 @@
 
 import { logger } from './logger.js';
 import { errorHandler, ExtensionError, ErrorUtils, ValidationError } from './error-handler.js';
-import { ERRORS } from './constants.js';
+import { ERRORS, VIDEO_ID } from './constants.js';
 
 /**
  * Actions that require a valid YouTube video ID
@@ -43,10 +43,10 @@ function validateVideoId(videoId) {
         };
     }
 
-    if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+    if (!VIDEO_ID.PATTERN.test(videoId)) {
         return {
             valid: false,
-            error: `videoId must be 11 alphanumeric characters, got "${videoId.slice(0, 20)}${videoId.length > 20 ? '...' : ''}" (length: ${videoId.length})`
+            error: `videoId must be ${VIDEO_ID.LENGTH} alphanumeric characters, got "${videoId.slice(0, 20)}${videoId.length > 20 ? '...' : ''}" (length: ${videoId.length})`
         };
     }
 

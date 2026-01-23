@@ -6,16 +6,14 @@
  */
 
 import { logger } from '../logger.js';
-import { ErrorUtils } from '../error-handler.js';
 import { History } from '../bg-history.js';
+import { createHandler } from '../handler-wrapper.js';
 
 /**
  * Synchronize browser history
- * @param {Object} request - Request with intTimestamp and skipExisting
- * @returns {Promise<Object>} Synchronization result
  */
-export async function handleHistorySynchronize(request) {
-    try {
+export const handleHistorySynchronize = createHandler(
+    async (request) => {
         const { intTimestamp = 0, skipExisting = false } = request;
 
         const result = await History.synchronize(intTimestamp, skipExisting, (progress) => {
@@ -23,13 +21,10 @@ export async function handleHistorySynchronize(request) {
         });
 
         return {
-            success: true,
             response: result,
             videoCount: result.videoCount || 0,
             skippedCount: result.skippedCount || 0
         };
-    } catch (error) {
-        logger.error('History synchronize error:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+    },
+    'handleHistorySynchronize'
+);

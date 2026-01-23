@@ -12,347 +12,13 @@ import { supabaseDatabaseProvider } from './supabase-database-provider.js';
 import { credentialStorage } from './credential-storage.js';
 import { syncQueue, SyncOperationType } from './sync-queue.js';
 import { logger } from './logger.js';
-
-/**
- * IndexedDB Provider Wrapper
- * Wraps the existing IndexedDB functionality to match the provider interface
- */
-class IndexedDBProvider {
-    constructor(databaseManager) {
-        this.databaseManager = databaseManager;
-        this.isInitialized = false;
-        this.isConnected = false;
-    }
-
-    async init() {
-        if (!this.databaseManager) {
-            throw new Error('Database manager not set');
-        }
-
-        // If database is already open, we're good
-        if (this.databaseManager.database) {
-            this.isInitialized = true;
-            this.isConnected = true;
-            return true;
-        }
-
-        // If database manager exists but database isn't open yet, 
-        // that's okay - it will be opened during database initialization
-        // We just mark as initialized and will connect when database opens
-        this.isInitialized = true;
-        this.isConnected = false;
-        return true;
-    }
-
-    async testConnection() {
-        // Update connection status based on current database state
-        this.isConnected = this.databaseManager && this.databaseManager.database !== null;
-        return this.isConnected;
-    }
-
-    /**
-     * Update connection status based on database state
-     */
-    updateConnectionStatus() {
-        // More thorough connection checking
-        const isDbOpen = this.databaseManager?.database !== null;
-        const isDbInitialized = this.databaseManager?.isInitialized === true;
-
-        // We're connected if database is open AND initialized
-        this.isConnected = isDbOpen && isDbInitialized;
-
-        // Log status for debugging
-        if (!this.isConnected) {
-            console.debug('IndexedDB connection status:', {
-                isDbOpen,
-                isDbInitialized,
-                databaseExists: !!this.databaseManager?.database,
-                managerInitialized: !!this.databaseManager?.isInitialized
-            });
-        }
-    }
-
-    async getVideo(videoId) {
-        // Update connection status
-        this.updateConnectionStatus();
-
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readonly');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-            const request = store.get(videoId);
-
-            request.onsuccess = () => {
-                resolve(request.result || null);
-            };
-
-            request.onerror = () => {
-                reject(new Error('Failed to get video'));
-            };
-        });
-    }
-
-    async putVideo(video) {
-        // Update connection status
-        this.updateConnectionStatus();
-
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-
-            // Check if video exists
-            const getRequest = store.get(video.strIdent);
-
-            getRequest.onsuccess = () => {
-                const existingVideo = getRequest.result;
-                let videoToStore = video;
-
-                if (existingVideo) {
-                    // Merge with existing data, keeping the latest timestamp
-                    videoToStore = {
-                        ...existingVideo,
-                        ...video,
-                        intTimestamp: Math.max(existingVideo.intTimestamp || 0, video.intTimestamp || 0),
-                        intCount: Math.max(existingVideo.intCount || 1, video.intCount || 1)
-                    };
-                }
-
-                const putRequest = store.put(videoToStore);
-
-                putRequest.onsuccess = () => {
-                    resolve(true);
-                };
-
-                putRequest.onerror = () => {
-                    reject(new Error('Failed to put video'));
-                };
-            };
-
-            getRequest.onerror = () => {
-                reject(new Error('Failed to check existing video'));
-            };
-        });
-    }
-
-    async getAllVideos() {
-        // Update connection status
-        this.updateConnectionStatus();
-
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readonly');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-            const request = store.getAll();
-
-            request.onsuccess = () => {
-                resolve(request.result || []);
-            };
-
-            request.onerror = () => {
-                reject(new Error('Failed to get all videos'));
-            };
-        });
-    }
-
-    async getVideoCount() {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readonly');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-            const request = store.count();
-
-            request.onsuccess = () => {
-                resolve(request.result || 0);
-            };
-
-            request.onerror = () => {
-                reject(new Error('Failed to get video count'));
-            };
-        });
-    }
-
-    async clearAllVideos() {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-            const request = store.clear();
-
-            request.onsuccess = () => {
-                resolve(true);
-            };
-
-            request.onerror = () => {
-                reject(new Error('Failed to clear all videos'));
-            };
-        });
-    }
-
-    async deleteVideo(videoId) {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-            const request = store.delete(videoId);
-
-            request.onsuccess = () => {
-                resolve(true);
-            };
-
-            request.onerror = () => {
-                reject(new Error('Failed to delete video'));
-            };
-        });
-    }
-
-    async importVideos(videos) {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        if (!videos || videos.length === 0) {
-            return true;
-        }
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.databaseManager.database.transaction([this.databaseManager.STORE_NAME], 'readwrite');
-            const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-
-            let processed = 0;
-            const total = videos.length;
-
-            const processNext = () => {
-                if (processed >= total) {
-                    resolve(true);
-                    return;
-                }
-
-                const video = videos[processed];
-
-                // Check if video exists
-                const getRequest = store.get(video.strIdent);
-
-                getRequest.onsuccess = () => {
-                    const existingVideo = getRequest.result;
-                    let videoToStore = video;
-
-                    if (existingVideo) {
-                        // Merge with existing data, keeping the latest timestamp
-                        videoToStore = {
-                            ...existingVideo,
-                            ...video,
-                            intTimestamp: Math.max(existingVideo.intTimestamp || 0, video.intTimestamp || 0),
-                            intCount: Math.max(existingVideo.intCount || 1, video.intCount || 1)
-                        };
-                    }
-
-                    const putRequest = store.put(videoToStore);
-
-                    putRequest.onsuccess = () => {
-                        processed++;
-                        processNext();
-                    };
-
-                    putRequest.onerror = () => {
-                        reject(new Error(`Failed to import video ${processed + 1}`));
-                    };
-                };
-
-                getRequest.onerror = () => {
-                    reject(new Error(`Failed to check existing video ${processed + 1}`));
-                };
-            };
-
-            processNext();
-        });
-    }
-
-    async searchVideos(query, limit = 100) {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        const allVideos = await this.getAllVideos();
-        const filteredVideos = allVideos.filter(video =>
-            video.strTitle && video.strTitle.toLowerCase().includes(query.toLowerCase())
-        );
-
-        return filteredVideos.slice(0, limit);
-    }
-
-    async getVideosByDateRange(startTimestamp, endTimestamp) {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        const allVideos = await this.getAllVideos();
-        return allVideos.filter(video =>
-            video.intTimestamp >= startTimestamp && video.intTimestamp <= endTimestamp
-        );
-    }
-
-    async getStatistics() {
-        if (!this.isConnected) {
-            throw new Error('Database not connected');
-        }
-
-        const allVideos = await this.getAllVideos();
-
-        if (allVideos.length === 0) {
-            return {
-                totalVideos: 0,
-                oldestTimestamp: 0,
-                newestTimestamp: 0,
-                totalViews: 0,
-                avgViewsPerVideo: 0
-            };
-        }
-
-        const timestamps = allVideos.map(v => v.intTimestamp).filter(t => t);
-        const totalViews = allVideos.reduce((sum, v) => sum + (v.intCount || 1), 0);
-
-        return {
-            totalVideos: allVideos.length,
-            oldestTimestamp: Math.min(...timestamps),
-            newestTimestamp: Math.max(...timestamps),
-            totalViews,
-            avgViewsPerVideo: totalViews / allVideos.length
-        };
-    }
-
-    async close() {
-        this.isConnected = false;
-        return true;
-    }
-
-    getProviderInfo() {
-        return {
-            name: 'IndexedDB',
-            type: 'local',
-            isConnected: this.isConnected,
-            isInitialized: this.isInitialized
-        };
-    }
-}
+import { IndexedDBProvider } from './indexeddb-provider.js';
+import {
+    performDeltaSync as performDeltaSyncUtil,
+    performInitialSync as performInitialSyncUtil,
+    mergeVideoData,
+    DELTA_SYNC_STORAGE_KEY
+} from './provider-sync.js';
 
 /**
  * Database Provider Factory
@@ -374,7 +40,7 @@ export class DatabaseProviderFactory {
         // Supabase is now a secondary backup, not a primary provider
         this.supabaseEnabled = false;
         this.lastDeltaSyncTimestamp = 0;
-        this.deltaSyncStorageKey = 'last_delta_sync_timestamp';
+        this.deltaSyncStorageKey = DELTA_SYNC_STORAGE_KEY;
     }
 
     /**
@@ -466,42 +132,7 @@ export class DatabaseProviderFactory {
         if (!this.supabaseEnabled || !supabaseDatabaseProvider.isConnected) {
             return { success: false, error: 'Supabase not available' };
         }
-
-        try {
-            // Load last sync timestamp
-            const result = await chrome.storage.local.get([this.deltaSyncStorageKey]);
-            const lastSync = result[this.deltaSyncStorageKey] || 0;
-            const now = Date.now();
-
-            // Get videos modified since last sync from IndexedDB
-            const modifiedVideos = await this.indexedDBProvider.getVideosByDateRange(lastSync, now);
-
-            if (modifiedVideos.length === 0) {
-                logger.debug('Delta sync: no new videos to sync');
-                return { success: true, synced: 0 };
-            }
-
-            // Upload to Supabase in batches
-            const BATCH_SIZE = 100;
-            let synced = 0;
-
-            for (let i = 0; i < modifiedVideos.length; i += BATCH_SIZE) {
-                const batch = modifiedVideos.slice(i, i + BATCH_SIZE);
-                await supabaseDatabaseProvider.importVideos(batch);
-                synced += batch.length;
-            }
-
-            // Update last sync timestamp
-            await chrome.storage.local.set({
-                [this.deltaSyncStorageKey]: now
-            });
-
-            logger.info(`Delta sync complete: synced ${synced} videos`);
-            return { success: true, synced };
-        } catch (error) {
-            logger.error('Delta sync failed:', error.message);
-            return { success: false, error: error.message };
-        }
+        return performDeltaSyncUtil(this.indexedDBProvider, supabaseDatabaseProvider);
     }
 
     /**
@@ -513,32 +144,7 @@ export class DatabaseProviderFactory {
         if (!supabaseDatabaseProvider.isConnected) {
             return { success: false, error: 'Supabase not connected' };
         }
-
-        try {
-            logger.info('Starting initial sync from Supabase...');
-
-            // Get all videos from Supabase
-            const supabaseVideos = await supabaseDatabaseProvider.getAllVideos();
-
-            if (supabaseVideos.length === 0) {
-                logger.info('Initial sync: no videos in Supabase');
-                return { success: true, imported: 0 };
-            }
-
-            // Import to IndexedDB (will merge with existing)
-            await this.indexedDBProvider.importVideos(supabaseVideos);
-
-            // Update last sync timestamp to now
-            await chrome.storage.local.set({
-                [this.deltaSyncStorageKey]: Date.now()
-            });
-
-            logger.info(`Initial sync complete: imported ${supabaseVideos.length} videos from Supabase`);
-            return { success: true, imported: supabaseVideos.length };
-        } catch (error) {
-            logger.error('Initial sync failed:', error.message);
-            return { success: false, error: error.message };
-        }
+        return performInitialSyncUtil(this.indexedDBProvider, supabaseDatabaseProvider);
     }
 
     /**
@@ -919,7 +525,7 @@ export class DatabaseProviderFactory {
             const data2 = await providers[provider2].getAllVideos();
 
             // Merge data (keep the most recent timestamp for each video)
-            const mergedData = this.mergeVideoData(data1, data2);
+            const mergedData = mergeVideoData(data1, data2);
 
             // Update both providers with merged data
             await providers[provider1].importVideos(mergedData);
@@ -934,41 +540,6 @@ export class DatabaseProviderFactory {
             }, null, 2));
             throw error;
         }
-    }
-
-    /**
-     * Merge video data from two sources
-     * @param {Array} data1 - First data set
-     * @param {Array} data2 - Second data set
-     * @returns {Array} Merged data
-     */
-    mergeVideoData(data1, data2) {
-        const merged = new Map();
-
-        // Add all videos from data1
-        data1.forEach(video => {
-            merged.set(video.strIdent, video);
-        });
-
-        // Merge with data2, keeping the most recent timestamp
-        data2.forEach(video => {
-            const existing = merged.get(video.strIdent);
-            if (!existing) {
-                merged.set(video.strIdent, video);
-            } else {
-                // Keep the video with the most recent timestamp
-                const mergedVideo = {
-                    ...existing,
-                    ...video,
-                    intTimestamp: Math.max(existing.intTimestamp || 0, video.intTimestamp || 0),
-                    intCount: Math.max(existing.intCount || 1, video.intCount || 1),
-                    strTitle: video.strTitle || existing.strTitle // Prefer non-null title
-                };
-                merged.set(video.strIdent, mergedVideo);
-            }
-        });
-
-        return Array.from(merged.values());
     }
 }
 

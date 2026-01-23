@@ -5,32 +5,26 @@
  * Handles provider switching, status, syncing, and migration
  */
 
-import { logger } from '../logger.js';
-import { ErrorUtils } from '../error-handler.js';
 import { credentialStorage } from '../credential-storage.js';
 import { databaseProviderFactory } from '../database-provider-factory.js';
+import { createHandler } from '../handler-wrapper.js';
 
 /**
  * Get database provider status
- * @returns {Promise<Object>} Provider status
  */
-export async function handleProviderStatus() {
-    try {
+export const handleProviderStatus = createHandler(
+    async () => {
         const status = databaseProviderFactory.getProviderStatus();
-        return { success: true, status };
-    } catch (error) {
-        logger.error('Failed to get provider status:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { status };
+    },
+    { name: 'handleProviderStatus', requiresRequest: false }
+);
 
 /**
  * Switch database provider
- * @param {Object} request - Request with provider field
- * @returns {Promise<Object>} Switch result
  */
-export async function handleProviderSwitch(request) {
-    try {
+export const handleProviderSwitch = createHandler(
+    async (request) => {
         const { provider } = request;
 
         if (!provider || !['indexeddb', 'supabase'].includes(provider)) {
@@ -40,41 +34,34 @@ export async function handleProviderSwitch(request) {
         if (provider === 'indexeddb') {
             const success = await databaseProviderFactory.switchToIndexedDB();
             if (success) {
-                return { success: true, message: `Successfully switched to ${provider}` };
+                return { message: `Successfully switched to ${provider}` };
             } else {
                 return { success: false, error: `Failed to switch to ${provider}` };
             }
         } else if (provider === 'supabase') {
             await databaseProviderFactory.switchToSupabase();
-            return { success: true, message: `Successfully switched to ${provider}` };
+            return { message: `Successfully switched to ${provider}` };
         }
-    } catch (error) {
-        logger.error('Failed to switch provider:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+    },
+    'handleProviderSwitch'
+);
 
 /**
  * Get available providers
- * @returns {Promise<Object>} Available providers
  */
-export async function handleProviderList() {
-    try {
+export const handleProviderList = createHandler(
+    async () => {
         const providers = await databaseProviderFactory.getAvailableProviders();
-        return { success: true, providers };
-    } catch (error) {
-        logger.error('Failed to get available providers:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { providers };
+    },
+    { name: 'handleProviderList', requiresRequest: false }
+);
 
 /**
  * Migrate data between providers
- * @param {Object} request - Request with fromProvider and toProvider
- * @returns {Promise<Object>} Migration result
  */
-export async function handleProviderMigrate(request) {
-    try {
+export const handleProviderMigrate = createHandler(
+    async (request) => {
         const { fromProvider, toProvider } = request;
 
         if (!fromProvider || !toProvider) {
@@ -83,26 +70,19 @@ export async function handleProviderMigrate(request) {
 
         const success = await databaseProviderFactory.migrateData(fromProvider, toProvider);
         if (success) {
-            return {
-                success: true,
-                message: `Successfully migrated data from ${fromProvider} to ${toProvider}`
-            };
+            return { message: `Successfully migrated data from ${fromProvider} to ${toProvider}` };
         } else {
             return { success: false, error: 'Migration failed' };
         }
-    } catch (error) {
-        logger.error('Failed to migrate data:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+    },
+    'handleProviderMigrate'
+);
 
 /**
  * Sync data between providers
- * @param {Object} request - Request with providers array
- * @returns {Promise<Object>} Sync result
  */
-export async function handleProviderSync(request) {
-    try {
+export const handleProviderSync = createHandler(
+    async (request) => {
         const { providers } = request;
 
         if (!providers || !Array.isArray(providers) || providers.length !== 2) {
@@ -111,27 +91,19 @@ export async function handleProviderSync(request) {
 
         const success = await databaseProviderFactory.syncProviders(providers[0], providers[1]);
         if (success) {
-            return {
-                success: true,
-                message: `Successfully synced data between ${providers[0]} and ${providers[1]}`
-            };
+            return { message: `Successfully synced data between ${providers[0]} and ${providers[1]}` };
         } else {
             return { success: false, error: 'Sync failed' };
         }
-    } catch (error) {
-        logger.error('Failed to sync providers:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+    },
+    'handleProviderSync'
+);
 
 /**
  * Configure Supabase credentials
- * @param {Object} request - Request with credentials
- * @returns {Promise<Object>} Configuration result
  */
-export async function handleSupabaseConfigure(request) {
-    // Note: request parameter is used in this function
-    try {
+export const handleSupabaseConfigure = createHandler(
+    async (request) => {
         const { credentials } = request;
 
         if (!credentials) {
@@ -139,88 +111,71 @@ export async function handleSupabaseConfigure(request) {
         }
 
         await credentialStorage.storeCredentials(credentials);
-        return { success: true, message: 'Supabase configuration saved successfully' };
-    } catch (error) {
-        logger.error('Failed to configure Supabase:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { message: 'Supabase configuration saved successfully' };
+    },
+    'handleSupabaseConfigure'
+);
 
 /**
  * Test Supabase connection
- * @returns {Promise<Object>} Test result
  */
-export async function handleSupabaseTest() {
-    try {
+export const handleSupabaseTest = createHandler(
+    async () => {
         const success = await credentialStorage.testConnection();
         if (success) {
-            return { success: true, message: 'Supabase connection test successful' };
+            return { message: 'Supabase connection test successful' };
         } else {
             return { success: false, error: 'Supabase connection test failed' };
         }
-    } catch (error) {
-        logger.error('Supabase connection test failed:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+    },
+    { name: 'handleSupabaseTest', requiresRequest: false }
+);
 
 /**
  * Clear Supabase configuration
- * @returns {Promise<Object>} Clear result
  */
-export async function handleSupabaseClear() {
-    try {
+export const handleSupabaseClear = createHandler(
+    async () => {
         await credentialStorage.clearCredentials();
-        return { success: true, message: 'Supabase configuration cleared successfully' };
-    } catch (error) {
-        logger.error('Failed to clear Supabase configuration:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { message: 'Supabase configuration cleared successfully' };
+    },
+    { name: 'handleSupabaseClear', requiresRequest: false }
+);
 
 /**
  * Get Supabase credentials (masked)
- * @returns {Promise<Object>} Credentials result
  */
-export async function handleSupabaseGetCredentials() {
-    try {
+export const handleSupabaseGetCredentials = createHandler(
+    async () => {
         const credentials = await credentialStorage.getMaskedCredentials();
-        return { success: true, credentials };
-    } catch (error) {
-        logger.error('Failed to get Supabase credentials:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { credentials };
+    },
+    { name: 'handleSupabaseGetCredentials', requiresRequest: false }
+);
 
 /**
  * Get Supabase status
- * @returns {Promise<Object>} Status result
  */
-export async function handleSupabaseGetStatus() {
-    try {
+export const handleSupabaseGetStatus = createHandler(
+    async () => {
         const status = await credentialStorage.getCredentialStatus();
-        return { success: true, status };
-    } catch (error) {
-        logger.error('Failed to get Supabase status:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { status };
+    },
+    { name: 'handleSupabaseGetStatus', requiresRequest: false }
+);
 
 /**
  * Check if Supabase table exists
- * @returns {Promise<Object>} Table check result
  */
-export async function handleSupabaseCheckTable() {
-    try {
+export const handleSupabaseCheckTable = createHandler(
+    async () => {
         const currentProvider = databaseProviderFactory.getCurrentProvider();
         if (!currentProvider || !currentProvider.checkTableExists) {
             return { success: false, error: 'Supabase provider not available' };
         }
 
         const exists = await currentProvider.checkTableExists();
-        return { success: true, tableExists: exists };
-    } catch (error) {
-        logger.error('Error checking Supabase table:', error);
-        return ErrorUtils.createErrorResponse(error);
-    }
-}
+        return { tableExists: exists };
+    },
+    { name: 'handleSupabaseCheckTable', requiresRequest: false }
+);

@@ -5,7 +5,13 @@
  * Centralized validation logic to avoid duplication
  */
 
-import { REGEX } from './constants.js';
+import { REGEX, VIDEO_ID } from './constants.js';
+
+/**
+ * Video ID length constant
+ * Re-exported from constants for convenience
+ */
+export const VIDEO_ID_LENGTH = VIDEO_ID.LENGTH;
 
 /**
  * Validates if a string is valid base64

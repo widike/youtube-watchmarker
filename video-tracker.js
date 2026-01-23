@@ -7,7 +7,7 @@
 
 import { logger } from './logger.js';
 import { sendMessageToTab } from './browser-utils.js';
-import { isValidVideoTitle } from './validation.js';
+import { isValidVideoTitle, VIDEO_ID_LENGTH } from './validation.js';
 import { decodeHtmlEntitiesAndFixEncoding } from './text-utils.js';
 import { TIMEOUTS } from './constants.js';
 
@@ -190,7 +190,7 @@ export class VideoTracker {
             const elapsedTimes = urlParams.get('et')?.split(',') || [];
             const videoId = urlParams.get('docid');
 
-            if (!videoId || videoId.length !== 11) {
+            if (!videoId || videoId.length !== VIDEO_ID_LENGTH) {
                 return;
             }
 

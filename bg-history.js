@@ -9,6 +9,31 @@ import { YOUTUBE } from "./constants.js";
 export class HistoryManager {
     constructor() {
         this.isInitialized = false;
+        this.providerFactory = null;
+    }
+
+    /**
+     * Set the provider factory for dependency injection
+     * @param {Object} factory - Database provider factory instance
+     */
+    setProviderFactory(factory) {
+        this.providerFactory = factory;
+    }
+
+    /**
+     * Get the current database provider
+     * @returns {Object} Database provider
+     * @throws {Error} If provider factory not set
+     */
+    getProvider() {
+        if (!this.providerFactory) {
+            throw new Error('Provider factory not set. Call setProviderFactory() first.');
+        }
+        const provider = this.providerFactory.getCurrentProvider();
+        if (!provider) {
+            throw new Error('No current database provider available');
+        }
+        return provider;
     }
 
     /**
@@ -22,25 +47,6 @@ export class HistoryManager {
 
         this.isInitialized = true;
         logger.debug('History module initialized');
-    }
-
-    /**
-     * Get the current database provider
-     * @returns {Object} Database provider
-     * @throws {Error} If provider is not available
-     */
-    getProvider() {
-        const extensionManager = globalThis.extensionManager;
-        if (!extensionManager || !extensionManager.providerFactory) {
-            throw new Error("Database provider factory not available");
-        }
-
-        const currentProvider = extensionManager.providerFactory.getCurrentProvider();
-        if (!currentProvider) {
-            throw new Error("No current database provider available");
-        }
-
-        return currentProvider;
     }
 
     /**
