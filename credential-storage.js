@@ -3,517 +3,619 @@
  * Uses AES-GCM with PBKDF2 key derivation for maximum security
  */
 class WebEncryption {
-    constructor() {
-        // Generate a unique salt for this extension instance
-        this.masterSalt = null;
-        this.keyMaterial = null;
-        this.initialized = false;
+  constructor() {
+    // Generate a unique salt for this extension instance
+    this.masterSalt = null;
+    this.keyMaterial = null;
+    this.initialized = false;
+  }
+
+  /**
+   * Initialize the encryption system with a master salt and key material
+   */
+  async initialize() {
+    if (this.initialized) return;
+
+    try {
+      // Try to get existing salt and key material from storage
+      const result = await chrome.storage.local.get([
+        "encryption_salt",
+        "encryption_key_material",
+      ]);
+
+      if (result.encryption_salt) {
+        this.masterSalt = new Uint8Array(result.encryption_salt);
+      } else {
+        // Generate new salt and store it
+        this.masterSalt = crypto.getRandomValues(new Uint8Array(32));
+      }
+
+      if (result.encryption_key_material) {
+        this.keyMaterial = new Uint8Array(result.encryption_key_material);
+      } else {
+        // Generate stable key material and store it
+        this.keyMaterial = crypto.getRandomValues(new Uint8Array(32));
+      }
+
+      // Store both salt and key material if either was newly generated
+      if (!result.encryption_salt || !result.encryption_key_material) {
+        await chrome.storage.local.set({
+          encryption_salt: Array.from(this.masterSalt),
+          encryption_key_material: Array.from(this.keyMaterial),
+        });
+      }
+
+      this.initialized = true;
+    } catch (error) {
+      console.error(
+        "Failed to initialize encryption:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      throw new Error("Encryption initialization failed");
     }
+  }
 
-    /**
-     * Initialize the encryption system with a master salt and key material
-     */
-    async initialize() {
-        if (this.initialized) return;
+  /**
+   * Generate a cryptographic key from stored key material
+   * Uses PBKDF2 for secure key derivation
+   */
+  async deriveKey() {
+    await this.initialize();
 
-        try {
-            // Try to get existing salt and key material from storage
-            const result = await chrome.storage.local.get(['encryption_salt', 'encryption_key_material']);
+    // Use the stored stable key material
+    const importedKey = await crypto.subtle.importKey(
+      "raw",
+      this.keyMaterial,
+      "PBKDF2",
+      false,
+      ["deriveKey"],
+    );
 
-            if (result.encryption_salt) {
-                this.masterSalt = new Uint8Array(result.encryption_salt);
-            } else {
-                // Generate new salt and store it
-                this.masterSalt = crypto.getRandomValues(new Uint8Array(32));
-            }
+    // Derive AES-GCM key using PBKDF2
+    const derivedKey = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: this.masterSalt,
+        iterations: 100000, // High iteration count for security
+        hash: "SHA-256",
+      },
+      importedKey,
+      {
+        name: "AES-GCM",
+        length: 256, // 256-bit key
+      },
+      false, // Key is not extractable
+      ["encrypt", "decrypt"],
+    );
 
-            if (result.encryption_key_material) {
-                this.keyMaterial = new Uint8Array(result.encryption_key_material);
-            } else {
-                // Generate stable key material and store it
-                this.keyMaterial = crypto.getRandomValues(new Uint8Array(32));
-            }
+    return derivedKey;
+  }
 
-            // Store both salt and key material if either was newly generated
-            if (!result.encryption_salt || !result.encryption_key_material) {
-                await chrome.storage.local.set({
-                    encryption_salt: Array.from(this.masterSalt),
-                    encryption_key_material: Array.from(this.keyMaterial)
-                });
-            }
+  /**
+   * Encrypt text using AES-GCM
+   * @param {string} text - Text to encrypt
+   * @returns {string} Base64 encoded encrypted data with IV
+   */
+  async encrypt(text) {
+    if (!text) return "";
 
-            this.initialized = true;
-        } catch (error) {
-            console.error('Failed to initialize encryption:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            throw new Error('Encryption initialization failed');
-        }
-    }
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
 
-    /**
-     * Generate a cryptographic key from stored key material
-     * Uses PBKDF2 for secure key derivation
-     */
-    async deriveKey() {
-        await this.initialize();
+      // Generate random IV for each encryption
+      const iv = crypto.getRandomValues(new Uint8Array(12)); // 12 bytes for GCM
 
-        // Use the stored stable key material
-        const importedKey = await crypto.subtle.importKey(
-            'raw',
-            this.keyMaterial,
-            'PBKDF2',
-            false,
-            ['deriveKey']
-        );
+      // Get the encryption key
+      const key = await this.deriveKey();
 
-        // Derive AES-GCM key using PBKDF2
-        const derivedKey = await crypto.subtle.deriveKey({
-            name: 'PBKDF2',
-            salt: this.masterSalt,
-            iterations: 100000, // High iteration count for security
-            hash: 'SHA-256'
+      // Encrypt the data
+      const encrypted = await crypto.subtle.encrypt(
+        {
+          name: "AES-GCM",
+          iv: iv,
         },
-            importedKey, {
-            name: 'AES-GCM',
-            length: 256 // 256-bit key
+        key,
+        data,
+      );
+
+      // Combine IV and encrypted data
+      const combined = new Uint8Array(iv.length + encrypted.byteLength);
+      combined.set(iv, 0);
+      combined.set(new Uint8Array(encrypted), iv.length);
+
+      // Return base64 encoded result
+      return btoa(String.fromCharCode(...combined));
+    } catch (error) {
+      console.error(
+        "Encryption failed:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      throw new Error("Failed to encrypt data");
+    }
+  }
+
+  /**
+   * Decrypt AES-GCM encrypted text
+   * @param {string} encryptedText - Base64 encoded encrypted data with IV
+   * @returns {string} Decrypted text
+   */
+  async decrypt(encryptedText) {
+    if (!encryptedText) return "";
+
+    try {
+      // Decode base64
+      const combined = new Uint8Array(
+        atob(encryptedText)
+          .split("")
+          .map((char) => char.charCodeAt(0)),
+      );
+
+      // Extract IV (first 12 bytes) and encrypted data
+      const iv = combined.slice(0, 12);
+      const encrypted = combined.slice(12);
+
+      // Get the decryption key
+      const key = await this.deriveKey();
+
+      // Decrypt the data
+      const decrypted = await crypto.subtle.decrypt(
+        {
+          name: "AES-GCM",
+          iv: iv,
         },
-            false, // Key is not extractable
-            ['encrypt', 'decrypt']
-        );
+        key,
+        encrypted,
+      );
 
-        return derivedKey;
+      // Convert back to text
+      const decoder = new TextDecoder();
+      const decryptedText = decoder.decode(decrypted);
+
+      if (!decryptedText) {
+        throw new Error("Decryption produced empty result");
+      }
+
+      return decryptedText;
+    } catch (error) {
+      console.error(
+        "Decryption failed:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      throw error; // Re-throw instead of silently returning empty string
     }
-
-    /**
-     * Encrypt text using AES-GCM
-     * @param {string} text - Text to encrypt
-     * @returns {string} Base64 encoded encrypted data with IV
-     */
-    async encrypt(text) {
-        if (!text) return '';
-
-        try {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(text);
-
-            // Generate random IV for each encryption
-            const iv = crypto.getRandomValues(new Uint8Array(12)); // 12 bytes for GCM
-
-            // Get the encryption key
-            const key = await this.deriveKey();
-
-            // Encrypt the data
-            const encrypted = await crypto.subtle.encrypt({
-                name: 'AES-GCM',
-                iv: iv
-            },
-                key,
-                data
-            );
-
-            // Combine IV and encrypted data
-            const combined = new Uint8Array(iv.length + encrypted.byteLength);
-            combined.set(iv, 0);
-            combined.set(new Uint8Array(encrypted), iv.length);
-
-            // Return base64 encoded result
-            return btoa(String.fromCharCode(...combined));
-        } catch (error) {
-            console.error('Encryption failed:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            throw new Error('Failed to encrypt data');
-        }
-    }
-
-    /**
-     * Decrypt AES-GCM encrypted text
-     * @param {string} encryptedText - Base64 encoded encrypted data with IV
-     * @returns {string} Decrypted text
-     */
-    async decrypt(encryptedText) {
-        if (!encryptedText) return '';
-
-        try {
-            // Decode base64
-            const combined = new Uint8Array(
-                atob(encryptedText).split('').map(char => char.charCodeAt(0))
-            );
-
-            // Extract IV (first 12 bytes) and encrypted data
-            const iv = combined.slice(0, 12);
-            const encrypted = combined.slice(12);
-
-            // Get the decryption key
-            const key = await this.deriveKey();
-
-            // Decrypt the data
-            const decrypted = await crypto.subtle.decrypt({
-                name: 'AES-GCM',
-                iv: iv
-            },
-                key,
-                encrypted
-            );
-
-            // Convert back to text
-            const decoder = new TextDecoder();
-            const decryptedText = decoder.decode(decrypted);
-
-            if (!decryptedText) {
-                throw new Error('Decryption produced empty result');
-            }
-
-            return decryptedText;
-        } catch (error) {
-            console.error('Decryption failed:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            throw error; // Re-throw instead of silently returning empty string
-        }
-    }
-
+  }
 }
 
 /**
  * Credential storage manager
  */
 export class CredentialStorage {
-    constructor() {
-        this.encryption = new WebEncryption();
-        this.storageKey = 'supabase_credentials';
+  constructor() {
+    this.encryption = new WebEncryption();
+    this.storageKey = "supabase_credentials";
+  }
+
+  /**
+   * Store Supabase credentials securely
+   * @param {Object} credentials - Database credentials
+   * @param {string} credentials.supabaseUrl - Supabase project URL
+   * @param {string} credentials.apiKey - Supabase service role API key
+   * @param {string} credentials.projectRef - Project reference ID
+   */
+  async storeCredentials(credentials) {
+    try {
+      // Validate required fields
+      if (!credentials.supabaseUrl || !credentials.apiKey) {
+        throw new Error(
+          "Invalid credentials: missing required fields (supabaseUrl, apiKey)",
+        );
+      }
+
+      // Validate URL format
+      if (
+        !credentials.supabaseUrl.includes("supabase.co") &&
+        !credentials.supabaseUrl.includes("localhost")
+      ) {
+        throw new Error("Invalid Supabase URL format");
+      }
+
+      // Encrypt sensitive data
+      const encryptedCredentials = {
+        supabaseUrl: await this.encryption.encrypt(credentials.supabaseUrl),
+        apiKey: await this.encryption.encrypt(credentials.apiKey),
+        projectRef: credentials.projectRef
+          ? await this.encryption.encrypt(credentials.projectRef)
+          : null,
+        stored_at: Date.now(),
+      };
+
+      // Store in Chrome storage
+      await chrome.storage.local.set({
+        [this.storageKey]: encryptedCredentials,
+      });
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Failed to store credentials:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve and decrypt Supabase credentials
+   * @returns {Object|null} Decrypted credentials or null if not found
+   */
+  async getCredentials() {
+    try {
+      const result = await chrome.storage.local.get([this.storageKey]);
+      const encryptedCredentials = result[this.storageKey];
+
+      if (!encryptedCredentials) {
+        return null;
+      }
+
+      // Decrypt sensitive data
+      const supabaseUrl = await this.encryption.decrypt(
+        encryptedCredentials.supabaseUrl,
+      );
+      const apiKey = await this.encryption.decrypt(encryptedCredentials.apiKey);
+
+      // Validate decrypted values
+      if (!supabaseUrl || !apiKey) {
+        throw new Error("Failed to decrypt credentials");
+      }
+
+      const credentials = {
+        supabaseUrl,
+        apiKey,
+        projectRef: encryptedCredentials.projectRef
+          ? await this.encryption.decrypt(encryptedCredentials.projectRef)
+          : null,
+        stored_at: encryptedCredentials.stored_at,
+      };
+
+      return credentials;
+    } catch (error) {
+      console.error(
+        "Failed to retrieve credentials:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Test database connection with stored credentials
+   * @returns {Promise<boolean>} True if connection successful
+   */
+  async testConnection() {
+    try {
+      const credentials = await this.getCredentials();
+      if (!credentials) {
+        throw new Error("No credentials found");
+      }
+
+      if (!credentials.supabaseUrl || !credentials.apiKey) {
+        throw new Error("Invalid credentials: missing URL or API key");
+      }
+
+      // Validate URL format
+      if (!credentials.supabaseUrl.startsWith("https://")) {
+        throw new Error("Invalid URL format: must start with https://");
+      }
+
+      // Test connection with a simple request and timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+      try {
+        const response = await fetch(`${credentials.supabaseUrl}/rest/v1/`, {
+          method: "GET",
+          headers: {
+            apikey: credentials.apiKey,
+            Authorization: `Bearer ${credentials.apiKey}`,
+            "X-Client-Info": "youtube-watchmarker-extension",
+          },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok || response.status === 404) {
+          // 404 is expected for root path, but means API is reachable
+          return true;
+        }
+
+        const errorText = await response.text();
+
+        if (response.status === 401) {
+          throw new Error(
+            "Invalid API key - check your Supabase service role key",
+          );
+        } else if (response.status === 403) {
+          throw new Error("API key does not have sufficient permissions");
+        }
+
+        throw new Error(
+          `HTTP ${response.status}: ${errorText || response.statusText}`,
+        );
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+
+        if (fetchError.name === "AbortError") {
+          throw new Error(
+            "Connection timeout - check your network and Supabase URL",
+          );
+        }
+
+        throw fetchError;
+      }
+    } catch (error) {
+      console.error("Supabase connection test failed:", error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Clear stored credentials
+   */
+  async clearCredentials() {
+    try {
+      await chrome.storage.local.remove([this.storageKey]);
+      return true;
+    } catch (error) {
+      console.error(
+        "Failed to clear credentials:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Check if credentials are stored
+   * @returns {Promise<boolean>} True if credentials exist
+   */
+  async hasCredentials() {
+    try {
+      const result = await chrome.storage.local.get([this.storageKey]);
+      return !!result[this.storageKey];
+    } catch (error) {
+      console.error(
+        "Failed to check credentials:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Parse Supabase URL to extract project reference
+   * @param {string} supabaseUrl - Supabase project URL
+   * @returns {string|null} Project reference or null
+   */
+  extractProjectRef(supabaseUrl) {
+    try {
+      const url = new URL(supabaseUrl);
+      const hostname = url.hostname;
+
+      // Extract project ref from hostname like "abcdefg.supabase.co"
+      const match = hostname.match(/^([a-z0-9]+)\.supabase\.co$/);
+      if (match) {
+        return match[1];
+      }
+
+      return null;
+    } catch (error) {
+      console.error(
+        "Failed to extract project ref:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Validate Supabase credentials format
+   * @param {Object} credentials - Credentials to validate
+   * @returns {Object} Validation result
+   */
+  validateCredentials(credentials) {
+    const errors = [];
+
+    if (!credentials.supabaseUrl) {
+      errors.push("Supabase URL is required");
+    } else if (
+      !credentials.supabaseUrl.includes("supabase.co") &&
+      !credentials.supabaseUrl.includes("localhost")
+    ) {
+      errors.push("Invalid Supabase URL format");
     }
 
-    /**
-     * Store Supabase credentials securely
-     * @param {Object} credentials - Database credentials
-     * @param {string} credentials.supabaseUrl - Supabase project URL
-     * @param {string} credentials.apiKey - Supabase service role API key
-     * @param {string} credentials.projectRef - Project reference ID
-     */
-    async storeCredentials(credentials) {
-        try {
-            // Validate required fields
-            if (!credentials.supabaseUrl || !credentials.apiKey) {
-                throw new Error('Invalid credentials: missing required fields (supabaseUrl, apiKey)');
-            }
-
-            // Validate URL format
-            if (!credentials.supabaseUrl.includes('supabase.co') && !credentials.supabaseUrl.includes('localhost')) {
-                throw new Error('Invalid Supabase URL format');
-            }
-
-            // Encrypt sensitive data
-            const encryptedCredentials = {
-                supabaseUrl: await this.encryption.encrypt(credentials.supabaseUrl),
-                apiKey: await this.encryption.encrypt(credentials.apiKey),
-                projectRef: credentials.projectRef ? await this.encryption.encrypt(credentials.projectRef) : null,
-                stored_at: Date.now()
-            };
-
-            // Store in Chrome storage
-            await chrome.storage.local.set({
-                [this.storageKey]: encryptedCredentials
-            });
-
-            return true;
-        } catch (error) {
-            console.error('Failed to store credentials:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            throw error;
-        }
+    if (!credentials.apiKey) {
+      errors.push("API Key is required");
+    } else if (credentials.apiKey.length < 20) {
+      errors.push("API Key appears to be too short");
     }
 
-    /**
-     * Retrieve and decrypt Supabase credentials
-     * @returns {Object|null} Decrypted credentials or null if not found
-     */
-    async getCredentials() {
-        try {
-            const result = await chrome.storage.local.get([this.storageKey]);
-            const encryptedCredentials = result[this.storageKey];
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
 
-            if (!encryptedCredentials) {
-                return null;
-            }
+  /**
+   * Get masked credentials for display purposes
+   * @returns {Object|null} Masked credentials or null if not found
+   */
+  async getMaskedCredentials() {
+    try {
+      const credentials = await this.getCredentials();
+      if (!credentials) {
+        return null;
+      }
 
-            // Decrypt sensitive data
-            const supabaseUrl = await this.encryption.decrypt(encryptedCredentials.supabaseUrl);
-            const apiKey = await this.encryption.decrypt(encryptedCredentials.apiKey);
+      // Return masked versions of sensitive data
+      return {
+        supabaseUrl: credentials.supabaseUrl,
+        apiKey: this.maskSensitiveValue(credentials.apiKey),
+        projectRef: credentials.projectRef
+          ? this.maskSensitiveValue(credentials.projectRef)
+          : null,
+        stored_at: credentials.stored_at,
+      };
+    } catch (error) {
+      console.error(
+        "Failed to retrieve masked credentials:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      return null;
+    }
+  }
 
-            // Validate decrypted values
-            if (!supabaseUrl || !apiKey) {
-                throw new Error('Failed to decrypt credentials');
-            }
-
-            const credentials = {
-                supabaseUrl,
-                apiKey,
-                projectRef: encryptedCredentials.projectRef ? await this.encryption.decrypt(encryptedCredentials.projectRef) : null,
-                stored_at: encryptedCredentials.stored_at
-            };
-
-            return credentials;
-        } catch (error) {
-            console.error('Failed to retrieve credentials:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            return null;
-        }
+  /**
+   * Mask sensitive values for display
+   * @param {string} value - Value to mask
+   * @returns {string} Masked value
+   */
+  maskSensitiveValue(value) {
+    if (!value || typeof value !== "string") {
+      return "";
     }
 
-    /**
-     * Test database connection with stored credentials
-     * @returns {Promise<boolean>} True if connection successful
-     */
-    async testConnection() {
-        try {
-            const credentials = await this.getCredentials();
-            if (!credentials) {
-                throw new Error('No credentials found');
-            }
-
-            if (!credentials.supabaseUrl || !credentials.apiKey) {
-                throw new Error('Invalid credentials: missing URL or API key');
-            }
-
-            // Validate URL format
-            if (!credentials.supabaseUrl.startsWith('https://')) {
-                throw new Error('Invalid URL format: must start with https://');
-            }
-
-            // Test connection with a simple request and timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
-            try {
-                const response = await fetch(`${credentials.supabaseUrl}/rest/v1/`, {
-                    method: 'GET',
-                    headers: {
-                        'apikey': credentials.apiKey,
-                        'Authorization': `Bearer ${credentials.apiKey}`,
-                        'X-Client-Info': 'youtube-watchmarker-extension'
-                    },
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                if (response.ok || response.status === 404) {
-                    // 404 is expected for root path, but means API is reachable
-                    return true;
-                }
-
-                const errorText = await response.text();
-
-                if (response.status === 401) {
-                    throw new Error('Invalid API key - check your Supabase service role key');
-                } else if (response.status === 403) {
-                    throw new Error('API key does not have sufficient permissions');
-                }
-
-                throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`);
-            } catch (fetchError) {
-                clearTimeout(timeoutId);
-
-                if (fetchError.name === 'AbortError') {
-                    throw new Error('Connection timeout - check your network and Supabase URL');
-                }
-
-                throw fetchError;
-            }
-        } catch (error) {
-            console.error('Supabase connection test failed:', error.message);
-            return false;
-        }
+    if (value.length <= 8) {
+      return "***";
     }
 
-    /**
-     * Clear stored credentials
-     */
-    async clearCredentials() {
-        try {
-            await chrome.storage.local.remove([this.storageKey]);
-            return true;
-        } catch (error) {
-            console.error('Failed to clear credentials:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            return false;
-        }
-    }
+    // Show first 4 and last 4 characters, mask the middle
+    const start = value.substring(0, 4);
+    const end = value.substring(value.length - 4);
+    const middle = "*".repeat(Math.min(value.length - 8, 20)); // Limit mask length
 
-    /**
-     * Check if credentials are stored
-     * @returns {Promise<boolean>} True if credentials exist
-     */
-    async hasCredentials() {
-        try {
-            const result = await chrome.storage.local.get([this.storageKey]);
-            return !!result[this.storageKey];
-        } catch (error) {
-            console.error('Failed to check credentials:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            return false;
-        }
-    }
+    return `${start}${middle}${end}`;
+  }
 
-    /**
-     * Parse Supabase URL to extract project reference
-     * @param {string} supabaseUrl - Supabase project URL
-     * @returns {string|null} Project reference or null
-     */
-    extractProjectRef(supabaseUrl) {
-        try {
-            const url = new URL(supabaseUrl);
-            const hostname = url.hostname;
-
-            // Extract project ref from hostname like "abcdefg.supabase.co"
-            const match = hostname.match(/^([a-z0-9]+)\.supabase\.co$/);
-            if (match) {
-                return match[1];
-            }
-
-            return null;
-        } catch (error) {
-            console.error('Failed to extract project ref:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            return null;
-        }
-    }
-
-    /**
-     * Validate Supabase credentials format
-     * @param {Object} credentials - Credentials to validate
-     * @returns {Object} Validation result
-     */
-    validateCredentials(credentials) {
-        const errors = [];
-
-        if (!credentials.supabaseUrl) {
-            errors.push('Supabase URL is required');
-        } else if (!credentials.supabaseUrl.includes('supabase.co') && !credentials.supabaseUrl.includes('localhost')) {
-            errors.push('Invalid Supabase URL format');
-        }
-
-        if (!credentials.apiKey) {
-            errors.push('API Key is required');
-        } else if (credentials.apiKey.length < 20) {
-            errors.push('API Key appears to be too short');
-        }
-
+  /**
+   * Get credential status for display
+   * @returns {Object} Status information
+   */
+  async getCredentialStatus() {
+    try {
+      const credentials = await this.getCredentials();
+      if (!credentials) {
         return {
-            isValid: errors.length === 0,
-            errors
+          configured: false,
+          hasUrl: false,
+          hasApiKey: false,
+          storedAt: null,
         };
+      }
+
+      return {
+        configured: true,
+        hasUrl: !!credentials.supabaseUrl,
+        hasApiKey: !!credentials.apiKey,
+        storedAt: credentials.stored_at
+          ? new Date(credentials.stored_at)
+          : null,
+      };
+    } catch (error) {
+      console.error(
+        "Failed to get credential status:",
+        JSON.stringify(
+          {
+            error: error.message,
+            errorName: error.name,
+            errorStack: error.stack,
+          },
+          null,
+          2,
+        ),
+      );
+      return {
+        configured: false,
+        hasUrl: false,
+        hasApiKey: false,
+        storedAt: null,
+      };
     }
-
-    /**
-     * Get masked credentials for display purposes
-     * @returns {Object|null} Masked credentials or null if not found
-     */
-    async getMaskedCredentials() {
-        try {
-            const credentials = await this.getCredentials();
-            if (!credentials) {
-                return null;
-            }
-
-            // Return masked versions of sensitive data
-            return {
-                supabaseUrl: credentials.supabaseUrl,
-                apiKey: this.maskSensitiveValue(credentials.apiKey),
-                projectRef: credentials.projectRef ? this.maskSensitiveValue(credentials.projectRef) : null,
-                stored_at: credentials.stored_at
-            };
-        } catch (error) {
-            console.error('Failed to retrieve masked credentials:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            return null;
-        }
-    }
-
-    /**
-     * Mask sensitive values for display
-     * @param {string} value - Value to mask
-     * @returns {string} Masked value
-     */
-    maskSensitiveValue(value) {
-        if (!value || typeof value !== 'string') {
-            return '';
-        }
-
-        if (value.length <= 8) {
-            return '***';
-        }
-
-        // Show first 4 and last 4 characters, mask the middle
-        const start = value.substring(0, 4);
-        const end = value.substring(value.length - 4);
-        const middle = '*'.repeat(Math.min(value.length - 8, 20)); // Limit mask length
-
-        return `${start}${middle}${end}`;
-    }
-
-    /**
-     * Get credential status for display
-     * @returns {Object} Status information
-     */
-    async getCredentialStatus() {
-        try {
-            const credentials = await this.getCredentials();
-            if (!credentials) {
-                return {
-                    configured: false,
-                    hasUrl: false,
-                    hasApiKey: false,
-                    storedAt: null
-                };
-            }
-
-            return {
-                configured: true,
-                hasUrl: !!credentials.supabaseUrl,
-                hasApiKey: !!credentials.apiKey,
-                storedAt: credentials.stored_at ? new Date(credentials.stored_at) : null
-            };
-        } catch (error) {
-            console.error('Failed to get credential status:', JSON.stringify({
-                error: error.message,
-                errorName: error.name,
-                errorStack: error.stack
-            }, null, 2));
-            return {
-                configured: false,
-                hasUrl: false,
-                hasApiKey: false,
-                storedAt: null
-            };
-        }
-    }
+  }
 }
 
 // Create singleton instance

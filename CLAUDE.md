@@ -29,6 +29,7 @@ To develop: Load the extension as an unpacked extension in Chrome from the proje
 ### Module Organization
 
 **Background modules (`bg-*.js`):**
+
 - `bg-database.js` - IndexedDB operations via `Database` class
 - `bg-history.js` - Browser history sync via `History` class
 - `bg-youtube.js` - YouTube API integration via `Youtube` class
@@ -36,10 +37,12 @@ To develop: Load the extension as an unpacked extension in Chrome from the proje
 - `bg-sync-manager.js` - Automatic synchronization scheduling
 
 **Handler modules (`handlers/`):**
+
 - Organized by domain: `database-handlers.js`, `youtube-handlers.js`, `search-handlers.js`, `history-handlers.js`, `provider-handlers.js`, `settings-handlers.js`
 - All handlers are registered in `ExtensionManager.registerMessageHandlers()`
 
 **Core utilities:**
+
 - `message-router.js` - Message passing between extension components
 - `settings-manager.js` - User settings management
 - `alarm-manager.js` - Chrome alarm scheduling for background tasks

@@ -5,8 +5,8 @@
  * @module chunk-utils
  */
 
-import { logger } from './logger.js';
-import { IMPORT_EXPORT, TIMEOUTS } from './constants.js';
+import { logger } from "./logger.js";
+import { IMPORT_EXPORT, TIMEOUTS } from "./constants.js";
 
 /**
  * @typedef {Object} ChunkProcessingOptions
@@ -34,19 +34,24 @@ import { IMPORT_EXPORT, TIMEOUTS } from './constants.js';
  * @returns {number} Optimal chunk size
  */
 export function getOptimalChunkSize(dataLength, options = {}) {
-    const largeThreshold = options.largeThreshold || IMPORT_EXPORT.LARGE_DATASET_THRESHOLD;
-    const mediumThreshold = options.mediumThreshold || IMPORT_EXPORT.MEDIUM_DATASET_THRESHOLD;
-    const largeChunkSize = options.largeChunkSize || IMPORT_EXPORT.CHUNK_SIZE_LARGE;
-    const mediumChunkSize = options.mediumChunkSize || IMPORT_EXPORT.CHUNK_SIZE_MEDIUM;
-    const smallChunkSize = options.smallChunkSize || IMPORT_EXPORT.CHUNK_SIZE_SMALL;
+  const largeThreshold =
+    options.largeThreshold || IMPORT_EXPORT.LARGE_DATASET_THRESHOLD;
+  const mediumThreshold =
+    options.mediumThreshold || IMPORT_EXPORT.MEDIUM_DATASET_THRESHOLD;
+  const largeChunkSize =
+    options.largeChunkSize || IMPORT_EXPORT.CHUNK_SIZE_LARGE;
+  const mediumChunkSize =
+    options.mediumChunkSize || IMPORT_EXPORT.CHUNK_SIZE_MEDIUM;
+  const smallChunkSize =
+    options.smallChunkSize || IMPORT_EXPORT.CHUNK_SIZE_SMALL;
 
-    if (dataLength > largeThreshold) {
-        return largeChunkSize;
-    } else if (dataLength > mediumThreshold) {
-        return mediumChunkSize;
-    } else {
-        return smallChunkSize;
-    }
+  if (dataLength > largeThreshold) {
+    return largeChunkSize;
+  } else if (dataLength > mediumThreshold) {
+    return mediumChunkSize;
+  } else {
+    return smallChunkSize;
+  }
 }
 
 /**
@@ -58,54 +63,59 @@ export function getOptimalChunkSize(dataLength, options = {}) {
  * @returns {Promise<ChunkProcessingResult>} Processing result
  */
 export async function processInChunks(data, processorFn, options = {}) {
-    if (!Array.isArray(data)) {
-        throw new Error('Data must be an array');
+  if (!Array.isArray(data)) {
+    throw new Error("Data must be an array");
+  }
+
+  if (typeof processorFn !== "function") {
+    throw new Error("Processor function is required");
+  }
+
+  const totalItems = data.length;
+  const chunkSize = getOptimalChunkSize(totalItems, options);
+  const totalChunks = Math.ceil(totalItems / chunkSize);
+  const delayMs =
+    options.delayMs !== undefined
+      ? options.delayMs
+      : TIMEOUTS.CHUNK_PROCESSING_DELAY;
+  const progressCallback = options.progressCallback;
+
+  logger.info(
+    `Processing ${totalItems} items in ${totalChunks} chunks (chunk size: ${chunkSize})`,
+  );
+
+  for (let i = 0; i < totalItems; i += chunkSize) {
+    const chunk = data.slice(i, i + chunkSize);
+    const chunkNumber = Math.floor(i / chunkSize) + 1;
+
+    logger.debug(`Processing chunk ${chunkNumber}/${totalChunks}`);
+
+    // Call progress callback if provided
+    if (progressCallback) {
+      progressCallback({
+        current: chunkNumber,
+        total: totalChunks,
+        itemsProcessed: i + chunk.length,
+        totalItems: totalItems,
+        percentage: Math.round(((i + chunk.length) / totalItems) * 100),
+      });
     }
 
-    if (typeof processorFn !== 'function') {
-        throw new Error('Processor function is required');
+    // Process the chunk
+    await processorFn(chunk);
+
+    // Add delay between chunks (except for the last one)
+    if (i + chunkSize < totalItems && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
+  }
 
-    const totalItems = data.length;
-    const chunkSize = getOptimalChunkSize(totalItems, options);
-    const totalChunks = Math.ceil(totalItems / chunkSize);
-    const delayMs = options.delayMs !== undefined ? options.delayMs : TIMEOUTS.CHUNK_PROCESSING_DELAY;
-    const progressCallback = options.progressCallback;
-
-    logger.info(`Processing ${totalItems} items in ${totalChunks} chunks (chunk size: ${chunkSize})`);
-
-    for (let i = 0; i < totalItems; i += chunkSize) {
-        const chunk = data.slice(i, i + chunkSize);
-        const chunkNumber = Math.floor(i / chunkSize) + 1;
-
-        logger.debug(`Processing chunk ${chunkNumber}/${totalChunks}`);
-
-        // Call progress callback if provided
-        if (progressCallback) {
-            progressCallback({
-                current: chunkNumber,
-                total: totalChunks,
-                itemsProcessed: i + chunk.length,
-                totalItems: totalItems,
-                percentage: Math.round((i + chunk.length) / totalItems * 100)
-            });
-        }
-
-        // Process the chunk
-        await processorFn(chunk);
-
-        // Add delay between chunks (except for the last one)
-        if (i + chunkSize < totalItems && delayMs > 0) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-        }
-    }
-
-    return {
-        success: true,
-        message: `Successfully processed ${totalItems} items in ${totalChunks} chunks`,
-        totalItems,
-        totalChunks
-    };
+  return {
+    success: true,
+    message: `Successfully processed ${totalItems} items in ${totalChunks} chunks`,
+    totalItems,
+    totalChunks,
+  };
 }
 
 /**
@@ -117,65 +127,67 @@ export async function processInChunks(data, processorFn, options = {}) {
  * @returns {Promise<ChunkProcessingResult>} Processing result
  */
 export async function processInParallelChunks(data, processorFn, options = {}) {
-    if (!Array.isArray(data)) {
-        throw new Error('Data must be an array');
-    }
+  if (!Array.isArray(data)) {
+    throw new Error("Data must be an array");
+  }
 
-    if (typeof processorFn !== 'function') {
-        throw new Error('Processor function is required');
-    }
+  if (typeof processorFn !== "function") {
+    throw new Error("Processor function is required");
+  }
 
-    const totalItems = data.length;
-    const chunkSize = getOptimalChunkSize(totalItems, options);
-    const maxParallel = options.maxParallel || 4;
-    const progressCallback = options.progressCallback;
+  const totalItems = data.length;
+  const chunkSize = getOptimalChunkSize(totalItems, options);
+  const maxParallel = options.maxParallel || 4;
+  const progressCallback = options.progressCallback;
 
-    // Split data into chunks
-    const chunks = [];
-    for (let i = 0; i < totalItems; i += chunkSize) {
-        chunks.push(data.slice(i, i + chunkSize));
-    }
+  // Split data into chunks
+  const chunks = [];
+  for (let i = 0; i < totalItems; i += chunkSize) {
+    chunks.push(data.slice(i, i + chunkSize));
+  }
 
-    const totalChunks = chunks.length;
-    logger.info(`Processing ${totalItems} items in ${totalChunks} parallel chunks (chunk size: ${chunkSize}, max parallel: ${maxParallel})`);
+  const totalChunks = chunks.length;
+  logger.info(
+    `Processing ${totalItems} items in ${totalChunks} parallel chunks (chunk size: ${chunkSize}, max parallel: ${maxParallel})`,
+  );
 
-    let processedChunks = 0;
-    let processedItems = 0;
+  let processedChunks = 0;
+  let processedItems = 0;
 
-    // Process chunks in batches to limit parallelism
-    for (let i = 0; i < totalChunks; i += maxParallel) {
-        const batch = chunks.slice(i, i + maxParallel);
+  // Process chunks in batches to limit parallelism
+  for (let i = 0; i < totalChunks; i += maxParallel) {
+    const batch = chunks.slice(i, i + maxParallel);
 
-        await Promise.all(
-            batch.map(async (chunk, batchIndex) => {
-                const chunkNumber = i + batchIndex + 1;
-                logger.debug(`Processing chunk ${chunkNumber}/${totalChunks}`);
+    await Promise.all(
+      batch.map(async (chunk, batchIndex) => {
+        const chunkNumber = i + batchIndex + 1;
+        logger.debug(`Processing chunk ${chunkNumber}/${totalChunks}`);
 
-                await processorFn(chunk);
+        await processorFn(chunk);
 
-                processedChunks++;
-                processedItems += chunk.length;
+        processedChunks++;
+        processedItems += chunk.length;
 
-                // Call progress callback if provided
-                if (progressCallback) {
-                    progressCallback({
-                        current: processedChunks,
-                        total: totalChunks,
-                        itemsProcessed: processedItems,
-                        totalItems: totalItems,
-                        percentage: Math.round(processedItems / totalItems * 100)
-                    });
-                }
-            })
-        );
-    }
+        // Call progress callback if provided
+        if (progressCallback) {
+          progressCallback({
+            current: processedChunks,
+            total: totalChunks,
+            itemsProcessed: processedItems,
+            totalItems: totalItems,
+            percentage: Math.round((processedItems / totalItems) * 100),
+          });
+        }
+      }),
+    );
+  }
 
-    return {
-        success: true,
-        message: `Successfully processed ${totalItems} items in ${totalChunks} parallel chunks`,
-        totalItems,
-        totalChunks
-    };
+  return {
+    success: true,
+    message: `Successfully processed ${totalItems} items in ${totalChunks} parallel chunks`,
+    totalItems,
+    totalChunks,
+  };
 }
 
 /**
@@ -185,10 +197,10 @@ export async function processInParallelChunks(data, processorFn, options = {}) {
  * @returns {boolean} True if data should be chunked
  */
 export function shouldProcessInChunks(data, options = {}) {
-    if (!Array.isArray(data)) {
-        return false;
-    }
+  if (!Array.isArray(data)) {
+    return false;
+  }
 
-    const chunkSize = getOptimalChunkSize(data.length, options);
-    return data.length > chunkSize;
+  const chunkSize = getOptimalChunkSize(data.length, options);
+  return data.length > chunkSize;
 }

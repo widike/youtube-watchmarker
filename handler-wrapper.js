@@ -5,8 +5,8 @@
  * Provides reusable wrapper for handler functions with consistent error handling
  */
 
-import { logger } from './logger.js';
-import { ErrorUtils } from './error-handler.js';
+import { logger } from "./logger.js";
+import { ErrorUtils } from "./error-handler.js";
 
 /**
  * @typedef {Object} HandlerOptions
@@ -54,35 +54,33 @@ import { ErrorUtils } from './error-handler.js';
  * );
  */
 export function createHandler(handlerFn, options = {}) {
-    // Support legacy signature: createHandler(fn, 'handlerName')
-    const opts = typeof options === 'string'
-        ? { name: options }
-        : options;
+  // Support legacy signature: createHandler(fn, 'handlerName')
+  const opts = typeof options === "string" ? { name: options } : options;
 
-    const {
-        name = 'handler',
-        requiresRequest = true,
-        errorHandler = (error) => ErrorUtils.createErrorResponse(error)
-    } = opts;
+  const {
+    name = "handler",
+    requiresRequest = true,
+    errorHandler = (error) => ErrorUtils.createErrorResponse(error),
+  } = opts;
 
-    return async (request, ...args) => {
-        try {
-            logger.debug(`Executing ${name}`);
-            const result = requiresRequest
-                ? await handlerFn(request, ...args)
-                : await handlerFn(...args);
+  return async (request, ...args) => {
+    try {
+      logger.debug(`Executing ${name}`);
+      const result = requiresRequest
+        ? await handlerFn(request, ...args)
+        : await handlerFn(...args);
 
-            // Ensure result has success field
-            if (result && typeof result === 'object' && !('success' in result)) {
-                return { success: true, ...result };
-            }
+      // Ensure result has success field
+      if (result && typeof result === "object" && !("success" in result)) {
+        return { success: true, ...result };
+      }
 
-            return result || { success: true };
-        } catch (error) {
-            logger.error(`Error in ${name}:`, error);
-            return errorHandler(error);
-        }
-    };
+      return result || { success: true };
+    } catch (error) {
+      logger.error(`Error in ${name}:`, error);
+      return errorHandler(error);
+    }
+  };
 }
 
 /**
@@ -93,8 +91,11 @@ export function createHandler(handlerFn, options = {}) {
  * @param {string} handlerName - Name of the handler (for logging)
  * @returns {Function} Wrapped handler function
  */
-export function createSimpleHandler(handlerFn, handlerName = 'handler') {
-    return createHandler(handlerFn, { name: handlerName, requiresRequest: false });
+export function createSimpleHandler(handlerFn, handlerName = "handler") {
+  return createHandler(handlerFn, {
+    name: handlerName,
+    requiresRequest: false,
+  });
 }
 
 /**
@@ -106,10 +107,10 @@ export function createSimpleHandler(handlerFn, handlerName = 'handler') {
  * @param {string} handlerName - Name of the handler (for logging)
  * @returns {Function} Wrapped handler function
  */
-export function createHandlerWithErrorHandler(handlerFn, errorHandler, handlerName = 'handler') {
-    return createHandler(handlerFn, { name: handlerName, errorHandler });
+export function createHandlerWithErrorHandler(
+  handlerFn,
+  errorHandler,
+  handlerName = "handler",
+) {
+  return createHandler(handlerFn, { name: handlerName, errorHandler });
 }
-
-
-
-

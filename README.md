@@ -9,6 +9,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 ## Current Features
 
 ### Core Functionality
+
 - **Complete Watch History Tracking**: Marks all previously watched videos, not just recent ones
 - **Multiple Data Sources**: Integrates browser history, YouTube watch history, and liked videos
 - **Real-time Detection**: Automatically detects when videos are watched through multiple methods
@@ -16,6 +17,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Video Management**: Delete individual videos from your watch history
 
 ### Visual Customization
+
 - **Fade Out**: Reduce opacity of watched video thumbnails
 - **Grayscale**: Convert watched video thumbnails to grayscale
 - **Watch Badge**: Display "WATCHED" badge on marked videos
@@ -24,6 +26,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Publication Date Tooltips**: Show video publication dates on hover
 
 ### Watch Detection Methods
+
 - **Browser Navigation**: Mark videos when opened in browser
 - **Browser History**: Sync from browser's history data
 - **YouTube Progress**: Detect when video progress is reported to YouTube
@@ -32,6 +35,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Video Rating**: Mark videos when liked or disliked
 
 ### Data Storage & Backup
+
 - **Local Storage**: IndexedDB for primary data storage with proper indexing
 - **Supabase Integration**: Optional cloud database storage via PostgreSQL
 - **Manual Export/Import**: JSON-based backup and restore functionality
@@ -39,6 +43,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Bidirectional Sync**: Merge data between IndexedDB and Supabase
 
 ### User Interface
+
 - **Modern Design**: Responsive, mobile-friendly interface built with Bootstrap
 - **Dark/Light Theme**: Automatic theme switching with system preferences
 - **Options Page**: Comprehensive settings management
@@ -49,6 +54,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 ## Technical Architecture
 
 ### Modern Stack
+
 - **Manifest V3**: Latest Chrome extension standard
 - **ES6+ Modules**: Modern JavaScript with imports/exports
 - **Service Worker**: Background script using latest APIs
@@ -56,6 +62,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **PostgREST API**: Direct PostgreSQL access via Supabase
 
 ### Code Structure
+
 - **`background.js`** - Main extension service worker with `ExtensionManager` class
 - **`bg-database.js`** - Database operations with `DatabaseManager` class
 - **`bg-history.js`** - Browser history synchronization module
@@ -68,6 +75,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **`database-provider-factory.js`** - Database provider switching logic
 
 ### Database Schema
+
 ```javascript
 {
   strIdent: "video_id",           // YouTube video ID (11 characters)
@@ -87,12 +95,14 @@ Currently, only manual installation of the unpacked source code is supported. Th
 ## Storage Options
 
 ### Local Storage (IndexedDB)
+
 - **Default option**: Works offline, no configuration required
 - **Fast performance**: Direct browser database access
 - **No size limits**: Can store extensive watch histories
 - **Privacy**: Data stays on your device
 
 ### Supabase Cloud Database
+
 - **Optional remote storage**: PostgreSQL database in the cloud
 - **Cross-device sync**: Access your data from multiple devices
 - **Simple setup**: Users configure Supabase credentials and create a table
@@ -101,12 +111,14 @@ Currently, only manual installation of the unpacked source code is supported. Th
 ## Data Management
 
 ### Backup & Restore
+
 - **JSON Export**: Download your complete watch history
 - **JSON Import**: Restore from exported files
 - **Data Merging**: Intelligent conflict resolution during imports
 - **Provider Migration**: Move data between local and cloud storage
 
 ### Synchronization
+
 - **Browser History Sync**: Extract YouTube visits from browser history
 - **YouTube History Sync**: Fetch watch history directly from YouTube
 - **Liked Videos Sync**: Import liked videos as watched

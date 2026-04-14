@@ -5,10 +5,7 @@ import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
   {
-    ignores: [
-      "content/bootstrap.bundle.min.js",
-      "content/moment.js",
-    ],
+    ignores: ["content/bootstrap.bundle.min.js"],
   },
   { files: ["**/*.{js,mjs,cjs}"] },
   {
@@ -17,7 +14,7 @@ export default defineConfig([
       globals: {
         ...globals.browser,
         ...globals.webextensions,
-        moment: 'readonly',
+        moment: "readonly",
       },
     },
   },
@@ -26,11 +23,14 @@ export default defineConfig([
     plugins: { js },
     extends: ["js/recommended"],
     rules: {
-      'no-unused-vars': ['warn', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_'
-      }],
+      "no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   eslintConfigPrettier,

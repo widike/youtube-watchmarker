@@ -1,63 +1,55 @@
 {
-    "manifest_version": 3,
-    "name": "Watchmarker for Youtube",
-    "description": "Automatically mark videos on Youtube that you have already watched.",
-    "homepage_url": "https://github.com/widike/youtube-watchmarker",
-    "version": "1.0.2",
-    "permissions": [
-        "storage",
-        "alarms",
-        "downloads",
-        "history",
-        "tabs",
-        "cookies",
-        "webRequest",
-        "scripting",
-        "declarativeNetRequest",
-        "notifications"
-    ],
-    "host_permissions": [
-        "https://www.youtube.com/*",
-        "https://m.youtube.com/*",
-        "https://*.supabase.co/*",
-        "https://*.supabase.in/*"
-    ],
-    "background": {
-        "service_worker": "background.js",
-        "type": "module"
-    },
-    "content_scripts": [
-        {
-            "matches": [
-                "*://www.youtube.com/*",
-                "*://m.youtube.com/*"
-            ],
-            "js": [
-                "youtube.js"
-            ]
-        }
-    ],
-    "options_ui": {
-        "page": "content/index.html",
-        "open_in_tab": true
-    },
-    "action": {
-        "default_title": "Watchmarker for Youtube Reloaded",
-        "default_icon": {
-            "72": "content/icon.png"
-        },
-        "default_popup": "popup.html"
-    },
-    "content_security_policy": {
-        "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';"
-    },
-    "icons": {
-        "72": "content/icon.png"
-    },
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "yourect@coderect.com",
-            "strict_min_version": "60.0"
-        }
+  "manifest_version": 3,
+  "name": "Watchmarker for Youtube",
+  "description": "Automatically mark videos on Youtube that you have already watched.",
+  "homepage_url": "https://github.com/widike/youtube-watchmarker",
+  "version": "1.0.2",
+  "permissions": [
+    "storage",
+    "alarms",
+    "history",
+    "tabs",
+    "cookies",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://*.supabase.co/*",
+    "https://*.supabase.in/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "minimum_chrome_version": "126",
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*"],
+      "js": [
+        "youtube/core.js",
+        "youtube/settings-runtime.js",
+        "youtube/rendering.js",
+        "youtube/interactions.js",
+        "youtube/app.js"
+      ]
     }
+  ],
+  "options_ui": {
+    "page": "content/index.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Watchmarker for Youtube Reloaded",
+    "default_icon": {
+      "72": "content/icon.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';"
+  },
+  "icons": {
+    "72": "content/icon.png"
+  }
 }

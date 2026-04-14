@@ -9,130 +9,144 @@
  * Log levels
  */
 export const LogLevel = {
-    DEBUG: 0,
-    INFO: 1,
-    WARN: 2,
-    ERROR: 3,
-    NONE: 4
+  DEBUG: 0,
+  INFO: 1,
+  WARN: 2,
+  ERROR: 3,
+  NONE: 4,
 };
 
 /**
  * Logger class with configurable log levels
  */
 export class Logger {
-    constructor(name, minLevel = LogLevel.INFO) {
-        this.name = name;
-        this.minLevel = minLevel;
-    }
+  constructor(name, minLevel = LogLevel.INFO) {
+    this.name = name;
+    this.minLevel = minLevel;
+  }
 
-    /**
-     * Set minimum log level
-     * @param {number} level - Log level from LogLevel enum
-     */
-    setLevel(level) {
-        this.minLevel = level;
-    }
+  /**
+   * Set minimum log level
+   * @param {number} level - Log level from LogLevel enum
+   */
+  setLevel(level) {
+    this.minLevel = level;
+  }
 
-    /**
-     * Format log message
-     * @param {string} level - Log level name
-     * @param {string} message - Log message
-     * @param {any[]} args - Additional arguments
-     * @returns {Array} Formatted log arguments
-     */
-    format(level, message, ...args) {
-        const timestamp = new Date().toISOString();
-        const prefix = `[${timestamp}] [${this.name}] [${level}]`;
-        return [prefix, message, ...args];
-    }
+  /**
+   * Format log message
+   * @param {string} level - Log level name
+   * @param {string} message - Log message
+   * @param {any[]} args - Additional arguments
+   * @returns {Array} Formatted log arguments
+   */
+  format(level, message, ...args) {
+    const timestamp = new Date().toISOString();
+    const prefix = `[${timestamp}] [${this.name}] [${level}]`;
+    return [prefix, message, ...args];
+  }
 
-    /**
-     * Format arguments for logging, handling objects that would display as [object Object]
-     * @param {...any} args - Arguments to format
-     * @returns {Array} Formatted arguments
-     */
-    formatArgs(...args) {
-        return args.map(arg => {
-            if (arg instanceof Error || arg instanceof DOMException) {
-                return {
-                    name: arg.name,
-                    message: arg.message,
-                    code: arg.code,
-                    stack: arg.stack
-                };
-            }
-            // Handle plain objects and other types that would display as [object Object]
-            if (arg !== null && typeof arg === 'object' && arg.constructor === Object) {
-                try {
-                    return JSON.stringify(arg, null, 2);
-                } catch (_e) {
-                    return `[Object: ${Object.keys(arg).join(', ')}]`;
-                }
-            }
-            return arg;
-        });
-    }
-
-    /**
-     * Log debug message
-     * @param {string} message - Log message
-     * @param {...any} args - Additional arguments
-     */
-    debug(message, ...args) {
-        if (this.minLevel <= LogLevel.DEBUG) {
-            console.debug(...this.format('DEBUG', message, ...this.formatArgs(...args)));
+  /**
+   * Format arguments for logging, handling objects that would display as [object Object]
+   * @param {...any} args - Arguments to format
+   * @returns {Array} Formatted arguments
+   */
+  formatArgs(...args) {
+    return args.map((arg) => {
+      if (arg instanceof Error || arg instanceof DOMException) {
+        return {
+          name: arg.name,
+          message: arg.message,
+          code: arg.code,
+          stack: arg.stack,
+        };
+      }
+      // Handle plain objects and other types that would display as [object Object]
+      if (
+        arg !== null &&
+        typeof arg === "object" &&
+        arg.constructor === Object
+      ) {
+        try {
+          return JSON.stringify(arg, null, 2);
+        } catch (_e) {
+          return `[Object: ${Object.keys(arg).join(", ")}]`;
         }
-    }
+      }
+      return arg;
+    });
+  }
 
-    /**
-     * Log info message
-     * @param {string} message - Log message
-     * @param {...any} args - Additional arguments
-     */
-    info(message, ...args) {
-        if (this.minLevel <= LogLevel.INFO) {
-            console.info(...this.format('INFO', message, ...this.formatArgs(...args)));
-        }
+  /**
+   * Log debug message
+   * @param {string} message - Log message
+   * @param {...any} args - Additional arguments
+   */
+  debug(message, ...args) {
+    if (this.minLevel <= LogLevel.DEBUG) {
+      console.debug(
+        ...this.format("DEBUG", message, ...this.formatArgs(...args)),
+      );
     }
+  }
 
-    /**
-     * Log warning message
-     * @param {string} message - Log message
-     * @param {...any} args - Additional arguments
-     */
-    warn(message, ...args) {
-        if (this.minLevel <= LogLevel.WARN) {
-            console.warn(...this.format('WARN', message, ...this.formatArgs(...args)));
-        }
+  /**
+   * Log info message
+   * @param {string} message - Log message
+   * @param {...any} args - Additional arguments
+   */
+  info(message, ...args) {
+    if (this.minLevel <= LogLevel.INFO) {
+      console.info(
+        ...this.format("INFO", message, ...this.formatArgs(...args)),
+      );
     }
+  }
 
-    /**
-     * Log error message
-     * @param {string} message - Log message
-     * @param {...any} args - Additional arguments
-     */
-    error(message, ...args) {
-        if (this.minLevel <= LogLevel.ERROR) {
-            console.error(...this.format('ERROR', message, ...this.formatArgs(...args)));
-        }
+  /**
+   * Log warning message
+   * @param {string} message - Log message
+   * @param {...any} args - Additional arguments
+   */
+  warn(message, ...args) {
+    if (this.minLevel <= LogLevel.WARN) {
+      console.warn(
+        ...this.format("WARN", message, ...this.formatArgs(...args)),
+      );
     }
+  }
 
-    /**
-     * Log error with full details
-     * @param {string} message - Error message
-     * @param {Error} error - Error object
-     */
-    errorWithDetails(message, error) {
-        if (this.minLevel <= LogLevel.ERROR) {
-            const details = {
-                message: error.message,
-                name: error.name,
-                stack: error.stack,
-                ...error
-            };
-            console.error(...this.format('ERROR', message, JSON.stringify(details, null, 2)));
-        }
+  /**
+   * Log error message
+   * @param {string} message - Log message
+   * @param {...any} args - Additional arguments
+   */
+  error(message, ...args) {
+    if (this.minLevel <= LogLevel.ERROR) {
+      console.error(
+        ...this.format("ERROR", message, ...this.formatArgs(...args)),
+      );
     }
+  }
+
+  /**
+   * Log error with full details
+   * @param {string} message - Error message
+   * @param {Error} error - Error object
+   */
+  errorWithDetails(message, error) {
+    if (this.minLevel <= LogLevel.ERROR) {
+      const details = {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        ...error,
+      };
+      console.error(
+        ...this.format("ERROR", message, JSON.stringify(details, null, 2)),
+      );
+    }
+  }
 }
 
 /**
@@ -142,10 +156,10 @@ export class Logger {
  * @returns {Logger} Logger instance
  */
 export function createLogger(name, minLevel = LogLevel.INFO) {
-    return new Logger(name, minLevel);
+  return new Logger(name, minLevel);
 }
 
 /**
  * Default logger instance
  */
-export const logger = new Logger('YouTubeWatchmarker', LogLevel.INFO);
+export const logger = new Logger("YouTubeWatchmarker", LogLevel.INFO);
