@@ -8,6 +8,7 @@
 import { credentialStorage } from '../credential-storage.js';
 import { databaseProviderFactory } from '../database-provider-factory.js';
 import { createHandler } from '../handler-wrapper.js';
+import { supabaseDatabaseProvider } from '../supabase-database-provider.js';
 
 /**
  * Get database provider status
@@ -169,12 +170,13 @@ export const handleSupabaseGetStatus = createHandler(
  */
 export const handleSupabaseCheckTable = createHandler(
     async () => {
-        const currentProvider = databaseProviderFactory.getCurrentProvider();
-        if (!currentProvider || !currentProvider.checkTableExists) {
-            return { success: false, error: 'Supabase provider not available' };
+        // Table existence must be checked against the Supabase provider directly.
+        // The provider factory always returns IndexedDB as the primary provider.
+        if (!supabaseDatabaseProvider.isInitialized) {
+            await supabaseDatabaseProvider.init();
         }
 
-        const exists = await currentProvider.checkTableExists();
+        const exists = await supabaseDatabaseProvider.checkTableExists();
         return { tableExists: exists };
     },
     { name: 'handleSupabaseCheckTable', requiresRequest: false }

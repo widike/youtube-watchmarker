@@ -30,6 +30,12 @@ export class SupabaseDatabaseProvider {
         this.resetTimeoutMs = 60000;    // Try again after 1 minute
     }
 
+    getTableProbePath() {
+        // Query a real column so PostgREST returns 200 for an existing, readable table,
+        // even when the table is empty.
+        return `/${this.tableName}?select=str_ident&limit=1`;
+    }
+
     /**
      * Check if circuit breaker allows requests
      * @returns {{allowed: boolean, reason?: string}}
@@ -229,8 +235,7 @@ export class SupabaseDatabaseProvider {
                 return false;
             }
 
-            // Check if table exists by trying to select from it
-            const response = await this.makeRequest('GET', `/${this.tableName}?select=count&limit=1`);
+            const response = await this.makeRequest('GET', this.getTableProbePath());
             return response.ok;
         } catch (error) {
             console.debug('Table existence check failed:', error);
@@ -244,7 +249,7 @@ export class SupabaseDatabaseProvider {
      */
     async ensureSchema() {
         try {
-            const response = await this.makeRequest('GET', `/${this.tableName}?select=count&limit=1`);
+            const response = await this.makeRequest('GET', this.getTableProbePath());
             if (response.ok) {
                 return;
             }
