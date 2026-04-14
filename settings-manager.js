@@ -7,6 +7,13 @@
 
 import { logger } from "./logger.js";
 
+const WATCHMARK_VISUAL_TARGET_SELECTOR =
+  ".youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .ytp-videowall-still-image.youwatch-mark";
+
+function buildWatchmarkVisualRule(declaration) {
+  return `${WATCHMARK_VISUAL_TARGET_SELECTOR} { ${declaration} !important; }`;
+}
+
 /**
  * Settings configuration
  */
@@ -29,13 +36,11 @@ const SETTINGS_CONFIG = {
   stylesheets: [
     {
       key: "stylesheet_Fadeout",
-      defaultValue:
-        ".youwatch-mark :is(yt-img-shadow img, yt-image img, yt-thumbnail-view-model img, yt-collection-thumbnail-view-model img, yt-collections-stack img, img.yt-core-image, img.ytCoreImageHost, .ytp-videowall-still-image) { opacity: 0.34; }",
+      defaultValue: buildWatchmarkVisualRule("opacity: 0.34"),
     },
     {
       key: "stylesheet_Grayout",
-      defaultValue:
-        ".youwatch-mark :is(yt-img-shadow img, yt-image img, yt-thumbnail-view-model img, yt-collection-thumbnail-view-model img, yt-collections-stack img, img.yt-core-image, img.ytCoreImageHost, .ytp-videowall-still-image) { filter: grayscale(1); }",
+      defaultValue: buildWatchmarkVisualRule("filter: grayscale(1)"),
     },
     {
       key: "stylesheet_Showbadge",

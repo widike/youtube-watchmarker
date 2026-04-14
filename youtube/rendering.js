@@ -3,6 +3,12 @@
 (() => {
   const watchmarker = globalThis.YouTubeWatchmarkerContent;
   const { core } = watchmarker;
+  const WATCHMARK_VISUAL_TARGET_SELECTOR =
+    ".youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .ytp-videowall-still-image.youwatch-mark";
+
+  function buildWatchmarkVisualRule(declaration) {
+    return `${WATCHMARK_VISUAL_TARGET_SELECTOR} { ${declaration} !important; }`;
+  }
 
   class ContentStyleManager {
     constructor(settingsStore) {
@@ -53,12 +59,18 @@
     buildStylesheet(settings) {
       let stylesheet = "";
 
-      if (settings.idVisualization_Fadeout && settings.stylesheet_Fadeout) {
-        stylesheet += `${settings.stylesheet_Fadeout}\n`;
+      if (settings.idVisualization_Fadeout) {
+        if (settings.stylesheet_Fadeout) {
+          stylesheet += `${settings.stylesheet_Fadeout}\n`;
+        }
+        stylesheet += `${buildWatchmarkVisualRule("opacity: 0.34")}\n`;
       }
 
-      if (settings.idVisualization_Grayout && settings.stylesheet_Grayout) {
-        stylesheet += `${settings.stylesheet_Grayout}\n`;
+      if (settings.idVisualization_Grayout) {
+        if (settings.stylesheet_Grayout) {
+          stylesheet += `${settings.stylesheet_Grayout}\n`;
+        }
+        stylesheet += `${buildWatchmarkVisualRule("filter: grayscale(1)")}\n`;
       }
 
       if (settings.idVisualization_Showbadge && settings.stylesheet_Showbadge) {
