@@ -1,7 +1,6 @@
 // @ts-check
 
 import { clearButtonBusy, setButtonBusy } from "../../ui/button-state.js";
-import { fixUtf8DoubleEncoding } from "../../text-utils.js";
 
 export class DatabaseController {
   constructor({ client, feedback, elements, onDataChanged }) {
@@ -124,8 +123,7 @@ export class DatabaseController {
   readFileAsText(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (event) =>
-        resolve(fixUtf8DoubleEncoding(event.target?.result));
+      reader.onload = (event) => resolve(event.target?.result);
       reader.onerror = () => reject(new Error("Failed to read file"));
       reader.readAsText(file);
     });

@@ -10,6 +10,7 @@ import { ErrorUtils } from "../error-handler.js";
 import { processInChunks, shouldProcessInChunks } from "../chunk-utils.js";
 import { Database } from "../bg-database.js";
 import { databaseProviderFactory } from "../database-provider-factory.js";
+import { fixUtf8DoubleEncoding } from "../text-utils.js";
 import {
   createSimpleHandler,
   createHandlerWithErrorHandler,
@@ -24,15 +25,99 @@ export const handleDatabaseExport = createSimpleHandler(async () => {
   return { data: JSON.stringify(data) };
 }, "handleDatabaseExport");
 
+function escapeJsonControlCharacter(character) {
+  switch (character) {
+    case "\b":
+      return "\\b";
+    case "\t":
+      return "\\t";
+    case "\n":
+      return "\\n";
+    case "\f":
+      return "\\f";
+    case "\r":
+      return "\\r";
+    default:
+      return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
+  }
+}
+
+function escapeInvalidJsonControlCharacters(text) {
+  let result = "";
+  let isInsideString = false;
+  let isEscaped = false;
+
+  for (const character of text) {
+    const charCode = character.charCodeAt(0);
+
+    if (isInsideString) {
+      if (isEscaped) {
+        result += character;
+        isEscaped = false;
+        continue;
+      }
+
+      if (character === "\\") {
+        result += character;
+        isEscaped = true;
+        continue;
+      }
+
+      if (character === '"') {
+        result += character;
+        isInsideString = false;
+        continue;
+      }
+
+      result +=
+        charCode <= 0x1f ? escapeJsonControlCharacter(character) : character;
+      continue;
+    }
+
+    if (character === '"') {
+      isInsideString = true;
+    }
+
+    if (
+      charCode <= 0x1f &&
+      character !== "\t" &&
+      character !== "\n" &&
+      character !== "\r"
+    ) {
+      continue;
+    }
+
+    result += character;
+  }
+
+  return result;
+}
+
+function parseImportJson(rawData) {
+  const text = String(rawData || "").replace(/^\uFEFF/, "");
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const sanitizedText = escapeInvalidJsonControlCharacters(text);
+    if (sanitizedText === text) {
+      throw error;
+    }
+
+    return JSON.parse(sanitizedText);
+  }
+}
+
 function normalizeImportedVideo(video) {
   const timestamp = Number(video.intTimestamp || video.int_timestamp);
   const count = Number(video.intCount || video.int_count || 1);
+  const title = String(video.strTitle || video.str_title || "");
 
   return {
     strIdent: String(video.strIdent || video.str_ident || "").trim(),
     intTimestamp:
       Number.isFinite(timestamp) && timestamp > 0 ? Math.floor(timestamp) : 0,
-    strTitle: video.strTitle || video.str_title || "",
+    strTitle: fixUtf8DoubleEncoding(title),
     intCount: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
   };
 }
@@ -73,9 +158,8 @@ export const handleDatabaseImport = createHandlerWithErrorHandler(
     let parsedData;
     const rawData = request.data;
 
-    // Parse as JSON
     try {
-      parsedData = JSON.parse(rawData);
+      parsedData = parseImportJson(rawData);
     } catch (jsonError) {
       logger.error("Failed to parse database as JSON:", jsonError);
       return {
