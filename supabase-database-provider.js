@@ -145,6 +145,34 @@ export class SupabaseDatabaseProvider {
   }
 
   /**
+   * Load and validate stored credentials.
+   * @returns {Promise<boolean>} True when usable credentials are available
+   */
+  async loadCredentials() {
+    this.credentials = await credentialStorage.getCredentials();
+    if (!this.credentials) {
+      return false;
+    }
+
+    if (!this.validateSupabaseUrl(this.credentials.supabaseUrl)) {
+      console.error(
+        "Invalid Supabase URL format:",
+        this.credentials.supabaseUrl,
+      );
+      return false;
+    }
+
+    if (!this.validateApiKey(this.credentials.apiKey)) {
+      console.error("Invalid API key format");
+      return false;
+    }
+
+    this.baseUrl = this.credentials.supabaseUrl;
+    this.apiKey = this.credentials.apiKey;
+    return true;
+  }
+
+  /**
    * Ensure database is connected
    * @private
    */
@@ -188,35 +216,25 @@ export class SupabaseDatabaseProvider {
       : Math.floor(Number(timestamp));
   }
 
+  parseContentRangeCount(response) {
+    const countHeader = response.headers.get("Content-Range");
+    if (!countHeader) {
+      return null;
+    }
+
+    const match = countHeader.match(/\/(\d+)$/);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
   /**
    * Initialize the Supabase connection
    * @returns {Promise<boolean>} Success status
    */
   async init() {
     try {
-      // Get stored credentials
-      this.credentials = await credentialStorage.getCredentials();
-      if (!this.credentials) {
+      if (!(await this.loadCredentials())) {
         return false;
       }
-
-      // Validate credentials
-      if (!this.validateSupabaseUrl(this.credentials.supabaseUrl)) {
-        console.error(
-          "Invalid Supabase URL format:",
-          this.credentials.supabaseUrl,
-        );
-        return false;
-      }
-
-      if (!this.validateApiKey(this.credentials.apiKey)) {
-        console.error("Invalid API key format");
-        return false;
-      }
-
-      // Set up API configuration
-      this.baseUrl = this.credentials.supabaseUrl;
-      this.apiKey = this.credentials.apiKey;
 
       // Test connection and ensure schema
       await this.ensureSchema();
@@ -240,10 +258,23 @@ export class SupabaseDatabaseProvider {
   async checkTableExists() {
     try {
       if (!this.baseUrl || !this.apiKey) {
-        return false;
+        const loaded = await this.loadCredentials();
+        if (!loaded) {
+          return false;
+        }
       }
 
-      const response = await this.makeRequest("GET", this.getTableProbePath());
+      const response = await this.makeRequest(
+        "HEAD",
+        this.getTableProbePath(),
+        null,
+        {
+          Prefer: "count=exact",
+          "Range-Unit": "items",
+          Range: "0-0",
+        },
+        { throwOnHttpError: false, useCircuitBreaker: false },
+      );
       return response.ok;
     } catch (error) {
       console.debug("Table existence check failed:", error);
@@ -257,8 +288,7 @@ export class SupabaseDatabaseProvider {
    */
   async ensureSchema() {
     try {
-      const response = await this.makeRequest("GET", this.getTableProbePath());
-      if (response.ok) {
+      if (await this.checkTableExists()) {
         return;
       }
 
@@ -316,13 +346,20 @@ export class SupabaseDatabaseProvider {
    * @param {string} path - API path
    * @param {Object} body - Request body
    * @param {Object} headers - Additional headers
+   * @param {Object} options - Request options
+   * @param {boolean} options.throwOnHttpError - Throw for non-2xx responses
+   * @param {boolean} options.useCircuitBreaker - Apply circuit breaker checks
    * @returns {Promise<Response>} Fetch response
    */
-  async makeRequest(method, path, body = null, headers = {}) {
+  async makeRequest(method, path, body = null, headers = {}, options = {}) {
+    const { throwOnHttpError = true, useCircuitBreaker = true } = options;
+
     // Check circuit breaker before making request
-    const circuitCheck = this.checkCircuitBreaker();
-    if (!circuitCheck.allowed) {
-      throw new Error(circuitCheck.reason);
+    if (useCircuitBreaker) {
+      const circuitCheck = this.checkCircuitBreaker();
+      if (!circuitCheck.allowed) {
+        throw new Error(circuitCheck.reason);
+      }
     }
 
     const url = `${this.baseUrl}/rest/v1${path}`;
@@ -332,11 +369,11 @@ export class SupabaseDatabaseProvider {
       "Content-Type": "application/json",
       apikey: this.apiKey,
       Authorization: `Bearer ${this.apiKey}`,
-      Prefer: "return=representation",
       "X-Client-Info": "youtube-watchmarker-extension",
       // Add security headers
       "Cache-Control": "no-cache",
       Pragma: "no-cache",
+      Prefer: "return=representation",
       ...headers,
     };
 
@@ -347,7 +384,7 @@ export class SupabaseDatabaseProvider {
       signal: this.createTimeoutSignal(15000),
     };
 
-    if (body && (method === "POST" || method === "PATCH")) {
+    if (body && method !== "GET" && method !== "HEAD") {
       config.body = JSON.stringify(body);
     }
 
@@ -355,7 +392,7 @@ export class SupabaseDatabaseProvider {
       try {
         const response = await fetch(url, config);
 
-        if (!response.ok) {
+        if (!response.ok && throwOnHttpError) {
           const errorText = await response.text();
           throw new Error(
             `HTTP ${response.status}: ${errorText || response.statusText}`,
@@ -363,11 +400,15 @@ export class SupabaseDatabaseProvider {
         }
 
         // Success - reset circuit breaker
-        this.recordSuccess();
+        if (response.ok && useCircuitBreaker) {
+          this.recordSuccess();
+        }
         return response;
       } catch (error) {
         // Record failure for circuit breaker
-        this.recordFailure();
+        if (useCircuitBreaker) {
+          this.recordFailure();
+        }
         throw error;
       }
     };
@@ -382,13 +423,21 @@ export class SupabaseDatabaseProvider {
   async testConnection() {
     try {
       if (!this.baseUrl || !this.apiKey) {
-        return false;
+        const loaded = await this.loadCredentials();
+        if (!loaded) {
+          return false;
+        }
       }
 
-      // Simple test query - try to access the table
       const response = await this.makeRequest(
-        "GET",
-        `/${this.tableName}?select=count&limit=1`,
+        "HEAD",
+        `/${this.tableName}?select=str_ident`,
+        null,
+        {
+          Prefer: "count=exact",
+          "Range-Unit": "items",
+          Range: "0-0",
+        },
       );
 
       this.isConnected = response.ok;
@@ -463,10 +512,10 @@ export class SupabaseDatabaseProvider {
 
       const response = await this.makeRequest(
         "POST",
-        `/${this.tableName}`,
+        `/${this.tableName}?on_conflict=str_ident`,
         videoData,
         {
-          Prefer: "resolution=merge-duplicates",
+          Prefer: "resolution=merge-duplicates,return=minimal",
         },
       );
 
@@ -538,11 +587,13 @@ export class SupabaseDatabaseProvider {
       this.ensureConnected();
 
       const response = await this.makeRequest(
-        "GET",
-        `/${this.tableName}?select=count`,
+        "HEAD",
+        `/${this.tableName}?select=str_ident`,
         null,
         {
           Prefer: "count=exact",
+          "Range-Unit": "items",
+          Range: "0-0",
         },
       );
 
@@ -550,16 +601,13 @@ export class SupabaseDatabaseProvider {
         throw new Error(`Failed to get video count: ${response.status}`);
       }
 
-      const countHeader = response.headers.get("Content-Range");
-      if (countHeader) {
-        const match = countHeader.match(/\/(\d+)$/);
-        if (match) {
-          return parseInt(match[1]);
-        }
+      const count = this.parseContentRangeCount(response);
+      if (count !== null) {
+        return count;
       }
 
       // Fallback: get all and count
-      const data = await response.json();
+      const data = await this.getAllVideos();
       return data.length;
     } catch (error) {
       console.error("Failed to get video count:", error.message);
@@ -638,10 +686,10 @@ export class SupabaseDatabaseProvider {
       // PostgREST supports batch operations
       const response = await this.makeRequest(
         "POST",
-        `/${this.tableName}`,
+        `/${this.tableName}?on_conflict=str_ident`,
         videoData,
         {
-          Prefer: "resolution=merge-duplicates",
+          Prefer: "resolution=merge-duplicates,return=minimal",
         },
       );
 
@@ -749,20 +797,7 @@ export class SupabaseDatabaseProvider {
     try {
       if (!this.isConnected) throw new Error("Database not connected");
 
-      // Get total count from header
-      const countResponse = await this.makeRequest(
-        "GET",
-        `/${this.tableName}?select=count`,
-        null,
-        {
-          Prefer: "count=exact",
-        },
-      );
-
-      const countHeader = countResponse.headers.get("Content-Range");
-      const totalVideos = countHeader
-        ? parseInt(countHeader.match(/\/(\d+)$/)?.[1] || "0")
-        : 0;
+      const totalVideos = await this.getVideoCount();
 
       // Get timestamp range
       const oldestResponse = await this.makeRequest(

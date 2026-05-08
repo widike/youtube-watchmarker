@@ -11,6 +11,33 @@ import { logger } from "./logger.js";
  * Storage key for last delta sync timestamp
  */
 export const DELTA_SYNC_STORAGE_KEY = "last_delta_sync_timestamp";
+export const SUPABASE_SYNC_BATCH_SIZE = 100;
+
+/**
+ * Import videos through a provider in bounded batches.
+ * @param {Object} provider - Provider with importVideos(videos)
+ * @param {Array} videos - Videos to import
+ * @param {number} batchSize - Maximum rows per import call
+ * @returns {Promise<number>} Number of videos passed to the provider
+ */
+export async function importVideosInBatches(
+  provider,
+  videos,
+  batchSize = SUPABASE_SYNC_BATCH_SIZE,
+) {
+  if (!videos || videos.length === 0) {
+    return 0;
+  }
+
+  let imported = 0;
+  for (let i = 0; i < videos.length; i += batchSize) {
+    const batch = videos.slice(i, i + batchSize);
+    await provider.importVideos(batch);
+    imported += batch.length;
+  }
+
+  return imported;
+}
 
 /**
  * Perform delta sync - only sync videos modified since last sync
@@ -41,15 +68,10 @@ export async function performDeltaSync(indexedDBProvider, supabaseProvider) {
       return { success: true, synced: 0 };
     }
 
-    // Upload to Supabase in batches
-    const BATCH_SIZE = 100;
-    let synced = 0;
-
-    for (let i = 0; i < modifiedVideos.length; i += BATCH_SIZE) {
-      const batch = modifiedVideos.slice(i, i + BATCH_SIZE);
-      await supabaseProvider.importVideos(batch);
-      synced += batch.length;
-    }
+    const synced = await importVideosInBatches(
+      supabaseProvider,
+      modifiedVideos,
+    );
 
     // Update last sync timestamp
     await chrome.storage.local.set({
@@ -88,7 +110,7 @@ export async function performInitialSync(indexedDBProvider, supabaseProvider) {
     }
 
     // Import to IndexedDB (will merge with existing)
-    await indexedDBProvider.importVideos(supabaseVideos);
+    await importVideosInBatches(indexedDBProvider, supabaseVideos, 500);
 
     // Update last sync timestamp to now
     await chrome.storage.local.set({
@@ -121,8 +143,8 @@ export async function syncProviders(provider1, provider2) {
     const mergedData = mergeVideoData(data1, data2);
 
     // Update both providers with merged data
-    await provider1.importVideos(mergedData);
-    await provider2.importVideos(mergedData);
+    await importVideosInBatches(provider1, mergedData, 500);
+    await importVideosInBatches(provider2, mergedData);
 
     return true;
   } catch (error) {

@@ -16,9 +16,94 @@ import { IndexedDBProvider } from "./indexeddb-provider.js";
 import {
   performDeltaSync as performDeltaSyncUtil,
   performInitialSync as performInitialSyncUtil,
+  importVideosInBatches,
   mergeVideoData,
   DELTA_SYNC_STORAGE_KEY,
 } from "./provider-sync.js";
+
+class LocalFirstProvider {
+  constructor(factory) {
+    this.factory = factory;
+  }
+
+  get indexedDBProvider() {
+    return this.factory.indexedDBProvider;
+  }
+
+  get isInitialized() {
+    return this.indexedDBProvider?.isInitialized || false;
+  }
+
+  get isConnected() {
+    return this.indexedDBProvider?.isConnected || false;
+  }
+
+  async init() {
+    return await this.indexedDBProvider.init();
+  }
+
+  async testConnection() {
+    return await this.indexedDBProvider.testConnection();
+  }
+
+  updateConnectionStatus() {
+    return this.indexedDBProvider.updateConnectionStatus();
+  }
+
+  async getVideo(videoId) {
+    return await this.indexedDBProvider.getVideo(videoId);
+  }
+
+  async putVideo(video) {
+    return await this.factory.writeVideo(video);
+  }
+
+  async getAllVideos() {
+    return await this.indexedDBProvider.getAllVideos();
+  }
+
+  async getVideoCount() {
+    return await this.indexedDBProvider.getVideoCount();
+  }
+
+  async clearAllVideos() {
+    return await this.indexedDBProvider.clearAllVideos();
+  }
+
+  async deleteVideo(videoId) {
+    return await this.factory.deleteVideo(videoId);
+  }
+
+  async importVideos(videos) {
+    return await this.factory.importVideos(videos);
+  }
+
+  async searchVideos(query, limit = 100) {
+    return await this.indexedDBProvider.searchVideos(query, limit);
+  }
+
+  async getVideosByDateRange(startTimestamp, endTimestamp) {
+    return await this.indexedDBProvider.getVideosByDateRange(
+      startTimestamp,
+      endTimestamp,
+    );
+  }
+
+  async getStatistics() {
+    return await this.indexedDBProvider.getStatistics();
+  }
+
+  async close() {
+    return await this.indexedDBProvider.close();
+  }
+
+  getProviderInfo() {
+    return {
+      ...this.indexedDBProvider.getProviderInfo(),
+      architecture: "indexeddb-first",
+    };
+  }
+}
 
 /**
  * Database Provider Factory
@@ -36,6 +121,7 @@ export class DatabaseProviderFactory {
     this.providerType = null;
     this.indexedDBProvider = null;
     this.databaseManager = null;
+    this.primaryProvider = new LocalFirstProvider(this);
 
     // Supabase is now a secondary backup, not a primary provider
     this.supabaseEnabled = false;
@@ -58,9 +144,9 @@ export class DatabaseProviderFactory {
    * @returns {Object} Current provider instance
    */
   getCurrentProvider() {
-    // Always return IndexedDB as the primary provider
-    // This ensures reads always work, even when Supabase is unavailable
-    return this.indexedDBProvider || this.currentProvider;
+    // Always expose a local-first provider for reads and writes.
+    // Writes are persisted locally first and then queued for Supabase.
+    return this.indexedDBProvider ? this.primaryProvider : this.currentProvider;
   }
 
   /**
@@ -96,6 +182,26 @@ export class DatabaseProviderFactory {
       } catch (error) {
         // Log but don't fail - local write succeeded
         logger.warn("Failed to queue video for Supabase sync:", error.message);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Import videos to IndexedDB and opportunistically mirror them to Supabase.
+   * The local import is authoritative; Supabase failures never roll it back.
+   * @param {Array} videos - Video records to import
+   * @returns {Promise<boolean>} Success status for the local import
+   */
+  async importVideos(videos) {
+    await this.indexedDBProvider.importVideos(videos);
+
+    if (this.supabaseEnabled && supabaseDatabaseProvider.isConnected) {
+      try {
+        await importVideosInBatches(supabaseDatabaseProvider, videos);
+      } catch (error) {
+        logger.warn("Failed to mirror imported videos to Supabase:", error);
       }
     }
 
@@ -165,18 +271,13 @@ export class DatabaseProviderFactory {
    */
   async switchToIndexedDB(savePreference = true) {
     try {
-      // Close current provider if different
-      if (this.currentProvider && this.providerType !== "indexeddb") {
-        await this.currentProvider.close();
-      }
-
       // Initialize IndexedDB provider
       const success = await this.indexedDBProvider.init();
       if (!success) {
         throw new Error("Failed to initialize IndexedDB provider");
       }
 
-      this.currentProvider = this.indexedDBProvider;
+      this.currentProvider = this.primaryProvider;
       this.providerType = "indexeddb";
 
       // Store provider preference only if requested
@@ -273,6 +374,7 @@ export class DatabaseProviderFactory {
       // Enable Supabase as backup (IndexedDB remains primary)
       this.supabaseEnabled = true;
       this.providerType = "supabase"; // For UI display purposes
+      this.currentProvider = this.primaryProvider;
 
       // Initialize sync queue with Supabase provider
       await syncQueue.init(supabaseDatabaseProvider);
@@ -531,8 +633,8 @@ export class DatabaseProviderFactory {
         return true;
       }
 
-      // Import data to target
-      await targetProviderInstance.importVideos(sourceData);
+      // Import data to target in bounded batches
+      await importVideosInBatches(targetProviderInstance, sourceData);
 
       console.log(
         `Successfully migrated ${sourceData.length} videos from ${sourceProvider} to ${targetProvider}`,
@@ -591,8 +693,12 @@ export class DatabaseProviderFactory {
       const mergedData = mergeVideoData(data1, data2);
 
       // Update both providers with merged data
-      await providers[provider1].importVideos(mergedData);
-      await providers[provider2].importVideos(mergedData);
+      await importVideosInBatches(providers[provider1], mergedData, 500);
+      await importVideosInBatches(providers[provider2], mergedData);
+
+      await chrome.storage.local.set({
+        [this.deltaSyncStorageKey]: Date.now(),
+      });
 
       return true;
     } catch (error) {

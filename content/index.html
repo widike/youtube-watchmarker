@@ -565,14 +565,44 @@ CREATE INDEX IF NOT EXISTS idx_youtube_watch_history_title_search
 ON youtube_watch_history USING gin(to_tsvector('english', str_title));
 
 -- Add data validation constraints
-ALTER TABLE youtube_watch_history 
-ADD CONSTRAINT IF NOT EXISTS check_positive_count CHECK (int_count > 0);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'check_positive_count'
+    AND conrelid = 'public.youtube_watch_history'::regclass
+  ) THEN
+    ALTER TABLE public.youtube_watch_history 
+    ADD CONSTRAINT check_positive_count CHECK (int_count > 0);
+  END IF;
+END $$;
 
-ALTER TABLE youtube_watch_history 
-ADD CONSTRAINT IF NOT EXISTS check_valid_timestamp CHECK (int_timestamp > 0);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'check_valid_timestamp'
+    AND conrelid = 'public.youtube_watch_history'::regclass
+  ) THEN
+    ALTER TABLE public.youtube_watch_history 
+    ADD CONSTRAINT check_valid_timestamp CHECK (int_timestamp > 0);
+  END IF;
+END $$;
 
-ALTER TABLE youtube_watch_history 
-ADD CONSTRAINT IF NOT EXISTS check_title_length CHECK (char_length(str_title) <= 1000);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'check_title_length'
+    AND conrelid = 'public.youtube_watch_history'::regclass
+  ) THEN
+    ALTER TABLE public.youtube_watch_history 
+    ADD CONSTRAINT check_title_length CHECK (char_length(str_title) <= 1000);
+  END IF;
+END $$;
+
+-- Refresh PostgREST schema cache after creating or changing the table
+NOTIFY pgrst, 'reload schema';
 
 -- Verify table creation
 SELECT 

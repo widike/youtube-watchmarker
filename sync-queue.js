@@ -100,7 +100,19 @@ export class SyncQueue {
       this.queue = this.queue.filter(
         (op) =>
           !(
-            op.type === SyncOperationType.PUT_VIDEO &&
+            (op.type === SyncOperationType.PUT_VIDEO ||
+              op.type === SyncOperationType.DELETE_VIDEO) &&
+            op.data.strIdent === data.strIdent
+          ),
+      );
+    }
+
+    if (type === SyncOperationType.DELETE_VIDEO && data.strIdent) {
+      this.queue = this.queue.filter(
+        (op) =>
+          !(
+            (op.type === SyncOperationType.PUT_VIDEO ||
+              op.type === SyncOperationType.DELETE_VIDEO) &&
             op.data.strIdent === data.strIdent
           ),
       );
@@ -190,6 +202,7 @@ export class SyncQueue {
       this.consecutiveFailures = 0;
     } catch (error) {
       this.consecutiveFailures++;
+      await this.persistQueue();
       logger.warn(
         `Sync failed (attempt ${this.consecutiveFailures}):`,
         error.message,
@@ -256,10 +269,9 @@ export class SyncQueue {
           queueOp.retries++;
           if (queueOp.retries >= this.maxRetries) {
             logger.warn(
-              `Dropping operation after ${this.maxRetries} retries:`,
+              `Operation still pending after ${this.maxRetries} retries:`,
               queueOp,
             );
-            this.queue = this.queue.filter((q) => q.id !== op.id);
           }
         }
       });
@@ -278,7 +290,15 @@ export class SyncQueue {
           await this.supabaseProvider.deleteVideo(operation.data.strIdent);
           break;
         case SyncOperationType.IMPORT_VIDEOS:
-          await this.supabaseProvider.importVideos(operation.data.videos);
+          for (
+            let i = 0;
+            i < operation.data.videos.length;
+            i += this.maxBatchSize
+          ) {
+            await this.supabaseProvider.importVideos(
+              operation.data.videos.slice(i, i + this.maxBatchSize),
+            );
+          }
           break;
         default:
           logger.warn(`Unknown operation type: ${operation.type}`);
@@ -290,10 +310,9 @@ export class SyncQueue {
       operation.retries++;
       if (operation.retries >= this.maxRetries) {
         logger.warn(
-          `Dropping operation after ${this.maxRetries} retries:`,
+          `Operation still pending after ${this.maxRetries} retries:`,
           operation,
         );
-        this.queue = this.queue.filter((op) => op.id !== operation.id);
       }
       throw error;
     }
