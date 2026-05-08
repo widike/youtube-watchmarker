@@ -154,7 +154,8 @@ export class HistoryManager {
       });
 
       let processedVideos = [];
-      let processedCount = 0;
+      let newCount = 0;
+      let updatedCount = 0;
       let skippedCount = 0;
 
       for (let historyResult of historyResults) {
@@ -199,7 +200,7 @@ export class HistoryManager {
 
         let videoToStore;
         if (existingVideo) {
-          // Update existing video with latest timestamp and count
+          // Update existing video with latest real browser-history timestamp.
           videoToStore = {
             strIdent: videoId,
             intTimestamp: Math.max(
@@ -213,6 +214,11 @@ export class HistoryManager {
             ),
           };
         } else {
+          if (!historyResult.lastVisitTime) {
+            skippedCount++;
+            continue;
+          }
+
           // Create new video record
           videoToStore = {
             strIdent: videoId,
@@ -222,15 +228,30 @@ export class HistoryManager {
           };
         }
 
-        // Store the video in the current provider
+        const changed =
+          !existingVideo ||
+          videoToStore.intTimestamp !== existingVideo.intTimestamp ||
+          videoToStore.strTitle !== (existingVideo.strTitle || "") ||
+          videoToStore.intCount !== (existingVideo.intCount || 1);
+
+        if (!changed) {
+          skippedCount++;
+          continue;
+        }
+
         await currentProvider.putVideo(videoToStore);
         processedVideos.push(videoToStore);
-        processedCount++;
+
+        if (existingVideo) {
+          updatedCount++;
+        } else {
+          newCount++;
+        }
 
         // Report progress every 100 videos
-        if (processedCount % 100 === 0 && onProgress) {
+        if ((newCount + updatedCount) % 100 === 0 && onProgress) {
           onProgress({
-            strProgress: `imported ${processedCount} videos`,
+            strProgress: `imported ${newCount + updatedCount} videos`,
           });
         }
       }
@@ -238,12 +259,14 @@ export class HistoryManager {
       // Return results
       const result = {
         objVideos: processedVideos,
-        videoCount: processedCount,
+        videoCount: newCount,
+        newCount: newCount,
+        updatedCount: updatedCount,
         skippedCount: skippedCount,
       };
 
       logger.info(
-        `History sync completed: ${processedCount} videos processed, ${skippedCount} skipped`,
+        `History sync completed: ${newCount} new, ${updatedCount} updated, ${skippedCount} skipped`,
       );
       return result;
     } catch (error) {

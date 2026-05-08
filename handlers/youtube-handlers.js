@@ -55,7 +55,7 @@ export const handleYoutubeSynchronize = createHandler(
       logger.debug("YouTube sync progress:", progress);
     });
 
-    const videoCount = result.videoCount || result.objVideos?.length || 0;
+    const videoCount = result.videoCount ?? 0;
     return { response: result, videoCount };
   },
   { name: "handleYoutubeSynchronize", requiresRequest: false },

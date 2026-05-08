@@ -39,6 +39,41 @@ export class SyncController {
     });
   }
 
+  getSyncStats(response) {
+    const details = response?.response || {};
+    const added = details.newCount ?? response?.videoCount ?? 0;
+    const updated = details.updatedCount ?? 0;
+    const skippedWithoutDate = details.unknownTimestampCount ?? 0;
+    const unchanged = details.skippedCount ?? 0;
+
+    return {
+      added,
+      updated,
+      skippedWithoutDate,
+      unchanged,
+      changed: added + updated,
+    };
+  }
+
+  formatSyncMessage(label, response) {
+    const stats = this.getSyncStats(response);
+    const parts = [`Added ${stats.added}`];
+
+    if (stats.updated > 0) {
+      parts.push(`updated ${stats.updated}`);
+    }
+
+    if (stats.skippedWithoutDate > 0) {
+      parts.push(`skipped ${stats.skippedWithoutDate} without a source date`);
+    }
+
+    if (stats.changed === 0 && stats.unchanged > 0) {
+      parts.push(`${stats.unchanged} unchanged`);
+    }
+
+    return `${label} synchronized. ${parts.join(", ")}.`;
+  }
+
   async syncProviders() {
     try {
       setButtonBusy(this.elements.syncDatabaseButton, "Syncing...");
@@ -87,13 +122,11 @@ export class SyncController {
         throw new Error(response?.error || `${config.label} sync failed`);
       }
 
-      const count = response.videoCount || 0;
-      this.feedback.success(
-        `${config.label} synchronized. Added ${count} videos.`,
-      );
+      const stats = this.getSyncStats(response);
+      this.feedback.success(this.formatSyncMessage(config.label, response));
       await this.onDataChanged();
 
-      if (count > 0) {
+      if (stats.changed > 0) {
         await this.refreshSearch();
       }
     } catch (error) {
@@ -119,7 +152,8 @@ export class SyncController {
           return `${label}: failed`;
         }
 
-        return `${label}: ${result.value.videoCount || 0} videos`;
+        const stats = this.getSyncStats(result.value);
+        return `${label}: ${stats.added} added, ${stats.updated} updated`;
       });
 
       const total = responses.reduce((sum, result) => {
@@ -127,11 +161,11 @@ export class SyncController {
           return sum;
         }
 
-        return sum + (result.value.videoCount || 0);
+        return sum + this.getSyncStats(result.value).changed;
       }, 0);
 
       this.feedback.success(
-        `All sources synchronized. Total added: ${total}. ${summary.join(" | ")}`,
+        `All sources synchronized. Total changed: ${total}. ${summary.join(" | ")}`,
       );
       await this.onDataChanged();
 

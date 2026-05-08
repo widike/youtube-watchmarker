@@ -11,6 +11,11 @@ import { processInChunks, shouldProcessInChunks } from "../chunk-utils.js";
 import { Database } from "../bg-database.js";
 import { databaseProviderFactory } from "../database-provider-factory.js";
 import {
+  auditDatabaseIntegrity,
+  exportIntegrityBackup,
+  repairDatabaseIntegrity,
+} from "../database-maintenance.js";
+import {
   createSimpleHandler,
   createHandlerWithErrorHandler,
 } from "../handler-wrapper.js";
@@ -117,4 +122,43 @@ export const handleDatabaseSize = createHandlerWithErrorHandler(
   },
   (error) => ErrorUtils.handleDatabaseError(error, "get size"),
   "handleDatabaseSize",
+);
+
+/**
+ * Audit database integrity without modifying data.
+ * @returns {Promise<Object>} Audit result
+ */
+export const handleDatabaseIntegrityCheck = createHandlerWithErrorHandler(
+  async () => {
+    const result = await auditDatabaseIntegrity();
+    return { result };
+  },
+  (error) => ErrorUtils.handleDatabaseError(error, "integrity check"),
+  "handleDatabaseIntegrityCheck",
+);
+
+/**
+ * Export raw provider data before integrity repair.
+ * @returns {Promise<Object>} Backup payload
+ */
+export const handleDatabaseIntegrityBackup = createHandlerWithErrorHandler(
+  async () => {
+    const backup = await exportIntegrityBackup();
+    return { data: JSON.stringify(backup) };
+  },
+  (error) => ErrorUtils.handleDatabaseError(error, "integrity backup"),
+  "handleDatabaseIntegrityBackup",
+);
+
+/**
+ * Repair database duplicate IDs and suspicious timestamp clusters.
+ * @returns {Promise<Object>} Repair result
+ */
+export const handleDatabaseIntegrityRepair = createHandlerWithErrorHandler(
+  async () => {
+    const result = await repairDatabaseIntegrity();
+    return { result };
+  },
+  (error) => ErrorUtils.handleDatabaseError(error, "integrity repair"),
+  "handleDatabaseIntegrityRepair",
 );
