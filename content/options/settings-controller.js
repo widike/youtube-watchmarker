@@ -12,7 +12,6 @@ const SETTING_LABELS = {
   idVisualization_Showbadge: "Show Badge",
   idVisualization_Showdate: "Show Date",
   idVisualization_Hideprogress: "Hide Progress Bar",
-  idVisualization_Showpublishdate: "Show Publication Date",
 };
 
 const TOGGLE_IDS = Object.keys(SETTING_LABELS);

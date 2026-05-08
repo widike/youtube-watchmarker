@@ -18,7 +18,6 @@
         "idVisualization_Showbadge",
         "idVisualization_Showdate",
         "idVisualization_Hideprogress",
-        "idVisualization_Showpublishdate",
       ];
     }
 

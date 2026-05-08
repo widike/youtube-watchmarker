@@ -31,7 +31,6 @@ const SETTINGS_CONFIG = {
     { key: "idVisualization_Showbadge", defaultValue: true },
     { key: "idVisualization_Showdate", defaultValue: true },
     { key: "idVisualization_Hideprogress", defaultValue: true },
-    { key: "idVisualization_Showpublishdate", defaultValue: false },
   ],
   stylesheets: [
     {

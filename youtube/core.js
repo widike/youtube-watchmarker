@@ -95,89 +95,6 @@
     return "";
   }
 
-  function extractPublishDate(videoElement) {
-    const tile =
-      videoElement.closest(".ytp-videowall-still") ||
-      videoElement.parentElement?.closest?.(".ytp-videowall-still") ||
-      null;
-
-    const extractAgoText = (text) => {
-      if (!text) {
-        return null;
-      }
-
-      const trimmedText = text.trim();
-      const exactMatch = trimmedText.match(
-        /(\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago)/i,
-      );
-      if (exactMatch) {
-        return exactMatch[1];
-      }
-
-      const streamedMatch = trimmedText.match(
-        /(?:Streamed|Premiered)\s+(\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago)/i,
-      );
-      if (streamedMatch) {
-        return streamedMatch[1];
-      }
-
-      if (!trimmedText.toLowerCase().includes("ago")) {
-        return null;
-      }
-
-      const agoIndex = trimmedText.toLowerCase().lastIndexOf("ago");
-      const tokenPrefix = trimmedText
-        .slice(0, agoIndex)
-        .trim()
-        .split(/[^a-z0-9]+/i)
-        .filter(Boolean)
-        .slice(-2)
-        .join(" ");
-
-      return tokenPrefix ? `${tokenPrefix} ago` : null;
-    };
-
-    const textCandidates = tile
-      ? [
-          tile.getAttribute?.("aria-label"),
-          tile.getAttribute?.("title"),
-          videoElement.getAttribute?.("aria-label"),
-          videoElement.getAttribute?.("title"),
-          ...Array.from(tile.querySelectorAll("span, div, a")).map(
-            (element) =>
-              element.getAttribute("aria-label")?.trim() ||
-              element.textContent?.trim(),
-          ),
-        ]
-      : [];
-
-    for (const candidate of textCandidates) {
-      const publishDate = extractAgoText(candidate);
-      if (publishDate) {
-        return publishDate;
-      }
-    }
-
-    let current = videoElement.parentElement;
-    for (let depth = 0; depth < 5 && current; depth += 1) {
-      const candidateText = Array.from(current.querySelectorAll("span, div, a"))
-        .map(
-          (element) =>
-            element.getAttribute("aria-label")?.trim() ||
-            element.textContent?.trim(),
-        )
-        .find((text) => extractAgoText(text));
-
-      if (candidateText) {
-        return extractAgoText(candidateText);
-      }
-
-      current = current.parentElement;
-    }
-
-    return null;
-  }
-
   function findVideos(targetVideoId = "") {
     return Array.from(
       document.querySelectorAll(videoSelectors.join(", ")),
@@ -199,34 +116,6 @@
 
       return !targetVideoId || videoId === targetVideoId;
     });
-  }
-
-  function findVideoTitleElement(videoElement) {
-    const videoWallTile =
-      videoElement.closest(".ytp-videowall-still") ||
-      videoElement.parentElement?.closest?.(".ytp-videowall-still");
-
-    if (videoWallTile) {
-      const videoWallTitle = videoWallTile.querySelector(
-        ".ytp-videowall-still-info-title",
-      );
-      if (videoWallTitle?.textContent?.trim()) {
-        return videoWallTitle;
-      }
-    }
-
-    let current = videoElement.parentElement;
-    for (let depth = 0; depth < 5 && current; depth += 1) {
-      const titleElement = current.querySelector?.(
-        "#video-title, #video-title-link, h3 a",
-      );
-      if (titleElement?.textContent?.trim()) {
-        return titleElement;
-      }
-      current = current.parentElement;
-    }
-
-    return null;
   }
 
   function debounce(callback, wait) {
@@ -285,9 +174,7 @@
     videoSelectors,
     extractVideoId,
     extractVideoTitle,
-    extractPublishDate,
     findVideos,
-    findVideoTitleElement,
     debounce,
     isRuntimeAvailable,
     logError,

@@ -16,9 +16,6 @@
       this.videoMarkerManager = new watchmarker.VideoMarkerManager(
         this.backgroundClient,
       );
-      this.publicationDateManager = new watchmarker.PublicationDateManager(
-        this.settingsStore,
-      );
       this.interactionManager = new watchmarker.InteractionManager(
         this.videoMarkerManager,
       );
@@ -73,7 +70,6 @@
           "idVisualization_Showbadge",
           "idVisualization_Showdate",
           "idVisualization_Hideprogress",
-          "idVisualization_Showpublishdate",
         ].some((key) => changes[key]);
 
         if (visualSettingChanged) {
@@ -99,10 +95,7 @@
 
         this.lastSnapshot = nextSnapshot;
 
-        await Promise.all([
-          this.videoMarkerManager.processVideos(videos),
-          this.publicationDateManager.processVideos(videos),
-        ]);
+        await this.videoMarkerManager.processVideos(videos);
       } catch (error) {
         core.logError("Failed to refresh YouTube watch markers", error);
       } finally {

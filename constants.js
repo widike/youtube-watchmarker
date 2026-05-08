@@ -67,7 +67,6 @@ export const STORAGE_KEYS = {
     SHOWBADGE: "idVisualization_Showbadge",
     SHOWDATE: "idVisualization_Showdate",
     HIDEPROGRESS: "idVisualization_Hideprogress",
-    SHOWPUBLISHDATE: "idVisualization_Showpublishdate",
   },
 
   // Condition Settings
@@ -224,7 +223,6 @@ export const DEFAULTS = {
     SHOWBADGE: "1",
     SHOWDATE: "1",
     HIDEPROGRESS: "0",
-    SHOWPUBLISHDATE: "0",
   },
 
   CONDITIONS: {
