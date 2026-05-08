@@ -22,9 +22,6 @@ import {
   handleDatabaseImport,
   handleDatabaseReset,
   handleDatabaseSize,
-  handleDatabaseIntegrityCheck,
-  handleDatabaseIntegrityBackup,
-  handleDatabaseIntegrityRepair,
 } from "../handlers/database-handlers.js";
 import {
   handleYoutubeLookup,
@@ -77,15 +74,6 @@ function registerMessageHandlers() {
     "database-import": withInitialization(handleDatabaseImport),
     "database-reset": withInitialization(handleDatabaseReset),
     "database-size": withInitialization(handleDatabaseSize),
-    "database-integrity-check": withInitialization(
-      handleDatabaseIntegrityCheck,
-    ),
-    "database-integrity-backup": withInitialization(
-      handleDatabaseIntegrityBackup,
-    ),
-    "database-integrity-repair": withInitialization(
-      handleDatabaseIntegrityRepair,
-    ),
     "youtube-lookup": withInitialization(handleYoutubeLookup),
     "youtube-ensure": withInitialization(handleYoutubeEnsure),
     "youtube-mark": withInitialization(handleYoutubeMark),

@@ -40,7 +40,6 @@ export function createOptionsElements() {
     importLabel: requireElement("idDatabase_Import").parentElement,
     resetButton: requireElement("idDatabase_Reset"),
     syncDatabaseButton: requireElement("idDatabase_Sync"),
-    integrityButton: requireElement("idDatabase_Integrity"),
     syncHistoryButton: requireElement("sync-history"),
     syncYouTubeButton: requireElement("sync-youtube"),
     syncLikesButton: requireElement("sync-youtube-likes"),

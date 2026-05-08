@@ -11,11 +11,6 @@ import { processInChunks, shouldProcessInChunks } from "../chunk-utils.js";
 import { Database } from "../bg-database.js";
 import { databaseProviderFactory } from "../database-provider-factory.js";
 import {
-  auditDatabaseIntegrity,
-  exportIntegrityBackup,
-  repairDatabaseIntegrity,
-} from "../database-maintenance.js";
-import {
   createSimpleHandler,
   createHandlerWithErrorHandler,
 } from "../handler-wrapper.js";
@@ -28,6 +23,43 @@ export const handleDatabaseExport = createSimpleHandler(async () => {
   const data = await Database.export();
   return { data: JSON.stringify(data) };
 }, "handleDatabaseExport");
+
+function normalizeImportedVideo(video) {
+  const timestamp = Number(video.intTimestamp || video.int_timestamp);
+  const count = Number(video.intCount || video.int_count || 1);
+
+  return {
+    strIdent: String(video.strIdent || video.str_ident || "").trim(),
+    intTimestamp:
+      Number.isFinite(timestamp) && timestamp > 0 ? Math.floor(timestamp) : 0,
+    strTitle: video.strTitle || video.str_title || "",
+    intCount: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
+  };
+}
+
+function getImportRows(parsedData) {
+  if (Array.isArray(parsedData)) {
+    return parsedData;
+  }
+
+  if (Array.isArray(parsedData?.data)) {
+    return parsedData.data;
+  }
+
+  if (Array.isArray(parsedData?.rows)) {
+    return parsedData.rows;
+  }
+
+  if (Array.isArray(parsedData?.providers?.indexedDB)) {
+    return parsedData.providers.indexedDB;
+  }
+
+  if (Array.isArray(parsedData?.providers?.supabase)) {
+    return parsedData.providers.supabase;
+  }
+
+  return null;
+}
 
 /**
  * Import database data
@@ -53,18 +85,19 @@ export const handleDatabaseImport = createHandlerWithErrorHandler(
       };
     }
 
-    if (
-      !parsedData ||
-      typeof parsedData !== "object" ||
-      !Array.isArray(parsedData.data)
-    ) {
+    const importRows = getImportRows(parsedData);
+
+    if (!importRows) {
       return {
         success: false,
-        error: "Invalid database format. Expected an object with a data array.",
+        error:
+          "Invalid database format. Expected a YouTube Watchmarker export array.",
       };
     }
 
-    const videoData = parsedData.data || [];
+    const videoData = importRows
+      .map(normalizeImportedVideo)
+      .filter((video) => video.strIdent);
     logger.info(`Importing ${videoData.length} videos`);
 
     // Use chunk processing utility for large datasets
@@ -122,43 +155,4 @@ export const handleDatabaseSize = createHandlerWithErrorHandler(
   },
   (error) => ErrorUtils.handleDatabaseError(error, "get size"),
   "handleDatabaseSize",
-);
-
-/**
- * Audit database integrity without modifying data.
- * @returns {Promise<Object>} Audit result
- */
-export const handleDatabaseIntegrityCheck = createHandlerWithErrorHandler(
-  async () => {
-    const result = await auditDatabaseIntegrity();
-    return { result };
-  },
-  (error) => ErrorUtils.handleDatabaseError(error, "integrity check"),
-  "handleDatabaseIntegrityCheck",
-);
-
-/**
- * Export raw provider data before integrity repair.
- * @returns {Promise<Object>} Backup payload
- */
-export const handleDatabaseIntegrityBackup = createHandlerWithErrorHandler(
-  async () => {
-    const backup = await exportIntegrityBackup();
-    return { data: JSON.stringify(backup) };
-  },
-  (error) => ErrorUtils.handleDatabaseError(error, "integrity backup"),
-  "handleDatabaseIntegrityBackup",
-);
-
-/**
- * Repair database duplicate IDs and suspicious timestamp clusters.
- * @returns {Promise<Object>} Repair result
- */
-export const handleDatabaseIntegrityRepair = createHandlerWithErrorHandler(
-  async () => {
-    const result = await repairDatabaseIntegrity();
-    return { result };
-  },
-  (error) => ErrorUtils.handleDatabaseError(error, "integrity repair"),
-  "handleDatabaseIntegrityRepair",
 );

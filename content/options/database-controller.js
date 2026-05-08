@@ -23,10 +23,6 @@ export class DatabaseController {
     this.elements.resetButton.addEventListener("click", () => {
       void this.resetDatabase();
     });
-
-    this.elements.integrityButton.addEventListener("click", () => {
-      void this.checkAndRepairIntegrity();
-    });
   }
 
   async updateDatabaseSize() {
@@ -113,7 +109,7 @@ export class DatabaseController {
     }
   }
 
-  downloadDatabaseFile(data, suffix = "", extension = "database") {
+  downloadDatabaseFile(data, suffix = "", extension = "json") {
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
@@ -123,75 +119,6 @@ export class DatabaseController {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-  }
-
-  summarizeIntegrityReport(report) {
-    const totals = report.reports.reduce(
-      (summary, provider) => ({
-        duplicateGroups:
-          summary.duplicateGroups + provider.duplicateIdGroups.length,
-        duplicateRows: summary.duplicateRows + provider.duplicateRowCount,
-        timestampClusters:
-          summary.timestampClusters + provider.timestampClusters.length,
-      }),
-      { duplicateGroups: 0, duplicateRows: 0, timestampClusters: 0 },
-    );
-
-    return totals;
-  }
-
-  async checkAndRepairIntegrity() {
-    try {
-      setButtonBusy(this.elements.integrityButton, "Checking...");
-
-      const checkResponse = await this.client.sendMessage({
-        action: "database-integrity-check",
-      });
-      if (!checkResponse?.success) {
-        throw new Error(checkResponse?.error || "Integrity check failed");
-      }
-
-      const summary = this.summarizeIntegrityReport(checkResponse.result);
-      if (summary.duplicateRows === 0 && summary.timestampClusters === 0) {
-        this.feedback.success("Database integrity check passed");
-        return;
-      }
-
-      const backupResponse = await this.client.sendMessage({
-        action: "database-integrity-backup",
-      });
-      if (!backupResponse?.success) {
-        throw new Error(backupResponse?.error || "Backup export failed");
-      }
-
-      this.downloadDatabaseFile(backupResponse.data, "-before-repair", "json");
-
-      const shouldRepair = confirm(
-        `Found ${summary.duplicateRows} duplicate rows across ${summary.duplicateGroups} duplicate ID groups and ${summary.timestampClusters} suspicious timestamp clusters. A backup was downloaded. Repair now?`,
-      );
-      if (!shouldRepair) {
-        this.feedback.success("Integrity check completed. Repair skipped.");
-        return;
-      }
-
-      setButtonBusy(this.elements.integrityButton, "Repairing...");
-      const repairResponse = await this.client.sendMessage({
-        action: "database-integrity-repair",
-      });
-      if (!repairResponse?.success) {
-        throw new Error(repairResponse?.error || "Integrity repair failed");
-      }
-
-      const repair = repairResponse.result;
-      this.feedback.success(
-        `Repair complete. Removed ${repair.local.duplicateRowsRemoved} duplicate rows and repaired ${repair.local.timestampsRepairedFromChromeHistory} timestamps from Chrome history.`,
-      );
-      await this.onDataChanged();
-    } catch (error) {
-      this.feedback.error(`Integrity repair failed: ${error.message}`);
-    } finally {
-      clearButtonBusy(this.elements.integrityButton);
-    }
   }
 
   readFileAsText(file) {

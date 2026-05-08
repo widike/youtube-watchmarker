@@ -132,7 +132,7 @@ export class DatabaseManager {
 
   /**
    * Export database data
-   * @returns {Promise<Object>} Export data with metadata
+   * @returns {Promise<Array>} Exported video records
    */
   async export() {
     try {
@@ -141,13 +141,7 @@ export class DatabaseManager {
         throw new Error(ERRORS.PROVIDER_NOT_FOUND);
       }
 
-      const data = await provider.getAllVideos();
-      return {
-        version: this.DB_VERSION,
-        timestamp: Date.now(),
-        provider: this.providerFactory.getCurrentProviderType(),
-        data: data,
-      };
+      return await provider.getAllVideos();
     } catch (error) {
       logger.error("Failed to export data:", error);
       throw error;
