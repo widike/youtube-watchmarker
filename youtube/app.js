@@ -87,6 +87,12 @@
       this.isProcessing = true;
 
       try {
+        if (core.isWatchHistoryPage()) {
+          this.videoMarkerManager.clearMarks();
+          this.lastSnapshot = window.location.href;
+          return;
+        }
+
         const videos = core.findVideos();
         const nextSnapshot = `${window.location.href}:${document.title}:${videos.length}`;
         if (nextSnapshot === this.lastSnapshot) {

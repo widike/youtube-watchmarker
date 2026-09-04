@@ -114,6 +114,13 @@
       this.markVideosWithId(videoId);
     }
 
+    clearMarks() {
+      document.querySelectorAll(".youwatch-mark").forEach((target) => {
+        target.classList.remove("youwatch-mark");
+        target.removeAttribute("watchdate");
+      });
+    }
+
     markVideosWithId(videoId) {
       core
         .findVideos(videoId)
@@ -125,10 +132,19 @@
         return;
       }
 
-      const timestamp = this.getWatchTimestamp(videoId);
-      const isWatched = timestamp !== null;
       const target = this.resolveMarkTarget(videoElement);
       const alreadyMarked = target.classList.contains("youwatch-mark");
+
+      if (core.isWatchHistoryPage()) {
+        if (alreadyMarked) {
+          target.classList.remove("youwatch-mark");
+          target.removeAttribute("watchdate");
+        }
+        return;
+      }
+
+      const timestamp = this.getWatchTimestamp(videoId);
+      const isWatched = timestamp !== null;
 
       if (isWatched && !alreadyMarked) {
         target.classList.add("youwatch-mark");

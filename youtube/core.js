@@ -95,7 +95,15 @@
     return "";
   }
 
+  function isWatchHistoryPage() {
+    return /^\/feed\/history(?:\/|$)/.test(window.location.pathname);
+  }
+
   function findVideos(targetVideoId = "") {
+    if (isWatchHistoryPage()) {
+      return [];
+    }
+
     return Array.from(
       document.querySelectorAll(videoSelectors.join(", ")),
     ).filter((element) => {
@@ -174,6 +182,7 @@
     videoSelectors,
     extractVideoId,
     extractVideoTitle,
+    isWatchHistoryPage,
     findVideos,
     debounce,
     isRuntimeAvailable,
