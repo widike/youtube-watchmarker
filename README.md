@@ -1,5 +1,7 @@
 # YouTube Watchmarker Reloaded
 
+Development and tests require Node 26.12.1 or newer. `.node-version` pins the patched development runtime, and npm rejects older versions during dependency installation.
+
 YouTube keeps track of your watch history and automatically marks videos that you have already watched. However, they only mark recently seen videos, which is kind of disappointing. This extension fixes this issue and keeps track of your entire watch history, such that not only the recently seen videos are being marked.
 
 ## Installation
