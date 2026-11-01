@@ -1,4 +1,4 @@
-import { isAllowedParent } from "./protocol.js";
+import { isAllowedParent, isCaptchaInitialization } from "./protocol.js";
 
 const status = document.getElementById("status");
 let active;
@@ -9,16 +9,37 @@ window.addEventListener("message", (event) => {
     window.parent === window ||
     event.source !== window.parent ||
     !isAllowedParent(event.origin) ||
-    event.data?.type !== "watchmarker-captcha-init" ||
-    !/^[a-f0-9]{64}$/.test(event.data.nonce || "") ||
-    !/^[A-Za-z0-9_-]{10,100}$/.test(event.data.siteKey || "") ||
-    active
+    !isCaptchaInitialization(event.data)
   )
     return;
+  initialize(event.data, (result) =>
+    window.parent.postMessage(result, event.origin),
+  );
+});
+
+// Android injects this channel only into the approved HTTPS origin. The native
+// listener additionally checks the main frame, per-attempt nonce and token size.
+const native = window.watchmarkerNative;
+if (window.parent === window && typeof native?.postMessage === "function") {
+  native.onmessage = (event) => {
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+    if (isCaptchaInitialization(data))
+      initialize(data, (result) => native.postMessage(JSON.stringify(result)));
+  };
+  native.postMessage(JSON.stringify({ type: "watchmarker-captcha-ready" }));
+}
+
+function initialize(data, send) {
+  if (active) return;
   active = {
-    origin: event.origin,
-    nonce: event.data.nonce,
-    siteKey: event.data.siteKey,
+    nonce: data.nonce,
+    siteKey: data.siteKey,
+    send,
   };
   const script = document.createElement("script");
   script.src =
@@ -34,7 +55,7 @@ window.addEventListener("message", (event) => {
     { once: true },
   );
   document.head.append(script);
-});
+}
 
 function render() {
   status.textContent = "Verify to connect this device";
@@ -45,10 +66,11 @@ function render() {
     theme: "auto",
     "response-field": false,
     callback(token) {
-      window.parent.postMessage(
-        { type: "watchmarker-captcha-result", nonce: active.nonce, token },
-        active.origin,
-      );
+      active.send({
+        type: "watchmarker-captcha-result",
+        nonce: active.nonce,
+        token,
+      });
       status.textContent = "Verified. Connecting…";
     },
     "expired-callback"() {

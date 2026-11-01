@@ -281,8 +281,8 @@ Normal restoration does not require an exported file.
 4. Choose **Create connection code** under **Sync & data** on a connected computer.
    Enter the six letters (for example **KMT-PXR**) on the new device and choose
    **Connect**. Lowercase and an omitted hyphen also work; a copy button is available.
-   For SmartTube, enter the code in the TV's Phone setup page and complete device
-   verification before saving. A shared temporary pairing directory resolves each
+   For SmartTube, open **Settings → Content → Cloud sync**, enter the code on the
+   TV and choose **Connect**. Device verification runs inside the app. A shared temporary pairing directory resolves each
    code to its issuing installation's public project settings. Different
    installations keep their own databases; new devices enter no project ID or key.
    Codes expire after ten minutes, connect

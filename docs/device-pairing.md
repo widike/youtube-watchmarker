@@ -27,8 +27,10 @@ destination database is resolved separately for each code.
    to the shared history. Local history identity checks precede credential storage
    and upload. Wrong, expired, consumed or rate-limited codes cannot connect.
 
-SmartTube keeps verification in its existing HTTPS Phone setup page. This change
-shortens its code field; it does not add CAPTCHA bypass or remote-only signup.
+SmartTube accepts the code directly in **Settings → Content → Cloud sync**.
+Verification runs inside the TV app in an origin-restricted Android WebView.
+Cloud sync does not open the LAN Phone setup screen or require its numeric PIN.
+The general Phone setup service remains available for other TV settings and backups.
 
 ## Data and limits
 
@@ -88,8 +90,9 @@ server environment secret and never enters either client or a response.
 - `psql -f test-support/pairing-directory.sql` in a disposable local PostgreSQL
   database. This includes the prior history/RLS checks and verifies independent
   destinations, replacement, collisions, expiry, persistent rate limits and ACLs.
-- SmartTube's Watchmarker and Phone setup unit tests, plus
-  `node --test scripts/phone-setup-captcha.test.mjs` in that repository.
+- SmartTube's Watchmarker, pairing coordinator, native verification channel and
+  Phone setup unit tests. Native messages require the approved main frame, an
+  attempt-specific nonce and a bounded token; cancelled attempts are ignored.
 
 Local tests simulate Auth claims and network responses. They do not establish
 production deployment, CAPTCHA configuration or acceptance on a physical TV.

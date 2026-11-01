@@ -42,22 +42,25 @@ database/MAU growth. It does not replace ownership policies. Keep Supabase's
 server-side anonymous-signup rate limit enabled and monitor Auth usage. A client
 delay cannot prevent attackers from calling the public signup endpoint directly.
 
-Both clients use the same hosted Turnstile page in an isolated iframe. The
-extension displays it during connection; SmartTube displays it in the paired
-phone's HTTPS setup page. TV settings open Phone setup rather than collecting
-codes without a browser verification flow. Routine syncing and session refresh
-use existing Auth sessions.
+Both clients use the same hosted Turnstile page. The extension displays an isolated
+iframe during connection; SmartTube embeds an Android WebView directly in its
+Cloud sync screen after the six-letter code is entered. No LAN Phone setup or
+numeric phone-pairing PIN is needed for cloud sync. Routine syncing and session
+refresh use existing Auth sessions.
 
-The iframe receives only a public widget key and a random per-attempt nonce.
+The verification page receives only a public widget key and a random per-attempt nonce.
 It never receives connection codes, project credentials, history or Auth tokens.
 Its replies require the exact origin, frame and nonce. Challenges time out after
 three minutes; cancellation, edited connection details and page closure discard
 the attempt. Tokens remain in memory, are submitted immediately, and never enter
 URLs, logs, connection codes, exports or persistent storage.
 
-The page accepts messages only from Chrome extension parents and HTTPS parents
-on private IPv4 addresses. Remote JavaScript runs inside the hosted page; both
-parent pages keep scripts restricted to their own packaged code. Supabase Auth
+The page accepts iframe messages only from Chrome extension parents. The removed
+LAN phone flow is no longer an allowed parent. SmartTube uses a separate native WebMessage
+channel injected only into the approved HTTPS origin; native replies additionally
+require the main frame and current nonce. Navigation cannot leave the approved
+page, and cancellation destroys the channel. Remote JavaScript runs inside the
+hosted page. Supabase Auth
 verifies the submitted `gotrue_meta_security.captcha_token` using its configured
 provider secret. The provider secret never enters either client or this repository.
 

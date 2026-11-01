@@ -53,16 +53,14 @@ test("verification replies require the exact origin, frame, nonce and bounded to
     );
 });
 
-test("the widget only hands tokens to extension pages and encrypted private IPv4 setup pages", () => {
-  for (const origin of [
-    "chrome-extension://" + "a".repeat(32),
-    "https://192.168.178.80:8443",
-    "https://10.1.2.3:4433",
-    "https://172.16.2.3:8443",
-  ])
+test("iframe verification only accepts extension parents; the removed LAN phone flow is rejected", () => {
+  for (const origin of ["chrome-extension://" + "a".repeat(32)])
     assert.equal(isAllowedParent(origin), true, origin);
   for (const origin of [
     "null",
+    "https://192.168.178.80:8443",
+    "https://10.1.2.3:4433",
+    "https://172.16.2.3:8443",
     "http://192.168.1.1",
     "https://192.168.1.1.attacker.example",
     "https://example.com",
