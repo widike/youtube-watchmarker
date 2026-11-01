@@ -1,0 +1,19 @@
+:root {
+  color-scheme: light dark;
+  font:
+    14px system-ui,
+    sans-serif;
+}
+body {
+  margin: 0;
+  background: transparent;
+}
+main {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+p {
+  margin: 0;
+}

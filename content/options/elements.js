@@ -34,6 +34,7 @@ export function createOptionsElements() {
     copyConnectionCodeButton: requireElement("copy-connection-code"),
     connectionCodeExpiry: requireElement("connection-code-expiry"),
     syncFeedback: requireElement("sync-feedback"),
+    captchaContainer: requireElement("captcha-container"),
     searchInput: requireElement("idSearch_Query"),
     searchButton: requireElement("idSearch_Lookup"),
     searchResults: requireElement("idSearch_Results"),

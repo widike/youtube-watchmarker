@@ -264,9 +264,12 @@ Normal restoration does not require an exported file.
    followed by [device linking](supabase/migrations/20261101020000_device_linking.sql)
    followed by [import reconciliation](supabase/migrations/20261101030000_import_reconciliation.sql)
    followed by [playback-time sync](supabase/migrations/20261101040000_playback_time_sync.sql)
-   and [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
-   in the project's SQL Editor. All six preserve existing history.
-   **Sync & data → Set up your first device → Copy setup SQL** copies all six in order.
+   followed by [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
+   and [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
+   in the project's SQL Editor. All seven preserve existing history.
+   **Sync & data → Set up your first device → Copy setup SQL** copies all seven in order.
+   Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)
+   to register your public Turnstile site key and configure its secret in Supabase.
    For an existing project, apply the import-reconciliation migration so the
    server's materialized `int_count` also reflects correction receipts. Updated
    extension clients already reconcile downloaded events even before that SQL
@@ -278,7 +281,7 @@ Normal restoration does not require an exported file.
    automatically; a copy button is also available. Paste it into the other
    MacBook's code field and choose **Connect**.
    Create another code for SmartTube and paste it through the TV's phone setup
-   page or Watchmarker settings. The code includes the public project details;
+   page. Complete device verification before saving. The code includes the public project details;
    they do not need to be entered again. Codes expire after ten minutes, connect
    one device, and are replaced when their issuing device creates another code.
 5. Reload the updated extension on both MacBooks. Other sync clients, including

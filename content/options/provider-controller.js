@@ -1,10 +1,12 @@
 import { clearButtonBusy, setButtonBusy } from "../../ui/button-state.js";
+import { CaptchaChallenge } from "../../ui/captcha-challenge.js";
 
 export class ProviderController {
   constructor({ client, elements, onDataChanged }) {
     Object.assign(this, { client, elements, onDataChanged });
     this.connected = false;
     this.busy = false;
+    this.challenge = new CaptchaChallenge(elements.captchaContainer);
   }
 
   bindEvents() {
@@ -28,7 +30,10 @@ export class ProviderController {
       e.supabaseProjectId,
       e.supabaseApiKey,
     ])
-      input.addEventListener("input", () => this.updateButtons());
+      input.addEventListener("input", () => {
+        this.connectionAttempt?.abort();
+        this.updateButtons();
+      });
     e.setupSqlButton.addEventListener("click", () => void this.copySetupSql());
     e.createLinkButton.addEventListener(
       "click",
@@ -44,6 +49,8 @@ export class ProviderController {
       () => {
         clearInterval(this.poll);
         this.clearConnectionCode();
+        this.challenge.cancel?.();
+        this.connectionAttempt?.abort();
       },
       { once: true },
     );
@@ -115,6 +122,7 @@ export class ProviderController {
     const e = this.elements;
     const button = mode === "code" ? e.connectDeviceButton : e.startSyncButton;
     this.busy = true;
+    this.connectionAttempt = new AbortController();
     e.syncFeedback.textContent = "";
     setButtonBusy(button, "Connecting…");
     this.updateButtons();
@@ -128,9 +136,21 @@ export class ProviderController {
                 publishableKey: e.supabaseApiKey.value.trim(),
               },
             };
+      const setup = await this.client.sendMessage({
+        action: "supabase-captcha-config",
+        ...request,
+      });
+      if (!setup?.success)
+        throw new Error(setup?.error || "Verification setup unavailable");
+      e.syncFeedback.textContent = "Verify to connect this device";
+      const captchaToken = await this.challenge.verify(setup.captcha, {
+        signal: this.connectionAttempt.signal,
+      });
+      e.syncFeedback.textContent = "Connecting…";
       const response = await this.client.sendMessage({
         action: "supabase-connect",
         ...request,
+        captchaToken,
       });
       if (!response?.success)
         throw new Error(response?.error || "Could not connect");
@@ -145,6 +165,7 @@ export class ProviderController {
       e.syncFeedback.textContent = error.message;
     } finally {
       clearButtonBusy(button);
+      this.connectionAttempt = null;
       this.busy = false;
       this.updateButtons();
       if (this.connected) e.createLinkButton.focus();
@@ -212,6 +233,7 @@ export class ProviderController {
         "20261101030000_import_reconciliation.sql",
         "20261101040000_playback_time_sync.sql",
         "20261101050000_anonymous_access_hardening.sql",
+        "20261101060000_captcha_configuration.sql",
       ];
       const sql = await Promise.all(
         migrations.map(async (name) => {

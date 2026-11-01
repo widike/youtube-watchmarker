@@ -40,23 +40,53 @@ database/MAU growth. It does not replace ownership policies. Keep Supabase's
 server-side anonymous-signup rate limit enabled and monitor Auth usage. A client
 delay cannot prevent attackers from calling the public signup endpoint directly.
 
-CAPTCHA is not integrated into this extension yet. Enabling it in Supabase now
-will make new device sign-ins fail; already connected devices retain their
-existing sessions. A complete integration needs:
+Both clients use the same hosted Turnstile page in an isolated iframe. The
+extension displays it during connection; SmartTube displays it in the paired
+phone's HTTPS setup page. TV settings open Phone setup rather than collecting
+codes without a browser verification flow. Routine syncing and session refresh
+use existing Auth sessions.
 
-1. A hosted HTTPS challenge page with a Turnstile or hCaptcha site key, using the
-   provider's approved hostname. The extension's MV3 pages prohibit remote
-   JavaScript, so the provider widget cannot be inserted into the options page.
-2. A challenge handoff bound to the initiating connection attempt, with exact
-   origin validation and short expiry. Keep challenge tokens in memory and out
-   of logs, connection codes, URLs and persistent storage.
-3. The signup request must forward the result as
-   `gotrue_meta_security: { captcha_token: token }`. Supabase Auth verifies it
-   using the provider secret configured in the Supabase dashboard. The provider
-   secret must never enter the extension or the hosted page.
-4. Test first-device signup and invitation-based signup on every client,
-   including SmartTube, before enabling project-wide CAPTCHA. Cancellation,
-   expiry and challenge failure must leave existing credentials/history intact.
+The iframe receives only a public widget key and a random per-attempt nonce.
+It never receives connection codes, project credentials, history or Auth tokens.
+Its replies require the exact origin, frame and nonce. Challenges time out after
+three minutes; cancellation, edited connection details and page closure discard
+the attempt. Tokens remain in memory, are submitted immediately, and never enter
+URLs, logs, connection codes, exports or persistent storage.
+
+The page accepts messages only from Chrome extension parents and HTTPS parents
+on private IPv4 addresses. Remote JavaScript runs inside the hosted page; both
+parent pages keep scripts restricted to their own packaged code. Supabase Auth
+verifies the submitted `gotrue_meta_security.captcha_token` using its configured
+provider secret. The provider secret never enters either client or this repository.
+
+Setup order:
+
+1. Create a managed Cloudflare Turnstile widget restricted to `widike.github.io`.
+2. Publish `verification/` using `.github/workflows/verification.yml`. The page
+   URL is `https://widike.github.io/youtube-watchmarker/verification/`. Only the
+   static verification files are published; no keys are embedded in the page.
+3. Apply `supabase/migrations/20261101060000_captcha_configuration.sql`, then
+   register the widget's **public site key** in the SQL Editor:
+
+   ```sql
+   insert into private.watchmarker_captcha_configuration(singleton, site_key)
+   values (true, 'YOUR_TURNSTILE_SITE_KEY')
+   on conflict (singleton) do update set site_key = excluded.site_key;
+   ```
+
+   The read-only `watchmarker_captcha_config()` RPC exposes just the public site
+   key and the approved page URL. Browser roles cannot change this configuration.
+
+4. Reload the extension and install the updated SmartTube release. Check
+   connection, cancellation and expiry in both clients before enabling enforcement.
+5. In Supabase **Authentication → Attack Protection**, enable CAPTCHA, select
+   Turnstile, and enter its **secret key** there. Verify that signup without a
+   CAPTCHA token is rejected and complete a real new-device connection.
+
+Each Supabase project needs the matching site-key/secret pair. Clients fail
+closed when public CAPTCHA configuration is absent or points to another page;
+they never retry signup without verification. Provider test keys belong only
+in isolated tests. Keep Supabase's server-side rate limiting enabled as well.
 
 Do not delete anonymous users as disposable guests: they own durable histories
 and memberships. Keep a connected device available to link replacements. If all
@@ -75,6 +105,11 @@ configuration, JWT signatures or CAPTCHA.
 Run `node --test supabase-auth-client.test.js supabase-security.test.js
 device-connection.test.js device-link.test.js message-router.test.js` for the
 client-side security checks.
+
+`captcha-challenge.test.js` and `captcha-security.test.js` cover spoofed frame
+messages, cancelled/expired attempts, invalid origins and missing tokens.
+`psql -f test-support/captcha-configuration.sql` checks the configuration RPC and
+private table permissions in a disposable local database.
 
 Sources: [Supabase anonymous sign-ins](https://supabase.com/docs/guides/auth/auth-anonymous),
 [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security),

@@ -44,6 +44,7 @@ import {
 import {
   handleProviderStatus,
   handleSupabaseConnect,
+  handleSupabaseCaptchaConfiguration,
   handleSupabaseCreateLink,
   handleSupabaseTest,
   handleSupabaseGetCredentials,
@@ -112,6 +113,9 @@ function registerMessageHandlers() {
     "duration-control": withInitialization(handleDurationControl),
     "database-provider-status": withInitialization(handleProviderStatus),
     "supabase-connect": withInitialization(handleSupabaseConnect),
+    "supabase-captcha-config": withInitialization(
+      handleSupabaseCaptchaConfiguration,
+    ),
     "supabase-create-link": withInitialization(handleSupabaseCreateLink),
     "supabase-test": withInitialization(handleSupabaseTest),
     "supabase-get-credentials": withInitialization(

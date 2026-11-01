@@ -1,4 +1,5 @@
 import { credentialStorage } from "./credential-storage.js";
+import { isCaptchaToken } from "./verification/protocol.js";
 
 const REFRESH_MARGIN_MS = 60_000;
 
@@ -78,9 +79,11 @@ export class SupabaseAuthClient {
     };
   }
 
-  async createDeviceSession(configuration) {
+  async createDeviceSession(configuration, captchaToken) {
+    if (!isCaptchaToken(captchaToken))
+      throw new Error("Verify this device before connecting");
     const payload = await this.request("/signup", {
-      body: {},
+      body: { gotrue_meta_security: { captcha_token: captchaToken } },
       configuration,
     });
     return this.createStoredSession(payload);

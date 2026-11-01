@@ -30,6 +30,7 @@ function routerWithHandlers() {
     "youtube-watch": async () => ({ data: { strIdent: videoId } }),
     "search-delete": async () => ({}),
     "supabase-get-credentials": async () => ({ credentials: "private" }),
+    "supabase-captcha-config": async () => ({ captcha: {} }),
     "set-setting": async () => ({}),
     "history-statistics": async () => ({ statistics: {} }),
     "duration-status": async () => ({ backfill: {} }),
@@ -62,6 +63,7 @@ test("credential and settings actions are restricted to extension pages", async 
   const router = routerWithHandlers();
   for (const action of [
     "supabase-get-credentials",
+    "supabase-captcha-config",
     "set-setting",
     "history-statistics",
     "duration-status",

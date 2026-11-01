@@ -67,9 +67,14 @@ test("new device uses anonymous Auth without email, password, or copied refresh 
     supabaseUrl: "https://abcdefghijklmnopqrst.supabase.co",
     publishableKey: "sb_publishable_public",
   };
-  const session = await client.createDeviceSession(configuration);
+  const session = await client.createDeviceSession(
+    configuration,
+    "captcha-proof",
+  );
   assert.equal(requests[0].url, configuration.supabaseUrl + "/auth/v1/signup");
-  assert.deepEqual(JSON.parse(requests[0].body), {});
+  assert.deepEqual(JSON.parse(requests[0].body), {
+    gotrue_meta_security: { captcha_token: "captcha-proof" },
+  });
   assert.equal(requests[0].headers.apikey, configuration.publishableKey);
   assert.equal(session.userId, "new-device");
 });

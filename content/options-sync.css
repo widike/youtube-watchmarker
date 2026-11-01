@@ -1,4 +1,14 @@
 @layer pages {
+  .captcha-container iframe {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    height: 150px;
+    border: 0;
+  }
+  .captcha-container {
+    margin-block: 12px;
+  }
   .connection-body {
     padding-block-start: var(--space-4);
   }

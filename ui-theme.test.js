@@ -64,7 +64,7 @@ for (const [name, flags, width] of [
             .toString()
             .replace(
               "<head>",
-              '<head><script src="/test-support/theme-runtime.browser.js"></script><script type="module" src="/test-support/theme.browser.js"></script>',
+              '<head><script type="module" src="/test-support/theme-runtime.browser.js"></script><script type="module" src="/test-support/theme.browser.js"></script>',
             );
         res.end(body);
       } catch {

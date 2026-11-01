@@ -1,3 +1,6 @@
+import { CaptchaChallenge } from "../ui/captcha-challenge.js";
+CaptchaChallenge.prototype.verify = async () => "fixture-captcha-proof";
+
 const fixture = (window.fixture = {
   errors: [],
   local: {},
@@ -53,6 +56,8 @@ chrome.runtime = {
       fixture.providerStatus = { configured: true, pending: 0 };
       return { success: true };
     }
+    if (action === "supabase-captcha-config")
+      return { success: true, captcha: {} };
     if (action === "supabase-create-link")
       return {
         success: true,

@@ -4,8 +4,19 @@ import { createHandler } from "../handler-wrapper.js";
 import { supabaseAuthClient } from "../supabase-auth-client.js";
 import { supabaseDatabaseProvider } from "../supabase-database-provider.js";
 import { decodeConnection, encodeConnection } from "../device-link.js";
+import {
+  connectionConfiguration,
+  loadCaptchaConfiguration,
+} from "../supabase-captcha.js";
 
 let connecting = false;
+
+export const handleSupabaseCaptchaConfiguration = createHandler(
+  async (request) => ({
+    captcha: await loadCaptchaConfiguration(connectionConfiguration(request)),
+  }),
+  { name: "handleSupabaseCaptchaConfiguration" },
+);
 
 export const handleProviderStatus = createHandler(
   async () => ({ status: await databaseProviderFactory.getProviderStatus() }),
@@ -50,7 +61,10 @@ export const handleSupabaseConnect = createHandler(
               ...current,
               accessToken: await supabaseAuthClient.getAccessToken(),
             }
-          : await supabaseAuthClient.createDeviceSession(active);
+          : await supabaseAuthClient.createDeviceSession(
+              active,
+              request.captchaToken,
+            );
       session.historyOwnerId = await supabaseAuthClient.deviceRpc(
         active,
         session,
