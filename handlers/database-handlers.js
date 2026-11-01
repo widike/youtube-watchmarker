@@ -10,178 +10,38 @@ import { ErrorUtils } from "../error-handler.js";
 import { processInChunks, shouldProcessInChunks } from "../chunk-utils.js";
 import { Database } from "../bg-database.js";
 import { databaseProviderFactory } from "../database-provider-factory.js";
-import { fixUtf8DoubleEncoding } from "../text-utils.js";
-import {
-  createSimpleHandler,
-  createHandlerWithErrorHandler,
-} from "../handler-wrapper.js";
+import { parseHistoryImport } from "../history-import.js";
+import { createHandler } from "../handler-wrapper.js";
+import { readMetadata } from "../history-storage.js";
+import { RECONCILIATION_KEY } from "../history-repair-storage.js";
 
 /**
  * Export database data
  * @returns {Promise<Object>} Export result
  */
-export const handleDatabaseExport = createSimpleHandler(async () => {
-  const data = await Database.export();
-  return { data: JSON.stringify(data) };
-}, "handleDatabaseExport");
-
-function escapeJsonControlCharacter(character) {
-  switch (character) {
-    case "\b":
-      return "\\b";
-    case "\t":
-      return "\\t";
-    case "\n":
-      return "\\n";
-    case "\f":
-      return "\\f";
-    case "\r":
-      return "\\r";
-    default:
-      return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
-  }
-}
-
-function escapeInvalidJsonControlCharacters(text) {
-  let result = "";
-  let isInsideString = false;
-  let isEscaped = false;
-
-  for (const character of text) {
-    const charCode = character.charCodeAt(0);
-
-    if (isInsideString) {
-      if (isEscaped) {
-        result += character;
-        isEscaped = false;
-        continue;
-      }
-
-      if (character === "\\") {
-        result += character;
-        isEscaped = true;
-        continue;
-      }
-
-      if (character === '"') {
-        result += character;
-        isInsideString = false;
-        continue;
-      }
-
-      result +=
-        charCode <= 0x1f ? escapeJsonControlCharacter(character) : character;
-      continue;
-    }
-
-    if (character === '"') {
-      isInsideString = true;
-    }
-
-    if (
-      charCode <= 0x1f &&
-      character !== "\t" &&
-      character !== "\n" &&
-      character !== "\r"
-    ) {
-      continue;
-    }
-
-    result += character;
-  }
-
-  return result;
-}
-
-function parseImportJson(rawData) {
-  const text = String(rawData || "").replace(/^\uFEFF/, "");
-
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    const sanitizedText = escapeInvalidJsonControlCharacters(text);
-    if (sanitizedText === text) {
-      throw error;
-    }
-
-    return JSON.parse(sanitizedText);
-  }
-}
-
-function normalizeImportedVideo(video) {
-  const timestamp = Number(video.intTimestamp || video.int_timestamp);
-  const count = Number(video.intCount || video.int_count || 1);
-  const title = String(video.strTitle || video.str_title || "");
-
-  return {
-    strIdent: String(video.strIdent || video.str_ident || "").trim(),
-    intTimestamp:
-      Number.isFinite(timestamp) && timestamp > 0 ? Math.floor(timestamp) : 0,
-    strTitle: fixUtf8DoubleEncoding(title),
-    intCount: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
-  };
-}
-
-function getImportRows(parsedData) {
-  if (Array.isArray(parsedData)) {
-    return parsedData;
-  }
-
-  if (Array.isArray(parsedData?.data)) {
-    return parsedData.data;
-  }
-
-  if (Array.isArray(parsedData?.rows)) {
-    return parsedData.rows;
-  }
-
-  if (Array.isArray(parsedData?.providers?.indexedDB)) {
-    return parsedData.providers.indexedDB;
-  }
-
-  if (Array.isArray(parsedData?.providers?.supabase)) {
-    return parsedData.providers.supabase;
-  }
-
-  return null;
-}
+export const handleDatabaseExport = createHandler(
+  async () => {
+    const data = await Database.export();
+    return { data: JSON.stringify(data) };
+  },
+  { name: "handleDatabaseExport" },
+);
 
 /**
  * Import database data
  * @param {Object} request - Request object with data field
  * @returns {Promise<Object>} Import result
  */
-export const handleDatabaseImport = createHandlerWithErrorHandler(
+export const handleDatabaseImport = createHandler(
   async (request) => {
     logger.info("Database import started");
 
-    let parsedData;
-    const rawData = request.data;
-
+    let videoData;
     try {
-      parsedData = parseImportJson(rawData);
-    } catch (jsonError) {
-      logger.error("Failed to parse database as JSON:", jsonError);
-      return {
-        success: false,
-        error:
-          "Invalid database format. Please ensure the file contains valid JSON data.",
-      };
+      videoData = parseHistoryImport(request.data);
+    } catch (error) {
+      return { success: false, error: error.message };
     }
-
-    const importRows = getImportRows(parsedData);
-
-    if (!importRows) {
-      return {
-        success: false,
-        error:
-          "Invalid database format. Expected a YouTube Watchmarker export array.",
-      };
-    }
-
-    const videoData = importRows
-      .map(normalizeImportedVideo)
-      .filter((video) => video.strIdent);
     logger.info(`Importing ${videoData.length} videos`);
 
     // Use chunk processing utility for large datasets
@@ -206,28 +66,17 @@ export const handleDatabaseImport = createHandlerWithErrorHandler(
       };
     }
   },
-  (error) => ErrorUtils.handleDatabaseError(error, "import"),
-  "handleDatabaseImport",
-);
-
-/**
- * Reset database
- * @returns {Promise<Object>} Reset result
- */
-export const handleDatabaseReset = createHandlerWithErrorHandler(
-  async () => {
-    await Database.reset();
-    return { message: "Database reset successfully" };
+  {
+    name: "handleDatabaseImport",
+    errorHandler: (error) => ErrorUtils.handleDatabaseError(error, "import"),
   },
-  (error) => ErrorUtils.handleDatabaseError(error, "reset"),
-  "handleDatabaseReset",
 );
 
 /**
  * Get database size
  * @returns {Promise<Object>} Size result
  */
-export const handleDatabaseSize = createHandlerWithErrorHandler(
+export const handleDatabaseSize = createHandler(
   async () => {
     const currentProvider = databaseProviderFactory.getCurrentProvider();
     if (!currentProvider) {
@@ -235,8 +84,14 @@ export const handleDatabaseSize = createHandlerWithErrorHandler(
     }
 
     const count = await currentProvider.getVideoCount();
-    return { size: count.toString() };
+    const reconciliation = await readMetadata(
+      Database.database,
+      RECONCILIATION_KEY,
+    );
+    return { size: count.toString(), reconciliation };
   },
-  (error) => ErrorUtils.handleDatabaseError(error, "get size"),
-  "handleDatabaseSize",
+  {
+    name: "handleDatabaseSize",
+    errorHandler: (error) => ErrorUtils.handleDatabaseError(error, "get size"),
+  },
 );

@@ -1,0 +1,71 @@
+@layer pages {
+  .library-toolbar {
+    scroll-margin-top: var(--space-5);
+  }
+  .filter-controls,
+  .display-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .select-control {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding-left: 12px;
+    background: var(--surface);
+    border: 1px solid var(--control-line);
+    border-radius: var(--radius-control);
+    color: var(--muted);
+  }
+  .select-control i {
+    font-size: 11px;
+  }
+  .select-control select {
+    background-color: transparent;
+    border: 0;
+    border-radius: var(--radius-control);
+    padding-inline-start: 0;
+    font-size: var(--font-small);
+    max-width: 150px;
+  }
+  .library-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0 0;
+  }
+  .library-summary h2 {
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .history-results {
+    min-height: 300px;
+    transition: opacity 0.15s;
+  }
+  .history-results.search-loading {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .day-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0 10px;
+  }
+  .day-heading h3 {
+    font-size: 12px;
+    font-weight: 650;
+  }
+  .day-heading > span {
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .day-heading::after {
+    content: "";
+    background: var(--line);
+    height: 1px;
+    flex: 1;
+  }
+}

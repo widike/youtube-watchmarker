@@ -1,46 +1,42 @@
-/**
- * YouTube authentication utilities
- * Handles YouTube cookie authentication and SAPISIDHASH generation
- */
+import { logger } from "./logger.js";
 
-/**
- * Gets YouTube cookies for authentication
- * @returns {Promise<Object>} Object containing cookie values
- */
-export async function getYouTubeCookies() {
-  const cookieNames = ["SAPISID", "__Secure-3PAPISID"];
-  const cookies = {};
+export const YOUTUBE_ORIGIN = "https://www.youtube.com";
+const SAPISID_COOKIE_NAMES = [
+  "SAPISID",
+  "__Secure-3PAPISID",
+  "__Secure-1PAPISID",
+];
 
-  for (const cookieName of cookieNames) {
-    const cookie = await chrome.cookies.get({
-      url: "https://www.youtube.com",
-      name: cookieName,
+async function readCookieValue(name) {
+  return new Promise((resolve) => {
+    chrome.cookies.get({ url: YOUTUBE_ORIGIN, name }, (cookie) => {
+      if (chrome.runtime.lastError) {
+        logger.warn(
+          `Cookie read error for ${name}:`,
+          chrome.runtime.lastError.message,
+        );
+        resolve(null);
+        return;
+      }
+      resolve(cookie?.value || null);
     });
-    cookies[cookieName] = cookie ? cookie.value : null;
-  }
-
-  return cookies;
+  });
 }
 
-/**
- * Creates YouTube authentication header (SAPISIDHASH)
- * @param {Object} cookies - Cookie object from getYouTubeCookies
- * @returns {Promise<string>} SAPISIDHASH authentication string
- */
-export async function createYouTubeAuthHeader(cookies) {
-  const time = Math.round(Date.now() / 1000);
-  const cookie = cookies["SAPISID"] || cookies["__Secure-3PAPISID"];
-  const origin = "https://www.youtube.com";
+export async function getSapisidCookie() {
+  for (const name of SAPISID_COOKIE_NAMES) {
+    const value = await readCookieValue(name);
+    if (value) return value;
+  }
+  return null;
+}
 
-  const hash = await crypto.subtle.digest(
-    "SHA-1",
-    new TextEncoder().encode(`${time} ${cookie} ${origin}`),
-  );
-
-  const hashArray = Array.from(new Uint8Array(hash));
-  const hashHex = hashArray
-    .map((byte) => byte.toString(16).padStart(2, "0"))
+export async function computeSapisidHash(sapisid, origin = YOUTUBE_ORIGIN) {
+  const ts = Math.floor(Date.now() / 1000);
+  const data = new TextEncoder().encode(`${ts} ${sapisid} ${origin}`);
+  const digest = await crypto.subtle.digest("SHA-1", data);
+  const hash = [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-
-  return `SAPISIDHASH ${time}_${hashHex}`;
+  return `SAPISIDHASH ${ts}_${hash}`;
 }

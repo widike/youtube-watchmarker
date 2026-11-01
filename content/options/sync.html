@@ -1,0 +1,358 @@
+<section
+  id="panel-sync"
+  class="app-panel"
+  aria-labelledby="sync-heading"
+  hidden
+>
+  <div class="page-heading">
+    <div>
+      <h1 id="sync-heading">Sync &amp; data</h1>
+    </div>
+  </div>
+  <div class="section-stack">
+    <section
+      class="surface-card settings-card sync-card"
+      aria-labelledby="cloud-heading"
+    >
+      <div class="section-heading">
+        <div>
+          <h2 id="cloud-heading">
+            <i class="fas fa-cloud" aria-hidden="true"></i>Cloud sync
+          </h2>
+        </div>
+        <div class="toolbar-actions">
+          <button
+            class="quiet-button compact-button"
+            id="idDatabase_Sync"
+            hidden
+          >
+            <i class="fas fa-arrows-rotate" aria-hidden="true"></i>Sync now
+          </button>
+          <button
+            class="quiet-button compact-button"
+            id="sync-setup-toggle"
+            type="button"
+            aria-label="Database setup"
+            title="Database setup"
+            aria-controls="sync-setup"
+            aria-expanded="false"
+            hidden
+          >
+            <i class="fas fa-cog" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+      <div
+        id="sync-summary"
+        class="sync-summary"
+        role="status"
+        aria-live="polite"
+      >
+        Checking sync…
+      </div>
+      <div id="sync-connected" hidden>
+        <button class="quiet-button" id="create-link" type="button">
+          <i class="fas fa-plus" aria-hidden="true"></i>Add a device
+        </button>
+        <div id="device-link-panel" class="device-link-panel" hidden>
+          <label for="generated-connection-code" class="field-label"
+            >Connection code</label
+          >
+          <div class="sync-code-row">
+            <input
+              class="text-input"
+              id="generated-connection-code"
+              readonly
+              aria-label="Temporary connection code"
+              spellcheck="false"
+            />
+            <button
+              class="quiet-button"
+              id="copy-connection-code"
+              type="button"
+              aria-label="Copy connection code"
+              title="Copy code"
+            >
+              <i class="far fa-copy" aria-hidden="true"></i>
+            </button>
+          </div>
+          <p class="field-note" id="connection-code-expiry">
+            One device · expires in 10 minutes
+          </p>
+        </div>
+      </div>
+      <div id="sync-setup" hidden>
+        <form id="connect-device-form" class="sync-connect-form">
+          <label class="visually-hidden" for="connection-code"
+            >Connection code</label
+          >
+          <input
+            class="text-input"
+            type="text"
+            id="connection-code"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste a connection code"
+            required
+          />
+          <button
+            class="primary-button"
+            id="connect-device"
+            type="submit"
+            disabled
+          >
+            Connect
+          </button>
+        </form>
+        <details class="sync-project-setup" id="project-settings">
+          <summary id="project-setup-label">First device setup</summary>
+          <form id="project-setup-form" class="connection-body">
+            <div class="connection-fields" id="project-fields">
+              <div class="connection-field">
+                <label for="supabase_project_id" class="field-label"
+                  >Project ID</label
+                ><input
+                  class="text-input"
+                  id="supabase_project_id"
+                  autocomplete="off"
+                  spellcheck="false"
+                  required
+                />
+              </div>
+              <div class="connection-field">
+                <label for="supabase_api_key" class="field-label"
+                  >Publishable key</label
+                ><input
+                  class="text-input"
+                  type="password"
+                  id="supabase_api_key"
+                  autocomplete="off"
+                  placeholder="sb_publishable_…"
+                  required
+                />
+              </div>
+            </div>
+            <p class="field-note">
+              Enable Anonymous Sign-Ins in Supabase; run setup SQL.
+            </p>
+            <div class="toolbar-actions">
+              <button
+                class="primary-button"
+                id="start-sync"
+                type="submit"
+                disabled
+              >
+                Start syncing
+              </button>
+              <button
+                class="quiet-button compact-button"
+                id="setup-sql"
+                type="button"
+              >
+                Copy setup SQL
+              </button>
+            </div>
+          </form>
+        </details>
+      </div>
+      <p
+        class="connection-status"
+        id="sync-feedback"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </section>
+    <section
+      class="surface-card settings-card"
+      aria-labelledby="sources-heading"
+    >
+      <div class="section-heading">
+        <div>
+          <h2 id="sources-heading">Sources</h2>
+        </div>
+        <div class="toolbar-actions">
+          <button
+            class="quiet-button compact-button"
+            id="refresh-sources"
+            type="button"
+            aria-label="Check sources"
+            title="Check sources"
+          >
+            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>Check
+            sources
+          </button>
+          <button class="quiet-button" id="sync-all">
+            <i class="fas fa-arrows-rotate" aria-hidden="true"></i>Sync all
+            sources
+          </button>
+        </div>
+      </div>
+      <div class="source-row">
+        <span class="source-icon"
+          ><i class="fas fa-globe" aria-hidden="true"></i
+        ></span>
+        <div>
+          <h3>Browser history</h3>
+          <dl class="source-metrics" id="source-history-metrics" hidden>
+            <div>
+              <dt>Total</dt>
+              <dd data-count="totalCount">—</dd>
+            </div>
+            <div>
+              <dt>Saved</dt>
+              <dd data-count="existingCount">—</dd>
+            </div>
+            <div>
+              <dt>New</dt>
+              <dd data-count="newCount">—</dd>
+            </div>
+          </dl>
+          <p class="source-status" id="source-history-status" role="status"></p>
+        </div>
+        <button class="quiet-button" id="sync-history">Sync browser</button>
+      </div>
+      <div class="source-row">
+        <span class="source-icon youtube"
+          ><i class="fab fa-youtube" aria-hidden="true"></i
+        ></span>
+        <div>
+          <h3>YouTube history</h3>
+          <dl class="source-metrics" id="source-youtube-metrics" hidden>
+            <div>
+              <dt>Total</dt>
+              <dd data-count="totalCount">—</dd>
+            </div>
+            <div>
+              <dt>Saved</dt>
+              <dd data-count="existingCount">—</dd>
+            </div>
+            <div>
+              <dt>New</dt>
+              <dd data-count="newCount">—</dd>
+            </div>
+          </dl>
+          <p class="source-status" id="source-youtube-status" role="status"></p>
+        </div>
+        <button class="quiet-button" id="sync-youtube">Sync YouTube</button>
+      </div>
+      <div class="source-row">
+        <span class="source-icon likes"
+          ><i class="far fa-heart" aria-hidden="true"></i
+        ></span>
+        <div>
+          <h3>Liked videos</h3>
+          <dl class="source-metrics" id="source-likes-metrics" hidden>
+            <div>
+              <dt>Total</dt>
+              <dd data-count="totalCount">—</dd>
+            </div>
+            <div>
+              <dt>Saved</dt>
+              <dd data-count="existingCount">—</dd>
+            </div>
+            <div>
+              <dt>New</dt>
+              <dd data-count="newCount">—</dd>
+            </div>
+          </dl>
+          <p class="source-status" id="source-likes-status" role="status"></p>
+        </div>
+        <button class="quiet-button" id="sync-youtube-likes">Sync likes</button>
+      </div>
+    </section>
+    <section
+      class="surface-card settings-card duration-setup"
+      aria-labelledby="duration-heading"
+    >
+      <div class="section-heading">
+        <div>
+          <h2 id="duration-heading">Video durations</h2>
+        </div>
+      </div>
+      <form
+        data-duration-form
+        title="Estimate past watch time from video lengths"
+      >
+        <label for="duration-api-key" class="field-label"
+          >YouTube Data API key</label
+        >
+        <div class="duration-controls">
+          <input
+            class="text-input"
+            id="duration-api-key"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+          <button type="submit" class="quiet-button">Start</button>
+          <button
+            type="button"
+            class="quiet-button"
+            data-duration-command="pause"
+            disabled
+          >
+            Pause
+          </button>
+          <button
+            type="button"
+            class="quiet-button"
+            data-duration-command="forget"
+            disabled
+          >
+            Remove key &amp; cache
+          </button>
+        </div>
+        <div class="duration-api-link">
+          <a
+            href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Enable YouTube Data API</a
+          >
+        </div>
+        <p data-duration-status role="status">Loading…</p>
+      </form>
+    </section>
+    <section
+      class="surface-card settings-card"
+      aria-labelledby="backup-heading"
+    >
+      <div class="section-heading">
+        <div>
+          <h2 id="backup-heading">Backup</h2>
+        </div>
+      </div>
+      <div class="toolbar-actions">
+        <button class="quiet-button" id="idDatabase_Export">
+          <i class="fas fa-download" aria-hidden="true"></i>Export history</button
+        ><label class="quiet-button import-control"
+          ><span id="idDatabase_Import"
+            ><i class="fas fa-upload" aria-hidden="true"></i>Import
+            history</span
+          ><input
+            type="file"
+            accept=".json,.database"
+            aria-label="Import history file"
+        /></label>
+      </div>
+    </section>
+    <section
+      class="surface-card settings-card"
+      aria-labelledby="reconciliation-heading"
+      data-reconciliation
+    >
+      <div class="section-heading">
+        <div>
+          <h2 id="reconciliation-heading">Import cleanup</h2>
+        </div>
+      </div>
+      <div class="toolbar-actions">
+        <button class="quiet-button" data-reconcile="preview">Preview</button>
+        <button class="quiet-button" data-reconcile-copy>Copy SQL</button>
+      </div>
+      <div data-reconcile-preview></div>
+      <p data-reconcile-status role="status"></p>
+    </section>
+  </div>
+</section>

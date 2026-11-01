@@ -54,12 +54,12 @@ export class Logger {
   formatArgs(...args) {
     return args.map((arg) => {
       if (arg instanceof Error || arg instanceof DOMException) {
-        return {
+        return JSON.stringify({
           name: arg.name,
           message: arg.message,
           code: arg.code,
           stack: arg.stack,
-        };
+        });
       }
       // Handle plain objects and other types that would display as [object Object]
       if (

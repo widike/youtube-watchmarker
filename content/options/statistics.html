@@ -1,0 +1,27 @@
+<section
+  id="panel-statistics"
+  class="app-panel"
+  aria-labelledby="statistics-heading"
+  hidden
+>
+  <div class="page-heading">
+    <div>
+      <h1 id="statistics-heading">Statistics</h1>
+    </div>
+    <button type="button" class="quiet-button" data-stats-refresh>
+      <i class="fas fa-arrows-rotate" aria-hidden="true"></i>Refresh
+    </button>
+  </div>
+  <div class="page-toolbar stats-toolbar">
+    <div
+      class="segmented-control"
+      data-stats-periods
+      role="group"
+      aria-label="Statistics period"
+    ></div>
+    <span data-stats-status role="status" class="stats-update"></span>
+  </div>
+  <div class="section-stack" data-stats-content>
+    <p class="stats-empty">Loading…</p>
+  </div>
+</section>

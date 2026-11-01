@@ -1,317 +1,233 @@
-// @ts-check
-
 import { clearButtonBusy, setButtonBusy } from "../../ui/button-state.js";
 
-const STATUS_ICON_CLASSES = {
-  secondary: "fas fa-info-circle",
-  info: "fas fa-info-circle",
-  success: "fas fa-check-circle",
-  warning: "fas fa-exclamation-triangle",
-  danger: "fas fa-times-circle",
-};
-
 export class ProviderController {
-  constructor({ client, feedback, elements, onDataChanged }) {
-    this.client = client;
-    this.feedback = feedback;
-    this.elements = elements;
-    this.onDataChanged = onDataChanged;
+  constructor({ client, elements, onDataChanged }) {
+    Object.assign(this, { client, elements, onDataChanged });
+    this.connected = false;
+    this.busy = false;
   }
 
   bindEvents() {
-    this.elements.providerIndexedDB.addEventListener("change", () => {
-      void this.switchProvider("indexeddb");
+    const e = this.elements;
+    e.connectDeviceForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void this.connectDevice("code");
     });
-
-    this.elements.providerSupabase.addEventListener("change", () => {
-      void this.switchProvider("supabase");
+    e.projectSetupForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void this.connectDevice("project");
     });
-
-    this.elements.enableAutoSync.addEventListener("change", (event) => {
-      void this.toggleAutoSync(event.target.checked);
+    e.syncSetupToggle.addEventListener("click", () => {
+      this.showSetup = !this.showSetup;
+      e.syncSetup.hidden = !this.showSetup;
+      e.projectSetup.open = this.showSetup;
+      e.syncSetupToggle.setAttribute("aria-expanded", String(this.showSetup));
     });
-
-    this.elements.saveSupabaseCredentialsButton.addEventListener(
+    for (const input of [
+      e.connectionCode,
+      e.supabaseProjectId,
+      e.supabaseApiKey,
+    ])
+      input.addEventListener("input", () => this.updateButtons());
+    e.setupSqlButton.addEventListener("click", () => void this.copySetupSql());
+    e.createLinkButton.addEventListener(
       "click",
-      () => {
-        void this.saveSupabaseCredentials();
-      },
+      () => void this.createConnectionCode(),
     );
-    this.elements.testSupabaseButton.addEventListener("click", () => {
-      void this.testSupabaseConnection();
-    });
+    e.copyConnectionCodeButton.addEventListener(
+      "click",
+      () => void this.copyConnectionCode(),
+    );
+    this.poll = setInterval(() => void this.updateProviderStatus(), 5000);
+    window.addEventListener(
+      "pagehide",
+      () => {
+        clearInterval(this.poll);
+        this.clearConnectionCode();
+      },
+      { once: true },
+    );
+    this.updateButtons();
+  }
 
-    this.elements.copySqlButton.addEventListener("click", () => {
-      void this.copySqlToClipboard();
-    });
+  updateButtons() {
+    const e = this.elements;
+    e.connectDeviceButton.disabled =
+      this.busy || !e.connectionCode.value.trim();
+    e.startSyncButton.disabled =
+      this.busy ||
+      !e.supabaseProjectId.value.trim() ||
+      !e.supabaseApiKey.value.trim();
+    e.createLinkButton.disabled = this.busy;
   }
 
   async updateProviderStatus() {
+    const e = this.elements;
     try {
-      const [providerResponse, autoSyncResult] = await Promise.all([
-        this.client.sendMessage({ action: "database-provider-status" }),
-        chrome.storage.sync.get(["auto_sync_enabled"]),
-      ]);
-
-      const providerType = providerResponse?.status?.type || "indexeddb";
-      this.elements.providerIndexedDB.checked = providerType === "indexeddb";
-      this.elements.providerSupabase.checked = providerType === "supabase";
-      this.elements.enableAutoSync.checked =
-        autoSyncResult.auto_sync_enabled || false;
-      this.elements.supabaseConfig.classList.toggle(
-        "d-none",
-        providerType !== "supabase",
-      );
-
-      if (providerType === "supabase") {
-        await this.loadSupabaseConfig();
-      }
-    } catch (error) {
-      this.feedback.error(`Failed to load provider status: ${error.message}`);
-    }
-  }
-
-  async switchProvider(provider) {
-    try {
-      if (provider === "indexeddb") {
-        this.elements.supabaseConfig.classList.add("d-none");
-        this.hideSetupInstructions();
-        await this.commitProviderChange("indexeddb");
-        return;
-      }
-
-      this.elements.supabaseConfig.classList.remove("d-none");
-      await this.loadSupabaseConfig();
-
-      const status = await this.client.sendMessage({
-        action: "supabase-get-status",
-      });
-      if (!status?.success || !status?.status?.configured) {
-        this.updateSupabaseStatus(
-          "secondary",
-          "Enter your credentials and click Save Credentials.",
-        );
-        this.showSetupInstructions();
-        return;
-      }
-
-      if (!status.status.authenticated) {
-        this.updateSupabaseStatus(
-          "secondary",
-          "The saved login is no longer valid. Enter your credentials and save again.",
-        );
-        return;
-      }
-
-      this.updateSupabaseStatus("info", "Testing saved credentials...");
-      const testResponse = await this.client.sendMessage({
-        action: "supabase-test",
-      });
-      if (!testResponse?.success) {
-        throw new Error(testResponse?.error || "Saved credentials failed");
-      }
-
-      const tableExists = await this.checkTableExists();
-      if (!tableExists) {
-        this.updateSupabaseStatus(
-          "warning",
-          "Connection successful, but the table setup is required before Supabase can be enabled.",
-        );
-        this.showSetupInstructions();
-        return;
-      }
-
-      await this.commitProviderChange("supabase");
-      this.updateSupabaseStatus(
-        "success",
-        "Connected to Supabase. Table is ready.",
-      );
-      this.hideSetupInstructions();
-    } catch (error) {
-      this.feedback.error(`Provider switch failed: ${error.message}`);
-      this.elements.providerIndexedDB.checked = provider !== "indexeddb";
-      this.elements.providerSupabase.checked = provider !== "supabase";
-    }
-  }
-
-  async commitProviderChange(provider) {
-    const response = await this.client.sendMessage({
-      action: "database-provider-switch",
-      provider,
-    });
-
-    if (!response?.success) {
-      throw new Error(response?.error || "Provider switch failed");
-    }
-
-    this.feedback.success(
-      `Switched to ${provider === "indexeddb" ? "Local Storage" : "Supabase"}`,
-    );
-    await this.onDataChanged();
-  }
-
-  async toggleAutoSync(isEnabled) {
-    try {
-      await chrome.storage.sync.set({ auto_sync_enabled: isEnabled });
       const response = await this.client.sendMessage({
-        action: isEnabled ? "sync-manager-start" : "sync-manager-stop",
+        action: "database-provider-status",
       });
-
-      if (!response?.success) {
-        throw new Error(response?.error || "Auto sync update failed");
+      if (!response?.success)
+        throw new Error(response?.error || "Status unavailable");
+      const status = response.status;
+      this.connected = Boolean(status.configured);
+      e.syncSetup.hidden = this.connected && !this.showSetup;
+      e.syncSetupToggle.hidden = !this.connected;
+      e.connectDeviceForm.hidden = this.connected;
+      e.projectFields.hidden = this.connected;
+      e.startSyncButton.hidden = this.connected;
+      e.projectSetupLabel.textContent = this.connected
+        ? "Database setup"
+        : "First device setup";
+      e.syncConnected.hidden = !this.connected;
+      e.syncDatabaseButton.hidden = !this.connected;
+      e.syncDatabaseButton.disabled = !this.connected;
+      e.syncSummary.classList.toggle("sync-attention", Boolean(status.error));
+      let message = "Local only";
+      if (this.connected) {
+        if (status.error) message = `Sync paused · ${status.error}`;
+        else if (status.pending || status.inProgress) {
+          const pending = Number(status.pending) || 0;
+          message = pending
+            ? `Syncing · ${pending.toLocaleString()} remaining`
+            : "Syncing…";
+        } else if (status.lastSuccess)
+          message = `Up to date · ${new Date(status.lastSuccess).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+        else message = "Connected";
       }
-
-      this.feedback.success(
-        `Automatic synchronization ${isEnabled ? "enabled" : "disabled"}`,
-      );
+      e.syncSummary.textContent = message;
+      if (!this.connected) this.clearConnectionCode();
+      else if (this.linkExpiresAt && Date.now() >= this.linkExpiresAt) {
+        this.clearConnectionCode();
+        e.syncFeedback.textContent = "Code expired.";
+      }
+      if (this.loaded && status.lastAttempt !== this.lastAttempt)
+        await this.onDataChanged();
+      this.lastAttempt = status.lastAttempt;
+      this.loaded = true;
     } catch (error) {
-      this.elements.enableAutoSync.checked = !isEnabled;
-      this.feedback.error(`Automatic synchronization failed: ${error.message}`);
+      e.syncSummary.textContent = `Sync status unavailable · ${error.message}`;
     }
   }
 
-  getSupabaseCredentialInput() {
-    const projectId = this.elements.supabaseProjectId.value.trim();
-    const publishableKey = this.elements.supabaseApiKey.value.trim();
-    if (!projectId || !publishableKey) {
-      throw new Error("Enter both the Supabase project ID and publishable key");
-    }
-    const email = this.elements.supabaseEmail.value.trim();
-    const password = this.elements.supabasePassword.value;
-    if (!email || !password) {
-      throw new Error("Email and password are required");
-    }
-    return {
-      configuration: { projectId, publishableKey },
-      email,
-      password,
-    };
-  }
-
-  async saveSupabaseCredentials() {
-    const button = this.elements.saveSupabaseCredentialsButton;
+  async connectDevice(mode) {
+    if (this.busy) return;
+    const e = this.elements;
+    const button = mode === "code" ? e.connectDeviceButton : e.startSyncButton;
+    this.busy = true;
+    e.syncFeedback.textContent = "";
+    setButtonBusy(button, "Connecting…");
+    this.updateButtons();
     try {
-      const credentials = this.getSupabaseCredentialInput();
-      setButtonBusy(button, "Saving...");
+      const request =
+        mode === "code"
+          ? { connectionCode: e.connectionCode.value.trim() }
+          : {
+              configuration: {
+                projectId: e.supabaseProjectId.value.trim(),
+                publishableKey: e.supabaseApiKey.value.trim(),
+              },
+            };
       const response = await this.client.sendMessage({
-        action: "supabase-save-credentials",
-        ...credentials,
+        action: "supabase-connect",
+        ...request,
       });
-      if (!response?.success) {
-        throw new Error(response?.error || "Credentials could not be saved");
-      }
-
-      this.elements.supabaseApiKey.value = "";
-      this.elements.supabasePassword.value = "";
-      await this.loadSupabaseConfig();
-      this.feedback.success("Supabase credentials saved securely");
-      await this.switchProvider("supabase");
+      if (!response?.success)
+        throw new Error(response?.error || "Could not connect");
+      e.connectionCode.value = "";
+      e.supabaseApiKey.value = "";
+      e.supabaseProjectId.value = "";
+      e.projectSetup.open = false;
+      e.syncFeedback.textContent = "";
+      await this.updateProviderStatus();
+      await this.onDataChanged();
     } catch (error) {
-      this.feedback.error(
-        `Saving Supabase credentials failed: ${error.message}`,
-      );
+      e.syncFeedback.textContent = error.message;
     } finally {
       clearButtonBusy(button);
+      this.busy = false;
+      this.updateButtons();
+      if (this.connected) e.createLinkButton.focus();
     }
   }
 
-  async testSupabaseConnection() {
+  clearConnectionCode() {
+    this.linkExpiresAt = 0;
+    this.elements.deviceLinkPanel.hidden = true;
+    this.elements.generatedConnectionCode.value = "";
+  }
+
+  async createConnectionCode() {
+    if (this.busy) return;
+    const e = this.elements;
+    this.busy = true;
+    const startedAt = Date.now();
+    this.clearConnectionCode();
+    e.syncFeedback.textContent = "";
+    setButtonBusy(e.createLinkButton, "Creating code…");
+    this.updateButtons();
     try {
-      setButtonBusy(this.elements.testSupabaseButton, "Testing...");
-
       const response = await this.client.sendMessage({
-        action: "supabase-test",
+        action: "supabase-create-link",
       });
-      if (!response?.success) {
-        throw new Error(response?.error || "Connection test failed");
-      }
-
-      const tableExists = await this.checkTableExists();
-      if (tableExists) {
-        this.updateSupabaseStatus(
-          "success",
-          "Connection successful. Table is ready.",
-        );
-        this.hideSetupInstructions();
-      } else {
-        this.updateSupabaseStatus(
-          "warning",
-          "Connection successful, but the table setup is still required.",
-        );
-        this.showSetupInstructions();
-      }
+      if (!response?.success)
+        throw new Error(response?.error || "Could not create connection code");
+      this.linkExpiresAt = startedAt + 10 * 60_000;
+      e.generatedConnectionCode.value = response.connectionCode;
+      e.deviceLinkPanel.hidden = false;
+      e.connectionCodeExpiry.textContent = `One device · valid until ${new Date(this.linkExpiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      await this.copyConnectionCode();
     } catch (error) {
-      this.updateSupabaseStatus(
-        "danger",
-        `Connection failed: ${error.message}`,
-      );
-      await this.loadSupabaseConfig();
+      e.syncFeedback.textContent = error.message;
     } finally {
-      clearButtonBusy(this.elements.testSupabaseButton);
+      clearButtonBusy(e.createLinkButton);
+      this.busy = false;
+      this.updateButtons();
     }
   }
 
-  async loadSupabaseConfig() {
+  async copyConnectionCode() {
+    const e = this.elements;
+    if (!this.linkExpiresAt || Date.now() >= this.linkExpiresAt) {
+      this.clearConnectionCode();
+      e.syncFeedback.textContent = "Code expired.";
+      return;
+    }
     try {
-      const response = await this.client.sendMessage({
-        action: "supabase-get-credentials",
-      });
-      if (!response?.success || !response.credentials) {
-        this.elements.currentConfig.classList.add("d-none");
-        this.elements.testSupabaseButton.classList.add("d-none");
-        this.elements.testSupabaseButton.disabled = true;
-        return;
-      }
-
-      this.elements.currentProjectId.textContent =
-        response.credentials.projectId || "-";
-      this.elements.currentApiKey.textContent =
-        response.credentials.publishableKey || "-";
-      this.elements.currentAuthUser.textContent = response.credentials
-        .authenticated
-        ? response.credentials.userEmail || "Signed in"
-        : "Not signed in";
-      this.elements.currentConfig.classList.remove("d-none");
-      this.elements.testSupabaseButton.classList.remove("d-none");
-      this.elements.testSupabaseButton.disabled =
-        !response.credentials.authenticated;
-    } catch (_error) {
-      this.elements.currentConfig.classList.add("d-none");
-      this.elements.testSupabaseButton.classList.add("d-none");
-      this.elements.testSupabaseButton.disabled = true;
+      await navigator.clipboard.writeText(e.generatedConnectionCode.value);
+      e.syncFeedback.textContent = "Code copied";
+    } catch {
+      e.generatedConnectionCode.focus();
+      e.generatedConnectionCode.select();
+      e.syncFeedback.textContent = "Copy the selected code manually.";
     }
   }
 
-  async copySqlToClipboard() {
+  async copySetupSql() {
     try {
-      const sqlCode =
-        document.getElementById("supabase-sql-code")?.textContent || "";
-      await navigator.clipboard.writeText(sqlCode);
-      this.feedback.success("SQL code copied to clipboard");
-    } catch (_error) {
-      this.feedback.error("Failed to copy SQL code");
+      const migrations = [
+        "20261101000000_durable_history_sync.sql",
+        "20261101010000_watch_events.sql",
+        "20261101020000_device_linking.sql",
+        "20261101030000_import_reconciliation.sql",
+        "20261101040000_playback_time_sync.sql",
+        "20261101050000_anonymous_access_hardening.sql",
+      ];
+      const sql = await Promise.all(
+        migrations.map(async (name) => {
+          const response = await fetch(
+            chrome.runtime.getURL(`supabase/migrations/${name}`),
+          );
+          if (!response.ok)
+            throw new Error("Database setup SQL could not be loaded");
+          return response.text();
+        }),
+      );
+      await navigator.clipboard.writeText(sql.join("\n\n"));
+      this.elements.syncFeedback.textContent =
+        "SQL copied. Run in Supabase SQL Editor.";
+    } catch (error) {
+      this.elements.syncFeedback.textContent = error.message;
     }
-  }
-
-  async checkTableExists() {
-    const response = await this.client.sendMessage({
-      action: "supabase-check-table",
-    });
-    return Boolean(response?.success && response.tableExists);
-  }
-
-  updateSupabaseStatus(level, text) {
-    this.elements.supabaseStatus.className = `alert alert-${level} mt-3`;
-    this.elements.supabaseStatusIcon.innerHTML = `<i class="${STATUS_ICON_CLASSES[level] || STATUS_ICON_CLASSES.info}"></i>`;
-    this.elements.supabaseStatusText.textContent = text;
-    this.elements.supabaseStatus.classList.remove("d-none");
-  }
-
-  showSetupInstructions() {
-    this.elements.supabaseSetupInstructions.classList.remove("d-none");
-  }
-
-  hideSetupInstructions() {
-    this.elements.supabaseSetupInstructions.classList.add("d-none");
   }
 }

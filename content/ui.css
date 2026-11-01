@@ -1,0 +1,8 @@
+/* Every extension surface starts with the same design system. */
+@import url("theme.css");
+@import url("ui-base.css");
+@import url("ui-components.css");
+@import url("ui-layout.css");
+@import url("ui-select.css");
+@import url("ui-search.css");
+@import url("ui-accessibility.css");

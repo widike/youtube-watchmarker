@@ -1,0 +1,200 @@
+@layer variants {
+  body.popup {
+    --radius-card: var(--radius-control);
+    width: 600px;
+    height: 580px;
+    overflow: hidden;
+  }
+  .popup-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .popup-header .brand {
+    margin: 0;
+    font-size: 19px;
+  }
+  .popup-header .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+  .popup-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .popup-actions a {
+    text-decoration: none;
+  }
+  .popup .icon-button {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  .popup-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 8px 12px 0;
+  }
+  .popup-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .popup-heading h1 {
+    font-size: 20px;
+    line-height: 1.25;
+    font-weight: 650;
+    letter-spacing: -0.7px;
+  }
+  .popup .search-box {
+    flex-shrink: 0;
+    padding: 3px 4px 3px 10px;
+    gap: 10px;
+  }
+  .popup .search-box input {
+    font-size: 12px;
+    padding-block: 5px;
+  }
+  .popup .search-submit {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+  .popup-footer #result-count {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .popup .history-results {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+    margin: 0 -8px;
+    padding: 8px;
+    overscroll-behavior: contain;
+  }
+  .popup .history-results:focus-visible {
+    outline-offset: -3px;
+    border-radius: var(--radius-control);
+  }
+  .popup .day-heading {
+    padding: 9px 0 6px;
+    gap: 10px;
+  }
+  .popup .day-heading h3 {
+    font-size: 10px;
+    font-weight: 550;
+    color: var(--muted);
+  }
+  .popup .day-heading > span {
+    display: none;
+  }
+  .popup .video-list {
+    gap: 4px;
+  }
+  .popup .video-link {
+    min-height: 72px;
+    gap: 10px;
+    padding: 6px 36px 6px 6px;
+    border-radius: var(--radius-control);
+  }
+  .popup .video-link:has(.video-thumbnail) {
+    align-items: stretch;
+    padding: 0 36px 0 0;
+    overflow: hidden;
+  }
+  .popup .video-thumbnail {
+    width: 104px;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+  .popup .video-link:has(.video-thumbnail) .video-copy {
+    justify-content: center;
+    padding-block: 6px;
+  }
+  .popup .video-title {
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 550;
+  }
+  .popup .video-copy {
+    gap: 5px;
+  }
+  .popup .video-meta {
+    font-size: 10px;
+    gap: 3px 10px;
+  }
+  .popup .video-meta > span,
+  .popup .video-meta > time {
+    gap: 4px;
+  }
+  .popup-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 5px 12px;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .popup-footer > a {
+    text-decoration: none;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    padding-block: 5px;
+  }
+  .popup-footer > a:hover {
+    text-decoration: underline;
+  }
+  .popup-footer > a > i {
+    margin-left: 6px;
+    font-size: 9px;
+  }
+  .popup .history-empty {
+    padding: 30px 15px;
+    gap: 12px;
+    min-height: 100%;
+  }
+  .popup .history-empty h3 {
+    font-size: 18px;
+  }
+  .popup .history-empty p {
+    font-size: 12px;
+    max-width: 280px;
+  }
+  .popup .empty-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    font-size: 16px;
+  }
+  .popup-feedback {
+    font-size: 11px;
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: 1px solid var(--danger-line);
+    padding: 9px 12px;
+    border-radius: var(--radius-control);
+    margin-top: 12px;
+  }
+}

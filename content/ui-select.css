@@ -1,0 +1,60 @@
+@layer components {
+  :root {
+    --select-chevron-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23646b76' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --select-chevron-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23a6adb6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    --select-chevron: var(--select-chevron-light);
+  }
+
+  :root[data-theme="dark"] {
+    --select-chevron: var(--select-chevron-dark);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      --select-chevron: var(--select-chevron-dark);
+    }
+  }
+
+  select {
+    min-inline-size: 0;
+    min-block-size: var(--control-height);
+    padding: 8px 12px;
+    border: 1px solid var(--control-line);
+    border-radius: var(--radius-control);
+    background-color: var(--surface);
+    color: var(--ink);
+    font-size: var(--font-control);
+  }
+
+  select:where(:not([multiple]):not([size]), :not([multiple])[size="1"]) {
+    appearance: none;
+    padding-inline-end: 36px;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+  }
+
+  select:dir(rtl) {
+    background-position: left 12px center;
+  }
+
+  select option {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  select:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+@layer accessibility {
+  @media (forced-colors: active) {
+    select {
+      appearance: auto;
+      background-image: none;
+    }
+  }
+}

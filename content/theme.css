@@ -1,0 +1,68 @@
+/* Shared by extension pages only; never injected into YouTube. */
+@layer theme, base, components, pages, variants, accessibility;
+
+@layer theme {
+  :root {
+    color-scheme: light dark;
+    --page: light-dark(#f8f9fb, #15181b);
+    --surface: light-dark(#fff, #1d2226);
+    --sidebar: light-dark(#fff, #191d20);
+    --ink: light-dark(#24282e, #eef0f2);
+    --muted: light-dark(#646b76, #a6adb6);
+    --line: light-dark(#e7e9ed, #333a40);
+    --control-line: light-dark(#858c95, #76818a);
+    --soft: light-dark(#f1f3f5, #272e33);
+    --accent: light-dark(#27634d, #a1d6b8);
+    --accent-soft: light-dark(#eaf3ed, #273c31);
+    --accent-hover: light-dark(#1c4c3a, #b8e7cc);
+    --on-accent: light-dark(#fff, #15281e);
+    --red: light-dark(#df5347, #f5897c);
+    --danger: light-dark(#a42732, #ffb3b9);
+    --danger-soft: light-dark(#fff1f2, #382429);
+    --danger-line: light-dark(#ce7480, #b16c77);
+    --shadow: 0 8px 28px light-dark(#18201b14, #0005);
+    --radius-control: 8px;
+    --radius-card: 12px;
+    --font-body: 14px;
+    --font-control: 13px;
+    --font-small: 12px;
+    --font-caption: 11px;
+    --font-section: 16px;
+    --font-page: 32px;
+    --control-height: 40px;
+    --card-padding: 24px;
+    --sidebar-width: 242px;
+    --page-padding: 40px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+  @media (max-width: 1100px) {
+    :root {
+      --sidebar-width: 210px;
+      --page-padding: 28px;
+    }
+  }
+  @media (max-width: 800px) {
+    :root {
+      --page-padding: 24px;
+    }
+  }
+  @media (max-width: 600px) {
+    :root {
+      --card-padding: 16px;
+      --page-padding: 16px;
+      --font-page: 28px;
+    }
+  }
+}

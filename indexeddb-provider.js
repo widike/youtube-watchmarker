@@ -1,3 +1,7 @@
+import { isDeleted } from "./history-records.js";
+import { deleteVideo, saveVideos } from "./history-storage.js";
+import { recordPlayback } from "./history-playback.js";
+import { readVideos } from "./history-event-storage.js";
 // @ts-check
 
 /**
@@ -64,7 +68,7 @@ export class IndexedDBProvider {
     }
   }
 
-  async getVideo(videoId) {
+  async getVideo(videoId, { includeDeleted = false } = {}) {
     // Update connection status
     this.updateConnectionStatus();
 
@@ -72,22 +76,10 @@ export class IndexedDBProvider {
       throw new Error("Database not connected");
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readonly",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-      const request = store.get(videoId);
-
-      request.onsuccess = () => {
-        resolve(request.result || null);
-      };
-
-      request.onerror = () => {
-        reject(new Error("Failed to get video"));
-      };
+    const video = await readVideos(this.databaseManager.database, {
+      id: videoId,
     });
+    return !includeDeleted && isDeleted(video) ? null : video;
   }
 
   async putVideo(video) {
@@ -98,54 +90,23 @@ export class IndexedDBProvider {
       throw new Error("Database not connected");
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readwrite",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-
-      // Check if video exists
-      const getRequest = store.get(video.strIdent);
-
-      getRequest.onsuccess = () => {
-        const existingVideo = getRequest.result;
-        let videoToStore = video;
-
-        if (existingVideo) {
-          // Merge with existing data, keeping the latest timestamp
-          videoToStore = {
-            ...existingVideo,
-            ...video,
-            intTimestamp: Math.max(
-              existingVideo.intTimestamp || 0,
-              video.intTimestamp || 0,
-            ),
-            intCount: Math.max(
-              existingVideo.intCount || 1,
-              video.intCount || 1,
-            ),
-          };
-        }
-
-        const putRequest = store.put(videoToStore);
-
-        putRequest.onsuccess = () => {
-          resolve(true);
-        };
-
-        putRequest.onerror = () => {
-          reject(new Error("Failed to put video"));
-        };
-      };
-
-      getRequest.onerror = () => {
-        reject(new Error("Failed to check existing video"));
-      };
+    return saveVideos(this.databaseManager.database, [video], {
+      source: true,
     });
   }
 
-  async getAllVideos() {
+  async recordPlayback(videoId, title, playbackId) {
+    this.updateConnectionStatus();
+    if (!this.isConnected) throw new Error("Database not connected");
+    return recordPlayback(
+      this.databaseManager.database,
+      videoId,
+      title,
+      playbackId,
+    );
+  }
+
+  async getAllVideos({ includeDeleted = false } = {}) {
     // Update connection status
     this.updateConnectionStatus();
 
@@ -153,22 +114,8 @@ export class IndexedDBProvider {
       throw new Error("Database not connected");
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readonly",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-      const request = store.getAll();
-
-      request.onsuccess = () => {
-        resolve(request.result || []);
-      };
-
-      request.onerror = () => {
-        reject(new Error("Failed to get all videos"));
-      };
-    });
+    const videos = await readVideos(this.databaseManager.database);
+    return videos.filter((video) => includeDeleted || !isDeleted(video));
   }
 
   async getVideoCount() {
@@ -176,68 +123,17 @@ export class IndexedDBProvider {
       throw new Error("Database not connected");
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readonly",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-      const request = store.count();
-
-      request.onsuccess = () => {
-        resolve(request.result || 0);
-      };
-
-      request.onerror = () => {
-        reject(new Error("Failed to get video count"));
-      };
-    });
+    return (await this.getAllVideos()).length;
   }
 
   async clearAllVideos() {
-    if (!this.isConnected) {
-      throw new Error("Database not connected");
-    }
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readwrite",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-      const request = store.clear();
-
-      request.onsuccess = () => {
-        resolve(true);
-      };
-
-      request.onerror = () => {
-        reject(new Error("Failed to clear all videos"));
-      };
-    });
+    throw new Error(
+      "History is retained. Export a backup instead of resetting it.",
+    );
   }
 
   async deleteVideo(videoId) {
-    if (!this.isConnected) {
-      throw new Error("Database not connected");
-    }
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readwrite",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-      const request = store.delete(videoId);
-
-      request.onsuccess = () => {
-        resolve(true);
-      };
-
-      request.onerror = () => {
-        reject(new Error("Failed to delete video"));
-      };
-    });
+    return deleteVideo(this.databaseManager.database, videoId);
   }
 
   async importVideos(videos) {
@@ -249,66 +145,7 @@ export class IndexedDBProvider {
       return true;
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.databaseManager.database.transaction(
-        [this.databaseManager.STORE_NAME],
-        "readwrite",
-      );
-      const store = transaction.objectStore(this.databaseManager.STORE_NAME);
-
-      let processed = 0;
-      const total = videos.length;
-
-      const processNext = () => {
-        if (processed >= total) {
-          resolve(true);
-          return;
-        }
-
-        const video = videos[processed];
-
-        // Check if video exists
-        const getRequest = store.get(video.strIdent);
-
-        getRequest.onsuccess = () => {
-          const existingVideo = getRequest.result;
-          let videoToStore = video;
-
-          if (existingVideo) {
-            // Merge with existing data, keeping the latest timestamp
-            videoToStore = {
-              ...existingVideo,
-              ...video,
-              intTimestamp: Math.max(
-                existingVideo.intTimestamp || 0,
-                video.intTimestamp || 0,
-              ),
-              intCount: Math.max(
-                existingVideo.intCount || 1,
-                video.intCount || 1,
-              ),
-            };
-          }
-
-          const putRequest = store.put(videoToStore);
-
-          putRequest.onsuccess = () => {
-            processed++;
-            processNext();
-          };
-
-          putRequest.onerror = () => {
-            reject(new Error(`Failed to import video ${processed + 1}`));
-          };
-        };
-
-        getRequest.onerror = () => {
-          reject(new Error(`Failed to check existing video ${processed + 1}`));
-        };
-      };
-
-      processNext();
-    });
+    return saveVideos(this.databaseManager.database, videos);
   }
 
   async searchVideos(query, limit = 100) {

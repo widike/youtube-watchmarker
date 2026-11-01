@@ -1,210 +1,78 @@
-// @ts-check
-
-/**
- * Settings Manager
- * Manages extension settings and configuration
- */
-
 import { logger } from "./logger.js";
 
-const WATCHMARK_VISUAL_TARGET_SELECTOR =
-  ".youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .ytp-videowall-still-image.youwatch-mark";
-
-function buildWatchmarkVisualRule(declaration) {
-  return `${WATCHMARK_VISUAL_TARGET_SELECTOR} { ${declaration} !important; }`;
-}
-
-/**
- * Settings configuration
- */
-const SETTINGS_CONFIG = {
-  integers: [{ key: "databaseSize", defaultValue: 0 }],
-  booleans: [
-    { key: "idCondition_Brownav", defaultValue: true },
-    { key: "idCondition_Browhist", defaultValue: true },
-    { key: "idCondition_Youprog", defaultValue: true },
-    { key: "idCondition_Youbadge", defaultValue: true },
-    { key: "idCondition_Youhist", defaultValue: true },
-    { key: "idCondition_Yourating", defaultValue: true },
-    { key: "idVisualization_Fadeout", defaultValue: true },
-    { key: "idVisualization_Grayout", defaultValue: true },
-    { key: "idVisualization_Showbadge", defaultValue: true },
-    { key: "idVisualization_Showdate", defaultValue: true },
-    { key: "idVisualization_Hideprogress", defaultValue: true },
-  ],
-  stylesheets: [
-    {
-      key: "stylesheet_Fadeout",
-      defaultValue: buildWatchmarkVisualRule("opacity: 0.34"),
-    },
-    {
-      key: "stylesheet_Grayout",
-      defaultValue: buildWatchmarkVisualRule("filter: grayscale(1)"),
-    },
-    {
-      key: "stylesheet_Showbadge",
-      defaultValue:
-        '.youwatch-mark::after { align-items:center; backdrop-filter:blur(8px); background:rgb(15 15 15 / 0.82); border:1px solid rgb(255 255 255 / 0.08); border-radius:999px; color:#fff; content:"WATCHED"; display:inline-flex; font:500 11px/1.2 Roboto, Arial, sans-serif; inset-inline-start:8px; inset-block-start:8px; letter-spacing:0.02em; padding:5px 8px; position:absolute; text-transform:uppercase; z-index:1; }',
-    },
-    {
-      key: "stylesheet_Showdate",
-      defaultValue:
-        '.youwatch-mark::after { content:"WATCHED" attr(watchdate); white-space:nowrap; }',
-    },
-    {
-      key: "stylesheet_Hideprogress",
-      defaultValue:
-        "ytd-thumbnail-overlay-resume-playback-renderer, ytm-thumbnail-overlay-resume-playback-renderer { display:none !important; }",
-    },
-  ],
+const VISUAL_TARGET =
+  '.youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .youwatch-mark .ytp-ce-covering-image, .youwatch-mark .ytp-ce-covering-overlay[style*="background-image"], .youwatch-mark .ytp-autonav-endscreen-upnext-thumbnail';
+const stylesheets = {
+  Fadeout: `${VISUAL_TARGET} { opacity: 0.34 !important; }`,
+  Grayout: `${VISUAL_TARGET} { filter: grayscale(1) !important; }`,
+  Showbadge: `
+    .ytp-autonav-endscreen-link-container.youwatch-mark { position:relative; }
+    .youwatch-mark::after {
+      align-items:center;
+      backdrop-filter:blur(8px);
+      background:rgb(15 15 15 / 0.82);
+      border:1px solid rgb(255 255 255 / 0.08);
+      border-radius:999px;
+      box-sizing:border-box;
+      color:#fff;
+      content:"WATCHED" var(--youwatch-count, "") var(--youwatch-date, "");
+      display:inline-flex;
+      font:500 11px/1.2 Roboto, Arial, sans-serif;
+      inset:8px auto auto 8px;
+      width:max-content;
+      height:auto;
+      max-width:calc(100% - 16px);
+      letter-spacing:0.02em;
+      padding:5px 8px;
+      pointer-events:none;
+      position:absolute;
+      text-transform:uppercase;
+      white-space:nowrap;
+      z-index:20;
+    }
+  `,
+  Showdate: ".youwatch-mark::after { --youwatch-date:attr(watchdate); }",
+  Showcount: ".youwatch-mark::after { --youwatch-count:attr(watchcount); }",
+  Hideprogress:
+    ".youwatch-mark :is(ytd-thumbnail-overlay-resume-playback-renderer, ytm-thumbnail-overlay-resume-playback-renderer) { display:none !important; }",
+};
+const defaults = {
+  idCondition_Brownav: true,
+  idCondition_Browhist: true,
+  idCondition_Youprog: true,
+  idCondition_Youhist: true,
+  idCondition_Yourating: true,
+  ...Object.fromEntries(
+    Object.entries(stylesheets).flatMap(([name, css]) => [
+      [`stylesheet_${name}`, css],
+      [`idVisualization_${name}`, true],
+    ]),
+  ),
 };
 
-/**
- * Settings Manager class
- */
 export class SettingsManager {
-  constructor() {
-    this.isInitialized = false;
-    this.logger = logger;
-  }
-
-  /**
-   * Initialize settings with defaults
-   */
   async initialize() {
-    if (this.isInitialized) {
-      return;
-    }
-
-    try {
-      this.logger.info("Initializing settings...");
-
-      // Initialize all setting types in parallel
-      await Promise.all([
-        this.initializeSettingsByType(SETTINGS_CONFIG.integers),
-        this.initializeSettingsByType(SETTINGS_CONFIG.booleans),
-        this.initializeSettingsByType(SETTINGS_CONFIG.stylesheets),
-      ]);
-
-      this.isInitialized = true;
-      this.logger.info("Settings initialized successfully");
-    } catch (error) {
-      this.logger.error("Failed to initialize settings:", error);
-      throw error;
-    }
+    if (this.isInitialized) return;
+    const existing = await chrome.storage.sync.get(Object.keys(defaults));
+    const updates = Object.fromEntries(
+      Object.entries(defaults).filter(
+        ([key, value]) =>
+          existing[key] === undefined ||
+          (key.startsWith("stylesheet_") && existing[key] !== value),
+      ),
+    );
+    if (Object.keys(updates).length) await chrome.storage.sync.set(updates);
+    this.isInitialized = true;
+    logger.info("Settings initialized");
   }
 
-  /**
-   * Initialize settings by type from config
-   * Consolidated method that replaces separate integer/boolean/stylesheet init methods
-   * @param {Array<{key: string, defaultValue: any}>} config - Settings configuration array
-   */
-  async initializeSettingsByType(config) {
-    const keys = config.map((s) => s.key);
-    const existing = await chrome.storage.sync.get(keys);
-
-    const toSet = config
-      .filter(({ key }) => existing[key] === undefined)
-      .reduce(
-        (acc, { key, defaultValue }) => ({ ...acc, [key]: defaultValue }),
-        {},
-      );
-
-    if (Object.keys(toSet).length > 0) {
-      await chrome.storage.sync.set(toSet);
-    }
-  }
-
-  /**
-   * Get a setting value
-   * @param {string} key - Setting key
-   * @returns {Promise<any>} Setting value
-   */
   async getSetting(key) {
-    const result = await chrome.storage.sync.get([key]);
-    return result[key];
+    return (await chrome.storage.sync.get(key))[key];
   }
 
-  /**
-   * Set a setting value
-   * @param {string} key - Setting key
-   * @param {any} value - Setting value
-   */
   async setSetting(key, value) {
     await chrome.storage.sync.set({ [key]: value });
-    this.logger.debug(`Setting "${key}" updated to:`, value);
-  }
-
-  /**
-   * Get multiple settings
-   * @param {string[]} keys - Setting keys
-   * @returns {Promise<Object>} Settings object
-   */
-  async getMultipleSettings(keys) {
-    const result = await chrome.storage.sync.get(keys);
-    return result;
-  }
-
-  /**
-   * Set multiple settings
-   * @param {Object} settings - Settings object
-   */
-  async setMultipleSettings(settings) {
-    await chrome.storage.sync.set(settings);
-    this.logger.debug("Updated multiple settings:", Object.keys(settings));
-  }
-
-  /**
-   * Reset settings to defaults
-   */
-  async resetToDefaults() {
-    this.logger.info("Resetting all settings to defaults...");
-
-    const allSettings = {};
-
-    // Add all defaults
-    SETTINGS_CONFIG.integers.forEach(({ key, defaultValue }) => {
-      allSettings[key] = defaultValue;
-    });
-    SETTINGS_CONFIG.booleans.forEach(({ key, defaultValue }) => {
-      allSettings[key] = defaultValue;
-    });
-    SETTINGS_CONFIG.stylesheets.forEach(({ key, defaultValue }) => {
-      allSettings[key] = defaultValue;
-    });
-
-    await chrome.storage.sync.set(allSettings);
-    this.logger.info("Settings reset to defaults");
-  }
-
-  /**
-   * Export all settings
-   * @returns {Promise<Object>} All settings
-   */
-  async exportSettings() {
-    const allKeys = [
-      ...SETTINGS_CONFIG.integers.map((s) => s.key),
-      ...SETTINGS_CONFIG.booleans.map((s) => s.key),
-      ...SETTINGS_CONFIG.stylesheets.map((s) => s.key),
-    ];
-    return await this.getMultipleSettings(allKeys);
-  }
-
-  /**
-   * Import settings
-   * @param {Object} settings - Settings to import
-   */
-  async importSettings(settings) {
-    if (!settings || typeof settings !== "object") {
-      throw new Error("Invalid settings object");
-    }
-
-    await this.setMultipleSettings(settings);
-    this.logger.info("Settings imported successfully");
   }
 }
 
-/**
- * Create and export default settings manager instance
- */
 export const settingsManager = new SettingsManager();

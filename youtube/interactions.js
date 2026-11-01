@@ -5,20 +5,19 @@
   const { core } = watchmarker;
 
   class InteractionManager {
-    constructor(videoMarkerManager) {
-      this.videoMarkerManager = videoMarkerManager;
+    constructor(playbackTracker) {
+      this.playbackTracker = playbackTracker;
     }
 
     initialize() {
       this.setupRatingObserver();
-      this.setupProgressListener();
     }
 
     setupRatingObserver() {
       document.addEventListener(
         "click",
         (event) => {
-          const button = event.target.closest('button, [role="button"]');
+          const button = event.target.closest?.('button, [role="button"]');
           if (!this.isRatingButton(button)) {
             return;
           }
@@ -27,26 +26,6 @@
         },
         true,
       );
-
-      const observer = new MutationObserver((mutations) => {
-        for (const mutation of mutations) {
-          if (mutation.type !== "attributes") {
-            continue;
-          }
-
-          const button = mutation.target;
-          if (this.isRatingButton(button)) {
-            this.handleRatingChange(button);
-          }
-        }
-      });
-
-      observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["aria-pressed", "class"],
-        childList: true,
-        subtree: true,
-      });
     }
 
     isRatingButton(element) {
@@ -59,8 +38,8 @@
         'ytd-toggle-button-renderer[target-id="watch-dislike"]',
         "#segmented-like-button button",
         "#segmented-dislike-button button",
-        'button[aria-label*="like"]',
-        'button[aria-label*="dislike"]',
+        "like-button-view-model button",
+        "dislike-button-view-model button",
       ];
 
       return selectors.some((selector) => {
@@ -85,24 +64,7 @@
         return;
       }
 
-      void this.videoMarkerManager.markAsWatchedFromInteraction(
-        videoId,
-        core.getCurrentVideoTitle(),
-      );
-    }
-
-    setupProgressListener() {
-      document.addEventListener("youwatch-progresshook", (event) => {
-        const { strIdent, strTitle } = event.detail || {};
-        if (!strIdent || strIdent.length !== 11) {
-          return;
-        }
-
-        void this.videoMarkerManager.markAsWatchedFromInteraction(
-          strIdent,
-          strTitle,
-        );
-      });
+      void this.playbackTracker.report("rating");
     }
   }
 
@@ -115,25 +77,12 @@
       const debouncedRefresh = core.debounce(this.refreshCallback, 100);
 
       const observer = new MutationObserver((mutations) => {
-        const shouldRefresh = mutations.some((mutation) => {
-          if (
-            mutation.type !== "childList" ||
-            mutation.addedNodes.length === 0
-          ) {
-            return false;
-          }
-
-          return Array.from(mutation.addedNodes).some((node) => {
-            if (node.nodeType !== Node.ELEMENT_NODE) {
-              return false;
-            }
-
-            return (
-              node.matches?.(core.videoSelectors.join(", ")) ||
-              node.querySelector?.(core.videoSelectors.join(", "))
-            );
-          });
-        });
+        const shouldRefresh = mutations.some(
+          (mutation) =>
+            mutation.type === "attributes" ||
+            mutation.addedNodes.length > 0 ||
+            mutation.removedNodes.length > 0,
+        );
 
         if (shouldRefresh) {
           debouncedRefresh();
@@ -142,8 +91,13 @@
 
       observer.observe(document.body, {
         childList: true,
+        attributes: true,
+        attributeFilter: ["href", "src"],
         subtree: true,
       });
+      document.addEventListener("yt-navigate-finish", debouncedRefresh);
+      document.addEventListener("fullscreenchange", debouncedRefresh);
+      window.addEventListener("popstate", debouncedRefresh);
     }
   }
 

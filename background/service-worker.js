@@ -6,7 +6,16 @@
  * extension context before handlers execute.
  */
 
+import { createHistorySynchronization } from "./history-synchronization.js";
+import { handleHistoryReconciliation } from "../handlers/reconciliation-handlers.js";
+import { durationBackfill, durationStorage } from "./duration-runtime.js";
+import { DURATION_ALARM } from "../duration-backfill.js";
+import {
+  handleDurationStatus,
+  handleDurationControl,
+} from "../handlers/duration-handlers.js";
 import { logger } from "../logger.js";
+import { withWatchmarkerRefresh } from "../watch-notifications.js";
 import { messageRouter } from "../message-router.js";
 import { settingsManager } from "../settings-manager.js";
 import { alarmManager } from "../alarm-manager.js";
@@ -15,20 +24,18 @@ import { Database } from "../bg-database.js";
 import { History } from "../bg-history.js";
 import { Youtube } from "../bg-youtube.js";
 import { Search } from "../bg-search.js";
-import { SyncManagerInstance } from "../bg-sync-manager.js";
+import { HISTORY_SYNC_ALARM, SyncManagerInstance } from "../bg-sync-manager.js";
 import { databaseProviderFactory } from "../database-provider-factory.js";
 import {
   handleDatabaseExport,
   handleDatabaseImport,
-  handleDatabaseReset,
   handleDatabaseSize,
 } from "../handlers/database-handlers.js";
 import {
   handleYoutubeLookup,
-  handleYoutubeEnsure,
   handleYoutubeSynchronize,
   handleYoutubeLikedVideos,
-  handleYoutubeMark,
+  handleYoutubeWatch,
 } from "../handlers/youtube-handlers.js";
 import {
   handleSearchVideos,
@@ -36,17 +43,22 @@ import {
 } from "../handlers/search-handlers.js";
 import {
   handleProviderStatus,
-  handleProviderSwitch,
-  handleProviderList,
-  handleProviderMigrate,
-  handleProviderSync,
-  handleSupabaseSaveCredentials,
+  handleSupabaseConnect,
+  handleSupabaseCreateLink,
   handleSupabaseTest,
   handleSupabaseGetCredentials,
   handleSupabaseGetStatus,
   handleSupabaseCheckTable,
 } from "../handlers/provider-handlers.js";
 import { handleHistorySynchronize } from "../handlers/history-handlers.js";
+import {
+  handleSourcePreview,
+  handleSourcePreviewCancel,
+} from "../handlers/source-handlers.js";
+import {
+  handleHistoryStatistics,
+  handleYoutubeWatchTime,
+} from "../handlers/statistics-handlers.js";
 import {
   handleGetSetting,
   handleSetSetting,
@@ -56,10 +68,22 @@ let initializationPromise;
 let messageHandlersRegistered = false;
 let alarmHandlersRegistered = false;
 
+const HISTORY_CHANGES = new Set([
+  "history-reconcile",
+  "database-import",
+  "search-delete",
+  "youtube-synchronize",
+  "youtube-liked-videos",
+  "history-synchronize",
+  "sync-manager-sync-now",
+]);
+
 function withInitialization(handler) {
   return async (request, sender) => {
     await ensureServiceWorkerReady();
-    return handler(request, sender);
+    return HISTORY_CHANGES.has(request.action)
+      ? withWatchmarkerRefresh(() => handler(request, sender))
+      : handler(request, sender);
   };
 }
 
@@ -70,25 +94,25 @@ function registerMessageHandlers() {
 
   messageRouter.registerMultiple({
     "database-export": withInitialization(handleDatabaseExport),
+    "history-reconcile": withInitialization(handleHistoryReconciliation),
     "database-import": withInitialization(handleDatabaseImport),
-    "database-reset": withInitialization(handleDatabaseReset),
     "database-size": withInitialization(handleDatabaseSize),
     "youtube-lookup": withInitialization(handleYoutubeLookup),
-    "youtube-ensure": withInitialization(handleYoutubeEnsure),
-    "youtube-mark": withInitialization(handleYoutubeMark),
+    "youtube-watch": withInitialization(handleYoutubeWatch),
     "youtube-synchronize": withInitialization(handleYoutubeSynchronize),
     "youtube-liked-videos": withInitialization(handleYoutubeLikedVideos),
-    "search-videos": withInitialization(handleSearchVideos),
     "search-delete": withInitialization(handleSearchDelete),
+    "search-videos": withInitialization(handleSearchVideos),
     "history-synchronize": withInitialization(handleHistorySynchronize),
+    "source-preview": withInitialization(handleSourcePreview),
+    "source-preview-cancel": withInitialization(handleSourcePreviewCancel),
+    "history-statistics": withInitialization(handleHistoryStatistics),
+    "youtube-watch-time": withInitialization(handleYoutubeWatchTime),
+    "duration-status": withInitialization(handleDurationStatus),
+    "duration-control": withInitialization(handleDurationControl),
     "database-provider-status": withInitialization(handleProviderStatus),
-    "database-provider-switch": withInitialization(handleProviderSwitch),
-    "database-provider-list": withInitialization(handleProviderList),
-    "database-provider-migrate": withInitialization(handleProviderMigrate),
-    "database-provider-sync": withInitialization(handleProviderSync),
-    "supabase-save-credentials": withInitialization(
-      handleSupabaseSaveCredentials,
-    ),
+    "supabase-connect": withInitialization(handleSupabaseConnect),
+    "supabase-create-link": withInitialization(handleSupabaseCreateLink),
     "supabase-test": withInitialization(handleSupabaseTest),
     "supabase-get-credentials": withInitialization(
       handleSupabaseGetCredentials,
@@ -97,12 +121,6 @@ function registerMessageHandlers() {
     "supabase-check-table": withInitialization(handleSupabaseCheckTable),
     "get-setting": withInitialization(handleGetSetting),
     "set-setting": withInitialization(handleSetSetting),
-    "sync-manager-start": withInitialization(async () =>
-      SyncManagerInstance.startAutoSync(),
-    ),
-    "sync-manager-stop": withInitialization(async () =>
-      SyncManagerInstance.stopAutoSync(),
-    ),
     "sync-manager-sync-now": withInitialization(async () =>
       SyncManagerInstance.syncNow(),
     ),
@@ -120,8 +138,25 @@ function registerAlarmHandlers() {
     return;
   }
 
+  alarmManager.registerHandler(DURATION_ALARM, async () => {
+    await ensureServiceWorkerReady();
+    await durationBackfill.tick();
+  });
+  alarmManager.registerHandler("youtube-duration-expiry", async () => {
+    await ensureServiceWorkerReady();
+    await durationStorage.readCache();
+  });
+
   alarmManager.registerHandler("synchronize", async () => {
-    await performPeriodicSync();
+    await withWatchmarkerRefresh(() => historySynchronization.periodic());
+  });
+
+  alarmManager.registerHandler(HISTORY_SYNC_ALARM, async () => {
+    await ensureServiceWorkerReady();
+    if (await databaseProviderFactory.isConfigured())
+      await withWatchmarkerRefresh(() =>
+        SyncManagerInstance.syncNow({ forceDownload: false }),
+      );
   });
 
   alarmHandlersRegistered = true;
@@ -143,12 +178,6 @@ async function initializeDatabaseProviders() {
   Search.setProviderFactory(databaseProviderFactory);
 
   await Promise.all([History.init(), Youtube.init(), Search.init()]);
-  if (databaseProviderFactory.isSupabaseEnabled()) {
-    const syncResult = await databaseProviderFactory.performDeltaSync();
-    if (!syncResult.success) {
-      logger.warn("Supabase startup sync failed:", syncResult.error);
-    }
-  }
 }
 
 async function restrictSensitiveStorageAccess() {
@@ -165,10 +194,23 @@ async function initializeServiceWorker() {
   await settingsManager.initialize();
   await initializeDatabaseProviders();
 
-  registerAlarmHandlers();
   await alarmManager.initialize();
   await videoTracker.initialize(Youtube);
+  await durationStorage.readCache();
+  if (!(await chrome.alarms.get("youtube-duration-expiry")))
+    await chrome.alarms.create("youtube-duration-expiry", {
+      periodInMinutes: 60,
+    });
+  await durationBackfill.initialize();
 
+  // Network availability must never block recording a local watch.
+  void databaseProviderFactory
+    .isConfigured()
+    .then((configured) => {
+      if (configured)
+        return withWatchmarkerRefresh(() => SyncManagerInstance.syncNow());
+    })
+    .catch((error) => logger.warn("History sync deferred:", error.message));
   logger.info("Service worker context initialized");
 }
 
@@ -184,65 +226,24 @@ async function ensureServiceWorkerReady() {
   return initializationPromise;
 }
 
-async function syncHistory() {
-  const result = await History.synchronize(0, true, (progress) =>
-    logger.debug("History sync progress:", progress),
-  );
-  logger.info("History sync completed:", result);
-  return result;
-}
-
-async function syncYoutube() {
-  const result = await Youtube.synchronize((progress) =>
-    logger.debug("YouTube sync progress:", progress),
-  );
-  logger.info("YouTube sync completed:", result);
-  return result;
-}
-
-async function performStartupSynchronization() {
-  await ensureServiceWorkerReady();
-
-  try {
-    const result = await chrome.storage.sync.get(["idCondition_Youhist"]);
-    if (result.idCondition_Youhist === true) {
-      await syncYoutube();
-    }
-  } catch (error) {
-    logger.error("Startup synchronization failed:", error);
-  }
-}
-
-async function performPeriodicSync() {
-  await ensureServiceWorkerReady();
-
-  try {
-    const result = await chrome.storage.sync.get([
-      "idCondition_Browhist",
-      "idCondition_Youhist",
-    ]);
-
-    if (result.idCondition_Browhist === true) {
-      await syncHistory();
-    }
-
-    if (result.idCondition_Youhist === true) {
-      await syncYoutube();
-    }
-  } catch (error) {
-    logger.error("Periodic synchronization failed:", error);
-  }
-}
+const historySynchronization = createHistorySynchronization({
+  ready: ensureServiceWorkerReady,
+  storage: chrome.storage.sync,
+  youtube: Youtube,
+  history: History,
+  logger,
+});
 
 registerMessageHandlers();
+registerAlarmHandlers();
 alarmManager.bindListener();
 
 chrome.runtime.onInstalled.addListener(() => {
-  void performStartupSynchronization();
+  void withWatchmarkerRefresh(() => historySynchronization.startup());
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void performStartupSynchronization();
+  void withWatchmarkerRefresh(() => historySynchronization.startup());
 });
 
 void ensureServiceWorkerReady();

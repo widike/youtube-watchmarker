@@ -1,129 +1,84 @@
-// @ts-check
+import { HTML_ENTITIES } from "./shared/html-entities.js";
 
-/**
- * Text utilities for YouTube Watchmarker
- * Handles text encoding, decoding, and HTML entity processing
- */
+// Windows-1252 differs from Latin-1 in the C1 range. Mojibake often contains
+// these punctuation characters, especially in quotes, dashes and emoji.
+const C1_CHARACTERS =
+  "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008dŽ\u008f\u0090‘’“”•–—˜™š›œ\u009džŸ";
+const c1Bytes = new Map(
+  Array.from(C1_CHARACTERS, (char, index) => [char, index + 0x80]),
+);
+const byteOf = (char) =>
+  c1Bytes.get(char) ?? (char?.codePointAt(0) <= 255 ? char.codePointAt(0) : -1);
 
-/**
- * Fixes UTF-8 double encoding issues in text strings
- * Converts Latin-1 misinterpreted UTF-8 back to proper UTF-8
- * @param {string} text - Text that may have UTF-8 double encoding issues
- * @returns {string} Properly decoded UTF-8 text
- */
+/** Repair only valid, local UTF-8 byte sequences; never truncate Unicode. */
 export function fixUtf8DoubleEncoding(text) {
-  if (!text || typeof text !== "string") {
-    return text;
-  }
-
-  try {
-    // First, encode the string as Latin-1 to get the original UTF-8 bytes
-    const latin1Bytes = new Uint8Array(text.length);
-    for (let i = 0; i < text.length; i++) {
-      latin1Bytes[i] = text.charCodeAt(i) & 0xff;
-    }
-
-    // Then decode as UTF-8 using TextDecoder
-    const decoder = new TextDecoder("utf-8", { fatal: false });
-    const decoded = decoder.decode(latin1Bytes);
-
-    // Only return the decoded version if it's different and seems valid
-    // (contains fewer replacement characters or obvious improvements)
-    if (decoded !== text && decoded.length > 0) {
-      // Check if the decoding actually improved the text
-      // by looking for common UTF-8 double encoding patterns
-      const commonPatterns = [
-        "Ã¤",
-        "Ã¶",
-        "Ã¼",
-        "ÃŸ", // German umlauts
-        "Ã¡",
-        "Ã©",
-        "Ã­",
-        "Ã³",
-        "Ãº", // Spanish accents
-        "Ã ",
-        "Ã¨",
-        "Ã¬",
-        "Ã²",
-        "Ã¹", // More accents
-        "Ã¢",
-        "Ãª",
-        "Ã®",
-        "Ã´",
-        "Ã»", // Circumflex accents
-        "Ã£",
-        "Ã±",
-        "Ã§", // Other common UTF-8 patterns
-        "â€™",
-        "â€œ",
-        "â€", // Smart quotes
-        "â€¢",
-        'â€"',
-        'â€"', // Bullets and dashes
-      ];
-
-      const hasDoubleEncodingPatterns = commonPatterns.some((pattern) =>
-        text.includes(pattern),
-      );
-      const hasFewerReplacementChars =
-        (decoded.match(/�/g) || []).length < (text.match(/�/g) || []).length;
-
-      if (hasDoubleEncodingPatterns || hasFewerReplacementChars) {
-        return decoded;
+  if (typeof text !== "string" || !text) return text;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let result = text;
+  for (let pass = 0; pass < 3; pass++) {
+    const characters = Array.from(result);
+    let repaired = "";
+    for (let index = 0; index < characters.length; index++) {
+      const lead = byteOf(characters[index]);
+      const length =
+        lead >= 0xc2 && lead <= 0xdf
+          ? 2
+          : lead >= 0xe0 && lead <= 0xef
+            ? 3
+            : lead >= 0xf0 && lead <= 0xf4
+              ? 4
+              : 0;
+      const bytes = characters.slice(index, index + length).map(byteOf);
+      if (
+        length &&
+        bytes.length === length &&
+        bytes.slice(1).every((byte) => byte >= 0x80 && byte <= 0xbf)
+      ) {
+        try {
+          repaired += decoder.decode(new Uint8Array(bytes));
+          index += length - 1;
+          continue;
+        } catch {
+          // An invalid sequence is ordinary title text; preserve it verbatim.
+        }
       }
+      repaired += characters[index];
     }
-
-    return text;
-  } catch (error) {
-    console.warn("Failed to fix UTF-8 double encoding:", error);
-    return text;
+    if (repaired === result) break;
+    result = repaired;
   }
+  return result;
 }
 
-/**
- * Enhanced HTML entity decoder that also handles UTF-8 double encoding
- * @param {string} text - Text to decode
- * @returns {string} Decoded text
- */
+/** DOM strings are already decoded. Do not interpret literal entity text again. */
+export function normalizeVideoTitle(text) {
+  return typeof text === "string"
+    ? fixUtf8DoubleEncoding(text).normalize("NFC").trim()
+    : "";
+}
+
+/** Decode one layer of encoded source text, including supplementary code points. */
 export function decodeHtmlEntitiesAndFixEncoding(text) {
-  if (!text || typeof text !== "string") {
-    return text;
-  }
-
-  // First fix UTF-8 double encoding
-  let decoded = fixUtf8DoubleEncoding(text);
-
-  // Then decode common HTML entities
-  const entityMap = {
-    "&amp;": "&",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&quot;": '"',
-    "&#39;": "'",
-    "&apos;": "'",
-    "&nbsp;": " ",
-    "&copy;": "©",
-    "&reg;": "®",
-    "&trade;": "™",
-    "&euro;": "€",
-    "&pound;": "£",
-    "&yen;": "¥",
-    "&cent;": "¢",
-  };
-
-  for (const [entity, char] of Object.entries(entityMap)) {
-    decoded = decoded.replaceAll(entity, char);
-  }
-
-  // Handle numeric HTML entities
-  decoded = decoded.replace(/&#(\d+);/g, (match, num) => {
-    return String.fromCharCode(parseInt(num, 10));
-  });
-
-  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => {
-    return String.fromCharCode(parseInt(hex, 16));
-  });
-
-  return decoded;
+  if (typeof text !== "string" || !text) return text;
+  const decoded = text.replace(
+    /&(?:#(x[\da-f]+|\d+)|([a-z][\da-z]+));/gi,
+    (match, numeric, name) => {
+      if (name)
+        return Object.hasOwn(HTML_ENTITIES, name) ? HTML_ENTITIES[name] : match;
+      let codePoint =
+        numeric[0].toLowerCase() === "x"
+          ? parseInt(numeric.slice(1), 16)
+          : parseInt(numeric, 10);
+      if (
+        !codePoint ||
+        codePoint > 0x10ffff ||
+        (codePoint >= 0xd800 && codePoint <= 0xdfff)
+      )
+        return "\ufffd";
+      if (codePoint >= 0x80 && codePoint <= 0x9f)
+        return C1_CHARACTERS[codePoint - 0x80];
+      return String.fromCodePoint(codePoint);
+    },
+  );
+  return fixUtf8DoubleEncoding(decoded).normalize("NFC");
 }

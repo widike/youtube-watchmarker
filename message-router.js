@@ -1,260 +1,117 @@
-// @ts-check
-
-/**
- * Message Router
- * Handles routing of messages between content scripts and background script
- */
-
 import { logger } from "./logger.js";
-import {
-  errorHandler,
-  ExtensionError,
-  ErrorUtils,
-  ValidationError,
-} from "./error-handler.js";
-import { ERRORS, VIDEO_ID } from "./constants.js";
+import { ErrorUtils, ValidationError } from "./error-handler.js";
+import { isValidVideoId } from "./validation.js";
 
-/**
- * Actions that require a valid YouTube video ID
- */
-const VIDEO_ID_ACTIONS = new Set([
+const CONTENT_ACTIONS = new Set([
   "youtube-lookup",
-  "youtube-ensure",
-  "youtube-mark",
-  "search-delete",
+  "youtube-watch",
+  "youtube-watch-time",
+]);
+const VIDEO_ACTIONS = new Set([...CONTENT_ACTIONS, "search-delete"]);
+const CONTENT_ORIGINS = new Set([
+  "https://www.youtube.com",
+  "https://m.youtube.com",
 ]);
 
-/**
- * Validate a YouTube video ID
- * @param {*} videoId - The value to validate
- * @returns {{valid: boolean, error?: string}} Validation result
- */
-function validateVideoId(videoId) {
-  if (videoId === undefined) {
-    // videoId not provided - let handler decide if required
-    return { valid: true };
+function validateMessage(message, sender) {
+  if (
+    !message ||
+    typeof message !== "object" ||
+    Array.isArray(message) ||
+    typeof message.action !== "string"
+  ) {
+    throw new ValidationError("Message must include an action");
+  }
+  if (sender?.id !== chrome.runtime.id) {
+    throw new ValidationError("Untrusted message sender");
   }
 
-  if (videoId === null) {
-    return { valid: false, error: "videoId is null" };
+  let url;
+  try {
+    url = new URL(sender.url);
+  } catch {
+    throw new ValidationError("Missing or invalid sender URL");
   }
-
-  if (typeof videoId !== "string") {
-    const typeDesc =
-      videoId === null
-        ? "null"
-        : Array.isArray(videoId)
-          ? "array"
-          : typeof videoId;
-    return {
-      valid: false,
-      error: `videoId must be a string, got ${typeDesc}: ${JSON.stringify(videoId).slice(0, 50)}`,
-    };
+  const extensionPage = url.href.startsWith(chrome.runtime.getURL("/"));
+  if (
+    !extensionPage &&
+    (!CONTENT_ORIGINS.has(url.origin) || !CONTENT_ACTIONS.has(message.action))
+  ) {
+    throw new ValidationError("This action is restricted to extension pages");
   }
-
-  if (!VIDEO_ID.PATTERN.test(videoId)) {
-    return {
-      valid: false,
-      error: `videoId must be ${VIDEO_ID.LENGTH} alphanumeric characters, got "${videoId.slice(0, 20)}${videoId.length > 20 ? "..." : ""}" (length: ${videoId.length})`,
-    };
+  if (VIDEO_ACTIONS.has(message.action)) {
+    if (!isValidVideoId(message.videoId)) {
+      throw new ValidationError("A valid 11-character video ID is required");
+    }
+    if (
+      message.title !== undefined &&
+      (typeof message.title !== "string" || message.title.length > 2000)
+    ) {
+      throw new ValidationError(
+        "Video title must be a string of at most 2000 characters",
+      );
+    }
+    for (const key of ["timestamp", "count"]) {
+      if (
+        message[key] !== undefined &&
+        (!Number.isSafeInteger(message[key]) || message[key] < 0)
+      ) {
+        throw new ValidationError(`Invalid video ${key}`);
+      }
+    }
   }
-
-  return { valid: true };
+  // A page may report a watch, but cannot choose historical dates or view counts.
+  if (
+    !extensionPage &&
+    message.action === "youtube-watch" &&
+    (message.timestamp !== undefined || message.count !== undefined)
+  ) {
+    throw new ValidationError("Content scripts cannot override watch metadata");
+  }
 }
 
-/**
- * Message Router class
- * Routes messages to appropriate handlers with error handling
- */
+// One request/response transport. No callers use long-lived runtime ports.
 export class MessageRouter {
   constructor() {
     this.handlers = new Map();
-    this.logger = logger;
     this.listenersInitialized = false;
   }
 
-  /**
-   * Register a message handler
-   * @param {string} action - Action name
-   * @param {Function} handler - Handler function
-   */
-  register(action, handler) {
-    if (this.handlers.has(action)) {
-      this.logger.warn(
-        `Handler for action "${action}" already exists, overwriting`,
-      );
-    }
-    this.handlers.set(action, handler);
-    this.logger.debug(`Registered handler for action: ${action}`);
-  }
-
-  /**
-   * Register multiple handlers at once
-   * @param {Object} handlers - Object mapping actions to handlers
-   */
   registerMultiple(handlers) {
-    Object.entries(handlers).forEach(([action, handler]) => {
-      this.register(action, handler);
-    });
-  }
-
-  /**
-   * Unregister a message handler
-   * @param {string} action - Action name
-   */
-  unregister(action) {
-    if (this.handlers.delete(action)) {
-      this.logger.debug(`Unregistered handler for action: ${action}`);
+    for (const [action, handler] of Object.entries(handlers)) {
+      this.handlers.set(action, handler);
     }
   }
 
-  /**
-   * Handle a message
-   * @param {Object} message - Message object
-   * @param {Object} sender - Message sender
-   * @returns {Promise<Object>} Response object
-   */
   async handle(message, sender) {
-    const { action } = message;
-
-    if (!action) {
-      this.logger.warn("Received message without action", message);
-      return ErrorUtils.createErrorResponse(
-        new ExtensionError(
-          ERRORS.INVALID_REQUEST,
-          "Message must include action field",
-        ),
-      );
-    }
-
-    const handler = this.handlers.get(action);
-    if (!handler) {
-      this.logger.warn(`No handler found for action: ${action}`);
-      return ErrorUtils.createErrorResponse(
-        new ExtensionError(ERRORS.UNKNOWN_ACTION, `Unknown action: ${action}`),
-      );
-    }
-
-    // Validate videoId at message boundary for actions that need it
-    if (VIDEO_ID_ACTIONS.has(action)) {
-      const validation = validateVideoId(message.videoId);
-      if (!validation.valid) {
-        this.logger.warn(
-          `Invalid videoId for action "${action}": ${validation.error}`,
-        );
-        return ErrorUtils.createErrorResponse(
-          new ValidationError(validation.error, {
-            action,
-            videoId: message.videoId,
-          }),
-        );
-      }
-    }
-
     try {
-      this.logger.debug(`Handling action: ${action}`);
+      validateMessage(message, sender);
+      const handler = this.handlers.get(message.action);
+      if (!handler)
+        throw new ValidationError(`Unknown action: ${message.action}`);
       const result = await handler(message, sender);
-
-      // Handle null results
-      if (result === null || result === undefined) {
-        return { success: false, error: "Handler returned null or undefined" };
+      if (!result || typeof result !== "object" || Array.isArray(result)) {
+        throw new Error("Handler returned an invalid response");
       }
-
-      // Ensure result has success field
-      if (typeof result === "object" && !("success" in result)) {
-        return { success: true, ...result };
-      }
-
-      return result;
+      return { success: true, ...result };
     } catch (error) {
-      this.logger.error(`Error handling action "${action}":`, error);
-      errorHandler.handle(error, { action }, false);
+      // Log the action only: requests may contain passwords or private history.
+      logger.warn("Message request failed", {
+        action: message?.action,
+        message: error?.message,
+      });
       return ErrorUtils.createErrorResponse(error);
     }
   }
 
-  /**
-   * Setup Chrome message listeners
-   * Automatically handles both chrome.runtime.onMessage and chrome.runtime.onConnect
-   */
   setupListeners() {
-    if (this.listenersInitialized) {
-      return;
-    }
-
-    // Handle one-time messages
+    if (this.listenersInitialized) return;
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      this.handle(message, sender)
-        .then((response) => sendResponse(response))
-        .catch((error) => {
-          this.logger.error("Unhandled error in message handler:", error);
-          sendResponse(ErrorUtils.createErrorResponse(error));
-        });
-
-      // Return true to indicate async response
+      void this.handle(message, sender).then(sendResponse);
       return true;
     });
-
-    // Handle long-lived connections
-    chrome.runtime.onConnect.addListener((port) => {
-      this.logger.debug(`Port connected: ${port.name}`);
-
-      port.onMessage.addListener(async (message) => {
-        try {
-          const response = await this.handle(message, { port });
-          if (port && !port.disconnected) {
-            port.postMessage(response);
-          }
-        } catch (error) {
-          this.logger.error("Error handling port message:", error);
-          if (port && !port.disconnected) {
-            port.postMessage(ErrorUtils.createErrorResponse(error));
-          }
-        }
-      });
-
-      port.onDisconnect.addListener(() => {
-        this.logger.debug(`Port disconnected: ${port.name}`);
-        if (chrome.runtime.lastError) {
-          this.logger.debug(
-            "Port disconnect reason:",
-            chrome.runtime.lastError.message,
-          );
-        }
-      });
-    });
-
     this.listenersInitialized = true;
-    this.logger.info("Message router listeners initialized");
-  }
-
-  /**
-   * Get all registered actions
-   * @returns {string[]} List of registered action names
-   */
-  getRegisteredActions() {
-    return Array.from(this.handlers.keys());
-  }
-
-  /**
-   * Check if an action is registered
-   * @param {string} action - Action name
-   * @returns {boolean} True if registered
-   */
-  hasHandler(action) {
-    return this.handlers.has(action);
-  }
-
-  /**
-   * Clear all handlers
-   */
-  clear() {
-    this.handlers.clear();
-    this.logger.info("All message handlers cleared");
   }
 }
 
-/**
- * Create and export default message router instance
- */
 export const messageRouter = new MessageRouter();

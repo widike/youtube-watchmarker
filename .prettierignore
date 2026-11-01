@@ -1,1 +1,3 @@
 supabase/migrations/*.sql
+vendor/
+data/word-language/german-geography.json

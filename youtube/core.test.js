@@ -14,6 +14,7 @@ globalThis.document = {
   },
 };
 
+await import("../shared/video-identity.js");
 await import("./core.js");
 
 const { core } = globalThis.YouTubeWatchmarkerContent;
@@ -27,4 +28,39 @@ test("watch history routes are excluded from video marking", () => {
 
   window.location.pathname = "/feed/history-search";
   assert.equal(core.isWatchHistoryPage(), false);
+});
+
+test("video IDs use exact URL components across YouTube routes and thumbnail formats", () => {
+  for (const url of [
+    "/watch?list=PL123&v=aB_cd-Ef012&t=5",
+    "https://m.youtube.com/watch?v=aB_cd-Ef012#chapter",
+    "https://www.youtube.com/shorts/aB_cd-Ef012?feature=share",
+    "https://www.youtube.com/live/aB_cd-Ef012",
+    "https://youtu.be/aB_cd-Ef012?t=4",
+    "https://www.youtube.com/redirect?q=https%3A%2F%2Fyoutu.be%2FaB_cd-Ef012",
+    "https://i.ytimg.com/vi/aB_cd-Ef012/hqdefault.jpg",
+    "https://i.ytimg.com/vi_webp/aB_cd-Ef012/hqdefault.webp",
+  ])
+    assert.equal(core.extractVideoId(url), "aB_cd-Ef012", url);
+  for (const url of [
+    "https://www.youtube.com/watch?v=aB_cd-Ef012extra",
+    "https://www.youtube.com/shorts/aB_cd-Ef012extra",
+    "https://www.youtube.com/shorts/aB_cd-Ef012/extra",
+    "https://www.youtube.com/feed/abcdefghijk",
+    "https://www.youtube.com.evil.test/watch?v=aB_cd-Ef012",
+    "https://example.test/?v=aB_cd-Ef012",
+    "javascript:watch?v=aB_cd-Ef012",
+  ])
+    assert.equal(core.extractVideoId(url), null, url);
+});
+
+test("reused notification images follow the current link rather than stale image URLs", () => {
+  const link = { href: "https://www.youtube.com/watch?v=bbbbbbbbbbb" };
+  const image = {
+    src: "https://i.ytimg.com/vi/aaaaaaaaaaa/default.jpg",
+    closest: () => link,
+  };
+  assert.equal(core.extractVideoId(image), "bbbbbbbbbbb");
+  link.href = "https://www.youtube.com/feed/subscriptions";
+  assert.equal(core.extractVideoId(image), null);
 });

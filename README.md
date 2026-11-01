@@ -6,7 +6,7 @@ YouTube keeps track of your watch history and automatically marks videos that yo
 
 ## Installation
 
-Currently, only manual installation of the unpacked source code is supported. This extension has been tested on Chrome/Chromium browsers and has Firefox compatibility with some limitations.
+Load the repository as an unpacked extension from `chrome://extensions` in Chrome 126 or newer. Reload the extension and refresh existing YouTube tabs after updating the source.
 
 ## Current Features
 
@@ -15,6 +15,7 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Complete Watch History Tracking**: Marks all previously watched videos, not just recent ones
 - **Multiple Data Sources**: Integrates browser history, YouTube watch history, and liked videos
 - **Real-time Detection**: Automatically detects when videos are watched through multiple methods
+- **Individual Watch Events**: Rewatching a video adds a timestamped history entry; earlier watches stay in the timeline
 - **Search & Management**: Built-in search functionality to find and manage your watch history
 - **Video Management**: Delete individual videos from your watch history
 
@@ -25,14 +26,12 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Watch Badge**: Display "WATCHED" badge on marked videos
 - **Watch Date**: Show the date when video was watched in the badge
 - **Hide Progress Bar**: Hide YouTube's default progress bars on watched videos
-- **Publication Date Tooltips**: Show video publication dates on hover
 
 ### Watch Detection Methods
 
 - **Browser Navigation**: Mark videos when opened in browser
 - **Browser History**: Sync from browser's history data
 - **YouTube Progress**: Detect when video progress is reported to YouTube
-- **YouTube Badge**: Recognize YouTube's native watched indicators
 - **YouTube History**: Sync from YouTube's watch history
 - **Video Rating**: Mark videos when liked or disliked
 
@@ -41,7 +40,6 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Local Storage**: IndexedDB for primary data storage with proper indexing
 - **Supabase Integration**: Optional cloud database storage via PostgreSQL
 - **Manual Export/Import**: JSON-based backup and restore functionality
-- **Data Migration**: Transfer data between local and cloud storage
 - **Bidirectional Sync**: Merge data between IndexedDB and Supabase
 
 ### User Interface
@@ -50,10 +48,116 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **Dark/Light Theme**: Automatic theme switching with system preferences
 - **Options Page**: Comprehensive settings management
 - **Popup Search**: Quick search interface accessible from browser toolbar
+- **Viewing Insights**: Rolling activity totals, viewing timelines, average-week and
+  calendar heatmaps, streaks and a searchable title word cloud
+- **Continuous History**: Scroll through the popup or full library without page controls; videos load in small batches and TanStack Virtual keeps the rendered list bounded
 - **Real-time Updates**: Live status indicators and progress reporting
 - **Accessibility**: ARIA labels and keyboard navigation support
 
 ## Technical Architecture
+
+### Viewing insights
+
+The popup leads with viewing hours over the past 24 hours, 7 days and 30 days,
+a seven-day duration preview, and a supporting watch count. **Insights** opens one
+statistics dashboard in the options page. There is no units switch: duration
+leads the totals, daily average, timeline, average-week heatmap and calendar;
+activity counts describe different videos and most-recorded videos.
+Periods cover rolling 24-hour, 7-, 30-, 90- and 365-day windows and all time.
+A quarter means 90 days; comparisons use the preceding equal-length window.
+
+Activity totals reconcile imported snapshots by video and local calendar day:
+multiple browser URLs, YouTube's date-only history and migrated timestamps count
+once that day, or are covered by the tracked sessions on that day. Separate
+tracked sessions remain separate, including actual replays. Raw events and
+exports are retained unchanged. Lifetime counters and undated counts never enter
+period totals. Activity is not proof of completed viewing. New live playbacks
+require at least 60 seconds of measured viewing before navigation, progress or
+rating signals can mark a video. Each replay needs its own minute; shorter videos
+and short loops do not qualify. History imports remain unchanged because they
+do not supply measured viewing time. Subtracting distinct videos from mixed-source
+records cannot establish repeat watches, so Insights does not show that claim.
+Browser and YouTube source imports also skip timestamps already recorded for
+that video, including playback timestamps. YouTube's day-only imports check the
+whole local calendar day. Different dated activity remains importable.
+Liked-video imports have no watch timestamp, so they skip already-known video
+IDs entirely, including deleted videos. New likes are imported once as undated
+records and do not contribute to period activity totals.
+
+**Sync & data → Reconcile old imports → Preview reconciliation** inspects the
+database without changing history or the sync outbox. It shows redundant import
+records, affected videos, before/after stored watch counts, preserved playback
+sessions and undated counts, plus affected-video examples. One **Approve entire
+batch** or **Decline entire batch** decision covers all videos. Reloading the
+extension, previewing and declining never apply the repair.
+
+Approval is bound to that exact preview's event IDs; newly arriving records do
+not expand the approved scope. The repair retains all original events and
+appends replicated correction receipts for redundant observations. It commits
+in batches with an atomic resume cursor and cloud outbox. Interrupted approved
+batches can resume; stale devices cannot undo completed corrections. Supabase
+must be connected and have the import-reconciliation migration before approval.
+**Copy repair SQL** provides the migration for an existing Supabase project.
+After syncing, the extension reads back the receipts and materialized counts
+before reporting Supabase verification. Pending sync can be retried. Playback
+sessions, distinct days, titles, deletions and undated historical counts remain.
+Counter-only duplication cannot be inferred reliably and is not guessed away.
+
+Title words count **different videos in the selected period**, once per word
+per video. Rewatches and repeated words in a title do not increase a word's
+count. Unicode-aware segmentation preserves accents, short terms such as AI
+and VR, and technical names such as C++. English/German filler words, URLs and
+video-format labels are excluded. English and German inflections share readable
+dictionary-backed base words, using Wink/WordNet and spaCy lookup data with Franc
+language detection. Country names and demonyms in both languages share groups. Each
+video counts once per resulting word family, even if it contains several forms.
+The top 40 words appearing in at least two videos are ordered by frequency.
+The horizontal cloud uses square-root font sizing with a readable minimum;
+near ties remain similar in size. Tooltips and accessible labels give exact
+video counts. Selecting a word searches the full library.
+See [the word-cloud design notes](docs/word-cloud.md) for rationale and sources.
+
+Measured playback time is synchronized across all linked devices using stable,
+cumulative snapshots. Both MacBooks and SmartTube contribute to the shared
+history; a replacement device restores their combined measurements. Existing
+browser-only measurements are uploaded automatically on the next successful
+sync. See [the duration sync contract](docs/playback-time-sync.md) for measurement,
+retry, recovery, privacy and schema-upgrade details. Install sync schema 4 and
+update every client before relying on complete cross-device measured totals.
+
+Historical video lengths can optionally estimate older watch time. These remain
+clearly marked estimates, with synced measurements taking priority. See
+[historical duration estimates](docs/historical-duration-estimates.md) for setup,
+API-key storage, quota limits, retries, expiry and estimation limits.
+
+All calendar years are stacked newest first, back to the earliest saved date;
+colors use fixed duration thresholds (0, under 15 minutes, 15–60 minutes,
+1–3 hours, 3+ hours) across years. Every day also reveals its watch count.
+The average week divides local weekday/hour playback totals by calendar
+occurrences, including inactive days and partial boundary days. Its weekday
+watch averages also include dated imports, so saved activity remains visible
+without measured playback time. Calendar totals, weekday averages, title words,
+and video rankings all use the selected period. Long timelines
+aggregate by month. Heatmaps support arrow keys, Home/End, and exact values in
+accessible names and pointer/focus details.
+
+Watch counts aggregate individual events across the complete local library,
+independently of search. Approximate dates never invent hourly activity;
+undated counts and future-dated events are excluded from dated totals.
+The word cloud counts each word once per distinct video in the selected period,
+removes English/German filler words and generic YouTube terms, retains accented
+letters, and requires at least two matching titles. Selecting a word searches
+the library. Channel and category metadata are unavailable.
+
+Visualization research was checked on 1 November 2026 against guidance available
+by October 2026. [YouTube's 2025 Recap](https://blog.youtube/news-and-events/youtube-recap-2025/)
+emphasizes interests and changing viewing habits. [Datawrapper's scale guidance](https://www.datawrapper.de/blog/diverging-vs-sequential-color-scales)
+supports sequential colors for nonnegative activity. [W3C chart accessibility](https://www.w3.org/WAI/tutorials/images/complex/)
+and [Datawrapper accessibility practices](https://www.datawrapper.de/academy/how-we-make-sure-our-charts-maps-and-tables-are-accessible)
+inform summaries, keyboard access, and non-color value descriptions. Playback
+measurement follows [MDN media events](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement)
+and [Chrome extension persistence](https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies).
+No new service, permissions, or chart library is required.
 
 ### Modern Stack
 
@@ -63,74 +167,206 @@ Currently, only manual installation of the unpacked source code is supported. Th
 - **IndexedDB**: Local database with proper indexing and transactions
 - **PostgREST API**: Direct PostgreSQL access via Supabase
 
+Run `npm ci` to install development dependencies. `npm run build` regenerates
+the bundled TanStack Virtual runtime in `vendor/`; the extension loads this local
+ES module without remote scripts. The generated bundle and its license are
+included so the unpacked extension can also load directly from the repository.
+
 ### Code Structure
 
-- **`background.js`** - Main extension service worker with `ExtensionManager` class
+- **`background/service-worker.js`** - Synchronous listener registration and background initialization
 - **`bg-database.js`** - Database operations with `DatabaseManager` class
 - **`bg-history.js`** - Browser history synchronization module
 - **`bg-youtube.js`** - YouTube API integration and data fetching
 - **`bg-search.js`** - Search functionality and video management
 - **`bg-sync-manager.js`** - Automatic synchronization management
-- **`youtube.js`** - Content script with `YouTubeWatchMarker` class
-- **`content/index.js`** - Options page with `OptionsPageManager` class
+- **`youtube/`** - Content scripts for playback, marking, settings and page observation
+- **`history-playback.js`** - Atomic playback receipts, watch updates and pending uploads
+- **`content/options-page.js`** - Options page initialization and controllers
 - **`supabase-database-provider.js`** - Supabase cloud database integration
-- **`database-provider-factory.js`** - Database provider switching logic
+- **`database-provider-factory.js`** - Local history and sync coordination
 
 ### Database Schema
 
 ```javascript
 {
-  strIdent: "video_id",           // YouTube video ID (11 characters)
-  intTimestamp: 1234567890,       // Last watched timestamp (Unix time)
-  strTitle: "Video Title",        // Video title
-  intCount: 1                     // View count
+  strIdent: "abcdefghijk",       // YouTube video ID (11 characters)
+  intTimestamp: 1767225600000,  // Last watched timestamp in milliseconds
+  strTitle: "Video Title",      // Video title
+  intCount: 1,                 // View count
+  intDeletedAt: 0,             // Synced deletion timestamp; 0 when never deleted
+  intImportedCount: 0,         // Historical/imported count baseline
+  intUnknownCount: 0,          // Baseline views without an individual date
+  watchEvents: [{              // Included in sync and JSON exports
+    eventId: "playback:…",     // Stable playback identity, reused on retry
+    watchedAt: 1767225600000,  // Actual occurrence time, in UTC milliseconds
+    source: "playback",        // playback, saved source observation, or receipt
+    precision: "exact",        // exact, day, or inferred for old source data
+    observedDeletion: 0        // Deletion marker observed when this watch began
+  }]
 }
 ```
+
+IndexedDB stores video summaries and individual events separately in `storeDatabase`
+and `watchEvents`. Supabase uses `youtube_watch_history` and `youtube_watch_events`,
+with an owner-scoped composite primary key and timestamp indexes. Event rows are
+append-only for authenticated clients. Video titles, latest dates and counts remain
+summaries for thumbnail marking; the library and popup show individual occurrences.
+
+Existing databases migrate automatically on extension reload. The latest saved
+timestamp becomes one source observation. Older counts are preserved, but timestamps
+that were already overwritten cannot be reconstructed. Their date fields stay blank.
+Date-only source observations never display an invented exact time. The trash action
+removes all watches of that video from the visible history; a new explicit playback
+starts visible history again without restoring earlier deleted entries.
+
+The design follows [append-only event and idempotency guidance](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing),
+[PostgreSQL key constraints](https://www.postgresql.org/docs/18/ddl-constraints.html),
+and [IndexedDB upgrade transactions](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB).
+It uses a small event log rather than a full event-sourcing framework.
 
 ## Browser Compatibility
 
 - **Chrome/Chromium**: Full support with all features
-- **Firefox**: Core functionality supported, Supabase sync requires manual setup
-- **Edge**: Full Chrome compatibility expected
+- **Other Chromium browsers**: Not separately validated
 - **Safari**: Not currently supported
 
-## Storage Options
+## History and device sync
 
-### Local Storage (IndexedDB)
+Every device keeps a complete local copy. Supabase is optional: recording,
+searching and viewing local history work without a cloud connection. Once connected, Supabase holds the
+shared history for both MacBooks and SmartTube. A new or reinstalled device
+restores that history automatically after linking to an existing device.
+Normal restoration does not require an exported file.
 
-- **Default option**: Works offline, no configuration required
-- **Fast performance**: Direct browser database access
-- **No size limits**: Can store extensive watch histories
-- **Privacy**: Data stays on your device
+- Watch events, local summaries and pending uploads commit in one IndexedDB
+  transaction. Lost replies and worker restarts can retry the same playback
+  without incrementing its count again, including offline. Event IDs are retained
+  permanently, including after more than 128 later watches. Concurrent offline
+  watches from different devices merge by event identity, keeping both timestamps.
+- Uploads retry after failures and restarts; old imports are never skipped by a
+  watch-date watermark.
+- Downloads merge all remote records in stable ID pages. Missing remote rows
+  never mean deletion. Daily reconciliation can rebuild missing cloud rows.
+- The trash button creates a synced deletion marker. Offline devices and source
+  reimports cannot bring that video back. A later explicit watch can restore it.
+- Imports merge with existing history. There is no automatic pruning or reset.
+- Supabase is the recovery source for a replaced device. Unsynced changes still
+  require the original device to reconnect before another device can recover them.
 
-### Supabase Cloud Database
+### Connect your devices
 
-- **Optional remote storage**: PostgreSQL database in the cloud
-- **Cross-device sync**: Access your data from multiple devices
-- **Secure setup**: Configure a publishable key and use one sync login on every
-  computer; an owner-scoped RLS table keeps that login's rows private
-- **Direct access**: Direct table access via PostgREST API
+1. In Supabase, enable **Authentication → Sign In / Providers → Anonymous
+   Sign-Ins**, and obtain a modern `sb_publishable_…` key from **Settings → API Keys**.
+   No email provider, SMTP server, username, password, or OAuth app is needed.
+2. Run [the base database setup](supabase/migrations/20261101000000_durable_history_sync.sql)
+   followed by [the watch-event migration](supabase/migrations/20261101010000_watch_events.sql)
+   followed by [device linking](supabase/migrations/20261101020000_device_linking.sql)
+   followed by [import reconciliation](supabase/migrations/20261101030000_import_reconciliation.sql)
+   followed by [playback-time sync](supabase/migrations/20261101040000_playback_time_sync.sql)
+   and [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
+   in the project's SQL Editor. All six preserve existing history.
+   **Sync & data → Set up your first device → Copy setup SQL** copies all six in order.
+   For an existing project, apply the import-reconciliation migration so the
+   server's materialized `int_count` also reflects correction receipts. Updated
+   extension clients already reconcile downloaded events even before that SQL
+   migration; older server triggers retain inflated summary counters until it runs.
+3. Under **Set up your first device**, enter the project ID and publishable
+   key, then choose **Start syncing**.
+   If this device is already connected, keep its session and skip this step.
+4. Choose **Add a device** on a connected computer. The connection code is copied
+   automatically; a copy button is also available. Paste it into the other
+   MacBook's code field and choose **Connect**.
+   Create another code for SmartTube and paste it through the TV's phone setup
+   page or Watchmarker settings. The code includes the public project details;
+   they do not need to be entered again. Codes expire after ten minutes, connect
+   one device, and are replaced when their issuing device creates another code.
+5. Reload the updated extension on both MacBooks. Other sync clients, including
+   SmartTube, need to write watch events using the version 4 contract for their
+   rewatches to appear individually; counter-only writes cannot supply past dates.
 
-## Data Management
+The extension uploads pending changes every 30 seconds while Chrome can run,
+checks remote history every five minutes, and checks immediately on startup,
+connection, or **Sync now**. SmartTube queues network-constrained work after a watch
+and has a 15-minute periodic retry. OS scheduling and connectivity can delay work.
+Cloud restoration resumes from its last committed page after an interruption.
 
-### Backup & Restore
+### Authentication
 
-- **JSON Export**: Download your complete watch history
-- **JSON Import**: Restore from exported files
-- **Data Merging**: Intelligent conflict resolution during imports
-- **Provider Migration**: Move data between local and cloud storage
+Only publishable keys are accepted by the shipped clients. A publishable key
+identifies the app; each device's short-lived Auth JWT authorizes access to its
+rows. Requests put these in separate `apikey` and `Authorization: Bearer` headers.
+RLS resolves the device's server-controlled membership to a shared history owner.
+Unlinked devices can access only their own rows. Database merges run with caller permissions.
+Neither client contains a secret key, service-role key, or JWT signing secret.
 
-### Synchronization
+The apps create anonymous Auth sessions without asking for personal information.
+Every installation keeps its own refresh token; connection codes never contain
+access or refresh tokens. Invitation hashes and membership live in a private
+schema accessible only through narrowly scoped authenticated functions. Refresh
+tokens are encrypted at rest. Temporary network errors retain the session for
+retry. Local history is bound to its shared owner, preventing accidental uploads
+to another history. The clients accept Auth's opaque access tokens, including tokens issued
+using asymmetric signing keys; signing-key rotation is managed in Supabase.
 
-- **Browser History Sync**: Extract YouTube visits from browser history
-- **YouTube History Sync**: Fetch watch history directly from YouTube
-- **Liked Videos Sync**: Import liked videos as watched
-- **Bidirectional Sync**: Merge data between IndexedDB and Supabase
-- **Automatic Sync**: Configurable periodic synchronization
+Apply the anonymous-access hardening migration to existing projects as well.
+It enforces ownership even alongside a leftover permissive policy, removes
+excess browser table grants, and blocks old administrative RPCs. See
+[anonymous sign-in security](docs/anonymous-sign-ins.md) for the access model,
+local SQL regression test, and CAPTCHA deployment requirements.
+
+This follows Supabase's [API key guidance](https://supabase.com/docs/guides/getting-started/api-keys),
+[key migration guide](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys),
+and [anonymous Auth guidance](https://supabase.com/docs/guides/auth/auth-anonymous),
+checked on 1 November 2026 for the October 2026 refactor. Browser scheduling and
+storage follow [Chrome's worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
+and [persistent extension storage](https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies).
+
+### Import and export
+
+Import history accepts the current JSON video array, JSON wrapped in
+`{"objVideos": [...]}` (including the original extension's `objResponse` envelope),
+and the original extension's base64-encoded UTF-8 `.database` backups. The format
+is detected automatically; imports merge with your existing history.
+
+JSON exports include every watch event and deletion marker. Importing the same
+export repeatedly preserves timestamps without duplicating watches or undoing a
+deletion. Export/import is optional for manual transfer; linking to Supabase is
+the normal way to restore a device.
+
+Keep a connected device available to link replacements. If all device sessions
+are lost, the history still exists in Supabase but requires administrator-assisted
+relinking; the public project key cannot recover ownership. Never delete the
+anonymous Auth users as temporary guests: they are durable device identities.
+Portable SmartTube backups deliberately exclude Watchmarker sessions so restoring
+a backup cannot clone a rotating refresh token onto a second TV.
+
+### Verification
+
+`npm test` includes actual Chrome IndexedDB checks when Chrome is installed at its
+standard macOS path; set `CHROME_PATH` on other systems. They cover upgrade,
+rollback, concurrent writes, restart, offline retries, multi-device merging,
+deletions, restoration, timestamp retention, clock rollback, and late playback
+retries. No live Supabase account is contacted.
+
+Chrome checks also exercise infinite scrolling in the popup and full library,
+bounded rendering, search/filter resets, layout changes, retries, and deletion
+while retaining loaded history. These checks use isolated fixture records.
+
+`test-support/history-schema.sql` verifies merge rules, owner isolation, explicit
+deletions, stale-client writes, append-only events, idempotent retries and repeat
+setup in a **disposable local Postgres
+database only**. It creates test Auth roles and must not run against a real project.
+
+`test-support/device-link.sql` separately checks three linked device identities,
+shared summary/event reads and writes, unrelated-user isolation, private-table
+access, expired and consumed codes, and repeat setup in a disposable database.
 
 ## Privacy & Security
 
-- **No Data Collection**: Extension doesn't collect or transmit personal data
+- **No Analytics**: The extension has no analytics or telemetry. Optional sync
+  sends history to your Supabase project; visible thumbnails request images from
+  YouTube's image CDN.
 - **Local-First**: Primary storage is local IndexedDB
 - **User Control**: Complete control over sync settings and data sharing
 - **Optional Cloud**: Supabase integration is entirely optional
@@ -138,18 +374,14 @@ Currently, only manual installation of the unpacked source code is supported. Th
 
 ## FAQ
 
-**How can I ensure my watch history is preserved?**  
-The extension stores data locally in IndexedDB by default. For additional backup, you can export your data as JSON or optionally configure Supabase for cloud storage.
+**How can I restore a replacement device?**
+Install the extension or SmartTube, connect to the same project and sign in to
+the same sync account. The complete cloud history downloads automatically.
 
 **How do I set up Supabase sync?**  
-Go to the extension options and enter your 20-character Supabase project ID,
-`sb_publishable_...` key, sync email, and sync password, then choose **Save
-Credentials**. Repeat this on every computer with the same values. The login
-gives RLS a stable user ID so all your computers can access the same private
-rows. The password is used only for the initial sign-in and is never stored;
-the refresh token is encrypted at rest while the short-lived access token stays
-in browser-session memory. Never put a secret or service-role key in the
-extension.
+Follow **Connect your devices** above. There is one local store and one automatic
+sync process; no primary-database selector, migration direction or auto-sync
+switch is needed.
 
 **What's the difference between browser history and YouTube history sync?**  
 Browser history sync extracts YouTube video visits from your browser's history, while YouTube history sync fetches your watch history directly from YouTube's API. Both sources are merged for completeness.

@@ -18,10 +18,6 @@ export class DatabaseController {
     this.elements.importInput.addEventListener("change", (event) => {
       void this.importDatabase(event);
     });
-
-    this.elements.resetButton.addEventListener("click", () => {
-      void this.resetDatabase();
-    });
   }
 
   async updateDatabaseSize() {
@@ -47,7 +43,7 @@ export class DatabaseController {
       }
 
       this.downloadDatabaseFile(response.data);
-      this.feedback.success("Database exported successfully");
+      this.feedback.success("Exported");
     } catch (error) {
       this.feedback.error(`Export failed: ${error.message}`);
     }
@@ -60,7 +56,7 @@ export class DatabaseController {
     }
 
     try {
-      setButtonBusy(this.elements.importLabel, "Importing...");
+      setButtonBusy(this.elements.importLabel, "Importing…");
 
       const content = await this.readFileAsText(file);
       const response = await this.client.sendMessage({
@@ -72,39 +68,13 @@ export class DatabaseController {
         throw new Error(response?.error || "Import failed");
       }
 
-      this.feedback.success(
-        response.message || "Database imported successfully",
-      );
+      this.feedback.success("Imported");
       await this.onDataChanged();
     } catch (error) {
       this.feedback.error(`Import failed: ${error.message}`);
     } finally {
       clearButtonBusy(this.elements.importLabel);
       event.target.value = "";
-    }
-  }
-
-  async resetDatabase() {
-    if (
-      !confirm(
-        "Are you sure you want to reset the database? This action cannot be undone.",
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await this.client.sendMessage({
-        action: "database-reset",
-      });
-      if (!response?.success) {
-        throw new Error(response?.error || "Reset failed");
-      }
-
-      this.feedback.success("Database reset successfully");
-      await this.onDataChanged();
-    } catch (error) {
-      this.feedback.error(`Reset failed: ${error.message}`);
     }
   }
 

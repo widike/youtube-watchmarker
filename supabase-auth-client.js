@@ -35,42 +35,78 @@ export class SupabaseAuthClient {
         method: "POST",
         headers,
         body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(10_000),
       },
     );
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(
+      const error = new Error(
         payload.msg ||
           payload.message ||
           payload.error_description ||
           payload.error ||
           `Supabase Auth failed with HTTP ${response.status}`,
       );
+      error.status = response.status;
+      throw error;
     }
     return payload;
   }
 
   createStoredSession(payload, previousSession = null) {
-    const user = payload.user || {};
+    const user = payload?.user;
+    if (
+      typeof payload?.access_token !== "string" ||
+      !payload.access_token ||
+      typeof payload.refresh_token !== "string" ||
+      !payload.refresh_token ||
+      typeof user?.id !== "string" ||
+      !user.id ||
+      !Number.isFinite(payload.expires_in) ||
+      payload.expires_in <= 0
+    ) {
+      throw new Error("Supabase returned an incomplete Auth session");
+    }
+    if (previousSession && user.id !== previousSession.userId) {
+      throw new Error("Supabase refresh returned a different device identity");
+    }
     return {
       accessToken: payload.access_token,
       refreshToken: payload.refresh_token,
-      expiresAt: Date.now() + Number(payload.expires_in || 3600) * 1000,
-      userId: user.id || previousSession?.userId,
-      email: user.email || previousSession?.email || null,
+      expiresAt: Date.now() + payload.expires_in * 1000,
+      userId: user.id,
     };
   }
 
-  async authenticate(configuration, email, password) {
-    const payload = await this.request("/token?grant_type=password", {
-      body: { email, password },
+  async createDeviceSession(configuration) {
+    const payload = await this.request("/signup", {
+      body: {},
       configuration,
     });
-    const session = this.createStoredSession(payload);
-    return {
-      auth: { authenticated: true, email: payload.user?.email || email },
-      session,
-    };
+    return this.createStoredSession(payload);
+  }
+
+  async deviceRpc(configuration, session, name, body = {}) {
+    const response = await fetch(
+      `${configuration.supabaseUrl}/rest/v1/rpc/${name}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: configuration.publishableKey,
+          Authorization: `Bearer ${session.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok)
+      throw new Error(
+        payload?.message ||
+          "Device linking needs the current database setup SQL",
+      );
+    return payload;
   }
 
   refreshSession() {
@@ -85,7 +121,9 @@ export class SupabaseAuthClient {
   async performSessionRefresh() {
     const previousSession = await credentialStorage.getSession();
     if (!previousSession?.refreshToken) {
-      throw new Error("Supabase session is missing. Sign in again.");
+      throw new Error(
+        "Sync session is missing. Reconnect with a connection code.",
+      );
     }
 
     try {
@@ -93,18 +131,21 @@ export class SupabaseAuthClient {
         body: { refresh_token: previousSession.refreshToken },
       });
       const session = this.createStoredSession(payload, previousSession);
+      session.historyOwnerId = previousSession.historyOwnerId;
       await credentialStorage.storeSession(session);
       return session;
     } catch (error) {
-      await credentialStorage.clearSession();
-      throw new Error(`Supabase session expired: ${error.message}`);
+      if (error.status === 400 || error.status === 401) {
+        await credentialStorage.clearSession();
+      }
+      throw new Error(`Sync session could not be refreshed: ${error.message}`);
     }
   }
 
   async getAccessToken() {
     const session = await credentialStorage.getSession();
     if (!session) {
-      throw new Error("Sign in to Supabase before accessing cloud data");
+      throw new Error("Connect this device before accessing shared history");
     }
 
     if (session.expiresAt - Date.now() <= REFRESH_MARGIN_MS) {
@@ -117,6 +158,7 @@ export class SupabaseAuthClient {
     const configuration = await this.getConfiguration();
     const accessToken = await this.getAccessToken();
     const response = await fetch(`${configuration.supabaseUrl}/auth/v1/user`, {
+      signal: AbortSignal.timeout(10_000),
       headers: {
         apikey: configuration.publishableKey,
         Authorization: `Bearer ${accessToken}`,
@@ -125,8 +167,10 @@ export class SupabaseAuthClient {
     });
 
     if (!response.ok) {
-      await credentialStorage.clearSession();
-      throw new Error("Supabase Auth session is invalid. Sign in again.");
+      if (response.status === 401) await credentialStorage.clearSession();
+      throw new Error(
+        `Sync connection check failed (HTTP ${response.status}).`,
+      );
     }
     return response.json();
   }

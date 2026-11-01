@@ -2,7 +2,7 @@
 
 /**
  * YouTube action handlers
- * Handles YouTube-related operations like lookup, ensure, synchronize
+ * Handles YouTube-related operations like lookup, playback tracking, synchronize
  */
 
 import { logger } from "../logger.js";
@@ -13,38 +13,19 @@ import { createHandler } from "../handler-wrapper.js";
 /**
  * Lookup a video in the database
  */
-export const handleYoutubeLookup = createHandler(async (request) => {
-  const { videoId, title } = request;
+export const handleYoutubeLookup = createHandler(
+  async (request) => {
+    const { videoId } = request;
 
-  if (!videoId) {
-    return { success: false, error: "Missing video ID" };
-  }
+    if (!videoId) {
+      return { success: false, error: "Missing video ID" };
+    }
 
-  if (title) {
-    videoTracker.cacheTitle(videoId, title);
-  }
-
-  const result = await Youtube.lookup(videoId);
-  return result || { success: false, error: "Video not found" };
-}, "handleYoutubeLookup");
-
-/**
- * Ensure a video exists in the database
- */
-export const handleYoutubeEnsure = createHandler(async (request) => {
-  const { videoId, title, timestamp, count } = request;
-
-  if (!videoId) {
-    return { success: false, error: "Missing video ID" };
-  }
-
-  if (title) {
-    videoTracker.cacheTitle(videoId, title);
-  }
-
-  const result = await Youtube.ensure(videoId, title, timestamp, count);
-  return { data: result };
-}, "handleYoutubeEnsure");
+    const result = await Youtube.lookup(videoId);
+    return result || { success: true, strIdent: null };
+  },
+  { name: "handleYoutubeLookup" },
+);
 
 /**
  * Synchronize YouTube history
@@ -58,7 +39,7 @@ export const handleYoutubeSynchronize = createHandler(
     const videoCount = result.videoCount ?? 0;
     return { response: result, videoCount };
   },
-  { name: "handleYoutubeSynchronize", requiresRequest: false },
+  { name: "handleYoutubeSynchronize" },
 );
 
 /**
@@ -72,19 +53,12 @@ export const handleYoutubeLikedVideos = createHandler(
 
     return { response: result, videoCount: result.videoCount || 0 };
   },
-  { name: "handleYoutubeLikedVideos", requiresRequest: false },
+  { name: "handleYoutubeLikedVideos" },
 );
 
-/**
- * Mark a video as watched
- */
-export const handleYoutubeMark = createHandler(async (request) => {
-  const { videoId, title, timestamp, count } = request;
-
-  if (!videoId) {
-    return { success: false, error: "Missing video ID" };
-  }
-
-  const result = await Youtube.mark(videoId, title, timestamp, count);
-  return { data: result };
-}, "handleYoutubeMark");
+export const handleYoutubeWatch = createHandler(
+  async (request, sender) => ({
+    data: await videoTracker.recordWatch(request, sender),
+  }),
+  { name: "handleYoutubeWatch" },
+);

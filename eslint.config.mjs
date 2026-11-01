@@ -5,26 +5,29 @@ import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
   {
-    ignores: ["content/bootstrap.bundle.min.js"],
+    ignores: ["vendor/**"],
   },
-  { files: ["**/*.{js,mjs,cjs}"] },
   {
     files: ["**/*.{js,mjs,cjs}"],
     languageOptions: {
       globals: {
         ...globals.browser,
         ...globals.webextensions,
-        moment: "readonly",
       },
     },
+  },
+  {
+    files: ["**/*.test.js", "scripts/**/*.{js,mjs}"],
+    languageOptions: { globals: globals.node },
   },
   {
     files: ["**/*.{js,mjs,cjs}"],
     plugins: { js },
     extends: ["js/recommended"],
     rules: {
+      "max-lines": ["error", 400],
       "no-unused-vars": [
-        "warn",
+        "error",
         {
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",

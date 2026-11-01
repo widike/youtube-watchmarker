@@ -1,0 +1,45 @@
+@layer pages {
+  .stats-word-cloud {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    list-style: none;
+    margin: 18px 0 0;
+    padding: 4px;
+  }
+  .stats-word-cloud li {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .stats-word-cloud button {
+    display: block;
+    max-width: 100%;
+    min-height: 28px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 5px;
+    color: var(--accent);
+    background: transparent;
+    font-size: var(--word-size);
+    line-height: 1.25;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    text-align: start;
+  }
+  .stats-word-cloud button:hover,
+  .stats-word-cloud button:focus-visible {
+    background-color: var(--accent-soft);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .stats-word-cloud button:focus-visible {
+    outline-offset: 1px;
+  }
+  .stats-word-empty {
+    color: var(--muted);
+    font-size: 12px;
+    margin-block: 24px;
+  }
+}

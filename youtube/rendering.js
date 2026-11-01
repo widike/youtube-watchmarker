@@ -3,13 +3,6 @@
 (() => {
   const watchmarker = globalThis.YouTubeWatchmarkerContent;
   const { core } = watchmarker;
-  const WATCHMARK_VISUAL_TARGET_SELECTOR =
-    ".youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .ytp-videowall-still-image.youwatch-mark";
-
-  function buildWatchmarkVisualRule(declaration) {
-    return `${WATCHMARK_VISUAL_TARGET_SELECTOR} { ${declaration} !important; }`;
-  }
-
   class ContentStyleManager {
     constructor(settingsStore) {
       this.settingsStore = settingsStore;
@@ -21,103 +14,72 @@
       const stylesheet = this.buildStylesheet(settings);
 
       const existing = document.getElementById(this.styleElementId);
-      if (existing) {
-        existing.remove();
-      }
-
       if (!stylesheet.trim()) {
+        existing?.remove();
         return;
       }
-
-      const styleElement = document.createElement("style");
+      const styleElement = existing || document.createElement("style");
       styleElement.id = this.styleElementId;
       styleElement.textContent = stylesheet;
-      document.head.appendChild(styleElement);
+      if (!existing) document.head.appendChild(styleElement);
     }
 
     async getVisualSettings() {
-      const keys = [
-        "stylesheet_Fadeout",
-        "stylesheet_Grayout",
-        "stylesheet_Showbadge",
-        "stylesheet_Showdate",
-        "stylesheet_Hideprogress",
-        "idVisualization_Fadeout",
-        "idVisualization_Grayout",
-        "idVisualization_Showbadge",
-        "idVisualization_Showdate",
-        "idVisualization_Hideprogress",
-      ];
-
-      const settings = {};
-      for (const key of keys) {
-        settings[key] = await this.settingsStore.get(key);
-      }
-      return settings;
+      return Object.fromEntries(
+        await Promise.all(
+          this.settingsStore.settingKeys.map(async (key) => [
+            key,
+            await this.settingsStore.get(key),
+          ]),
+        ),
+      );
     }
 
     buildStylesheet(settings) {
-      let stylesheet = "";
-
-      if (settings.idVisualization_Fadeout) {
-        if (settings.stylesheet_Fadeout) {
-          stylesheet += `${settings.stylesheet_Fadeout}\n`;
-        }
-        stylesheet += `${buildWatchmarkVisualRule("opacity: 0.34")}\n`;
-      }
-
-      if (settings.idVisualization_Grayout) {
-        if (settings.stylesheet_Grayout) {
-          stylesheet += `${settings.stylesheet_Grayout}\n`;
-        }
-        stylesheet += `${buildWatchmarkVisualRule("filter: grayscale(1)")}\n`;
-      }
-
-      if (settings.idVisualization_Showbadge && settings.stylesheet_Showbadge) {
-        stylesheet += `${settings.stylesheet_Showbadge}\n`;
-      }
-
-      if (settings.idVisualization_Showdate && settings.stylesheet_Showdate) {
-        stylesheet += `${settings.stylesheet_Showdate}\n`;
-      }
-
-      if (
-        settings.idVisualization_Hideprogress &&
-        settings.stylesheet_Hideprogress
-      ) {
-        stylesheet += `${settings.stylesheet_Hideprogress}\n`;
-      }
-
-      return stylesheet;
+      return this.settingsStore.features
+        .filter((name) => settings[`idVisualization_${name}`])
+        .map((name) => settings[`stylesheet_${name}`] || "")
+        .join("\n");
     }
   }
 
   class VideoMarkerManager {
     constructor(backgroundClient) {
       this.backgroundClient = backgroundClient;
-      this.watchDates = new Map();
+      this.watchStates = new Map();
       this.pendingLookups = new Set();
-      this.observers = new WeakMap();
+      this.lookupTimes = new Map();
+      this.generation = 0;
     }
 
     getWatchTimestamp(videoId) {
-      return this.watchDates.get(videoId) ?? null;
+      return this.watchStates.get(videoId)?.timestamp ?? null;
     }
 
-    updateWatchState(videoId, timestamp = 0) {
-      this.watchDates.set(videoId, timestamp);
+    updateWatchState(videoId, timestamp = 0, count = 1) {
+      const previous = this.watchStates.get(videoId);
+      this.watchStates.set(videoId, {
+        timestamp: Math.max(previous?.timestamp || 0, timestamp),
+        count: Math.max(
+          previous?.count || 1,
+          Number.isSafeInteger(count) && count > 0 ? count : 1,
+        ),
+      });
       this.markVideosWithId(videoId);
     }
 
-    removeWatchState(videoId) {
-      this.watchDates.delete(videoId);
-      this.markVideosWithId(videoId);
+    invalidate() {
+      this.generation++;
+      this.watchStates.clear();
+      this.lookupTimes.clear();
+      this.pendingLookups.clear();
     }
 
     clearMarks() {
       document.querySelectorAll(".youwatch-mark").forEach((target) => {
         target.classList.remove("youwatch-mark");
         target.removeAttribute("watchdate");
+        target.removeAttribute("watchcount");
       });
     }
 
@@ -128,10 +90,6 @@
     }
 
     markVideo(videoElement, videoId) {
-      if (!videoId) {
-        return;
-      }
-
       const target = this.resolveMarkTarget(videoElement);
       const alreadyMarked = target.classList.contains("youwatch-mark");
 
@@ -139,6 +97,7 @@
         if (alreadyMarked) {
           target.classList.remove("youwatch-mark");
           target.removeAttribute("watchdate");
+          target.removeAttribute("watchcount");
         }
         return;
       }
@@ -153,11 +112,17 @@
       if (!isWatched && alreadyMarked) {
         target.classList.remove("youwatch-mark");
         target.removeAttribute("watchdate");
+        target.removeAttribute("watchcount");
       }
 
       if (!isWatched) {
         return;
       }
+
+      target.setAttribute(
+        "watchcount",
+        ` ×${this.watchStates.get(videoId).count}`,
+      );
 
       if (timestamp) {
         const watchDate = new Date(timestamp).toLocaleDateString(undefined, {
@@ -172,6 +137,13 @@
     }
 
     resolveMarkTarget(videoElement) {
+      // End-card images can be siblings of the link. Mark the card itself so
+      // both the thumbnail and badge remain inside the fullscreen player.
+      const playerTile = videoElement.closest(
+        ".ytp-ce-video, a.ytp-videowall-still, a.ytp-autonav-endscreen-link-container",
+      );
+      if (playerTile) return playerTile;
+
       const notification = videoElement.closest("ytd-notification-renderer");
       if (notification) {
         return (
@@ -196,79 +168,58 @@
 
       return (
         thumbnailElement?.closest?.(
-          'a[href^="/watch?v="], a[href^="/shorts/"]',
+          'a[href*="/watch?"], a[href*="/shorts/"]',
         ) ||
         renderer.querySelector(
-          'a.ytd-thumbnail[href^="/watch?v="], a[href^="/shorts/"]',
+          'a.ytd-thumbnail[href*="/watch?"], a[href*="/shorts/"]',
         ) ||
         videoElement
       );
     }
 
-    observeVideo(videoElement) {
-      if (this.observers.has(videoElement)) {
-        return;
-      }
-
-      const observer = new MutationObserver(() => {
-        const videoId = core.extractVideoId(videoElement);
-        this.markVideo(videoElement, videoId);
-      });
-
-      observer.observe(videoElement, {
-        attributes: true,
-        attributeFilter: ["href"],
-      });
-
-      this.observers.set(videoElement, observer);
-    }
-
-    async requestVideoData(videoElement, videoId) {
+    async requestVideoData(videoId) {
       if (
         !videoId ||
-        this.watchDates.has(videoId) ||
-        this.pendingLookups.has(videoId)
+        this.watchStates.has(videoId) ||
+        this.pendingLookups.has(videoId) ||
+        Date.now() - (this.lookupTimes.get(videoId) || 0) < 30_000
       ) {
         return;
       }
 
       this.pendingLookups.add(videoId);
+      const generation = this.generation;
 
       try {
         const response = await this.backgroundClient.send({
           action: "youtube-lookup",
           videoId,
-          title: core.extractVideoTitle(videoElement),
         });
 
-        if (response?.success !== false && response?.strIdent === videoId) {
-          this.updateWatchState(videoId, response.intTimestamp || 0);
+        if (generation !== this.generation) return;
+        if (
+          response?.success === true &&
+          response?.strIdent === videoId &&
+          !this.watchStates.has(videoId)
+        ) {
+          this.updateWatchState(
+            videoId,
+            response.intTimestamp || 0,
+            response.intCount,
+          );
         }
+        if (response?.success === true)
+          this.lookupTimes.set(videoId, Date.now());
       } finally {
-        this.pendingLookups.delete(videoId);
+        if (generation === this.generation) this.pendingLookups.delete(videoId);
       }
-    }
-
-    async markAsWatchedFromInteraction(videoId, title) {
-      if (!videoId) {
-        return;
-      }
-
-      const response = await this.backgroundClient.send({
-        action: "youtube-ensure",
-        videoId,
-        title,
-      });
-
-      if (response?.success === false) {
-        return;
-      }
-
-      const timestamp = response?.data?.intTimestamp || Date.now();
-      this.updateWatchState(videoId, timestamp);
     }
 
     async processVideos(videos) {
+      // YouTube reuses thumbnail nodes, including changing a link to a non-video.
+      document.querySelectorAll(".youwatch-mark").forEach((target) => {
+        this.markVideo(target, core.extractVideoId(target));
+      });
       const batchSize = 12;
 
       for (let index = 0; index < videos.length; index += batchSize) {
@@ -278,8 +229,11 @@
           batch.map(async (video) => {
             const videoId = core.extractVideoId(video);
             this.markVideo(video, videoId);
-            this.observeVideo(video);
-            await this.requestVideoData(video, videoId);
+            try {
+              await this.requestVideoData(videoId);
+            } catch (error) {
+              core.logError("Failed to look up watched video", error);
+            }
           }),
         );
       }

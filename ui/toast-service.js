@@ -1,53 +1,26 @@
-// @ts-check
-
+// Errors stay visible until dismissed. Routine feedback lives in the page.
 export class ToastService {
-  constructor({
-    bootstrap,
-    successToastElement,
-    errorToastElement,
-    successMessageElement,
-    errorMessageElement,
-    announcerElement = null,
-  }) {
-    this.successToast = successToastElement
-      ? new bootstrap.Toast(successToastElement)
-      : null;
-    this.errorToast = errorToastElement
-      ? new bootstrap.Toast(errorToastElement)
-      : null;
-    this.successMessageElement = successMessageElement;
+  constructor({ errorToastElement, errorMessageElement, statusElement }) {
+    this.errorElement = errorToastElement;
     this.errorMessageElement = errorMessageElement;
-    this.announcerElement = announcerElement;
+    this.statusElement = statusElement;
+    this.errorElement
+      ?.querySelector("[data-dismiss-error]")
+      ?.addEventListener("click", () => {
+        this.errorElement.hidden = true;
+      });
   }
 
   success(message) {
-    if (this.successToast && this.successMessageElement) {
-      this.successMessageElement.textContent = message;
-      this.successToast.show();
-    }
-
-    this.announce(message);
+    if (this.statusElement) this.statusElement.textContent = message;
   }
 
   error(message) {
-    if (this.errorToast && this.errorMessageElement) {
+    if (this.errorElement && this.errorMessageElement) {
       this.errorMessageElement.textContent = message;
-      this.errorToast.show();
+      this.errorElement.hidden = false;
     } else {
       console.error(message);
     }
-
-    this.announce(`Error: ${message}`);
-  }
-
-  announce(message) {
-    if (!this.announcerElement) {
-      return;
-    }
-
-    this.announcerElement.textContent = message;
-    setTimeout(() => {
-      this.announcerElement.textContent = "";
-    }, 1000);
   }
 }

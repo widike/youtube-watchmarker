@@ -5,55 +5,27 @@
   globalThis.YouTubeWatchmarkerContent = watchmarker;
 
   const videoSelectors = [
-    'a.ytd-thumbnail[href^="/watch?v="]',
-    'a.ytd-thumbnail[href^="/shorts/"]',
-    'yt-lockup-view-model a[href^="/watch?v="]',
-    'yt-lockup-view-model a[href^="/shorts/"]',
-    'yt-lockup-view-model a.yt-lockup-view-model__content-image[href^="/watch?v="]',
-    'ytd-watch-next-secondary-results-renderer a[href^="/watch?v="]',
-    'ytd-item-section-renderer a[href^="/watch?v="]',
-    'ytd-compact-video-renderer a[href^="/watch?v="]',
-    'a.ytp-ce-covering-overlay[href*="/watch?v="]',
-    'a.ytp-videowall-still[href*="/watch?v="]',
-    'a.ShortsLockupViewModelHostEndpoint[href^="/shorts/"]',
-    'a.reel-item-endpoint[href^="/shorts/"]',
-    'a.media-item-thumbnail-container[href^="/watch?v="]',
+    'a.ytd-thumbnail[href*="/watch?"]',
+    'a.ytd-thumbnail[href*="/shorts/"]',
+    "a#thumbnail[href]",
+    'yt-lockup-view-model a[href*="/watch?"]',
+    'yt-lockup-view-model a[href*="/shorts/"]',
+    'yt-lockup-view-model a.yt-lockup-view-model__content-image[href*="/watch?"]',
+    'ytd-watch-next-secondary-results-renderer a[href*="/watch?"]',
+    'ytd-item-section-renderer a[href*="/watch?"]',
+    'ytd-compact-video-renderer a[href*="/watch?"]',
+    "a.ytp-ce-covering-overlay[href]",
+    "a.ytp-videowall-still[href]",
+    "a.ytp-autonav-endscreen-link-container[href]",
+    'a.ShortsLockupViewModelHostEndpoint[href*="/shorts/"]',
+    'a.reel-item-endpoint[href*="/shorts/"]',
+    'a.media-item-thumbnail-container[href*="/watch?"]',
     "ytd-notification-renderer a",
     "ytd-notification-renderer .thumbnail-container img",
   ];
 
-  function parseVideoIdFromUrl(url) {
-    if (!url || typeof url !== "string") {
-      return null;
-    }
-
-    const watchMatch = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    if (watchMatch) {
-      return watchMatch[1];
-    }
-
-    const shortsMatch = url.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
-    if (shortsMatch) {
-      return shortsMatch[1];
-    }
-
-    const redirectMatch = url.match(/[?&]q=([^&]+)/);
-    if (redirectMatch) {
-      try {
-        return parseVideoIdFromUrl(decodeURIComponent(redirectMatch[1]));
-      } catch (_error) {
-        return null;
-      }
-    }
-
-    const thumbnailMatch = url.match(/\/vi\/([a-zA-Z0-9_-]{11})\//);
-    if (thumbnailMatch) {
-      return thumbnailMatch[1];
-    }
-
-    const tail = url.split("&")[0].slice(-11);
-    return /^[a-zA-Z0-9_-]{11}$/.test(tail) ? tail : null;
-  }
+  const { parseVideoId: parseVideoIdFromUrl } =
+    globalThis.YouTubeWatchmarkerVideo;
 
   function extractVideoId(input) {
     if (typeof input === "string") {
@@ -64,35 +36,23 @@
       return null;
     }
 
-    const ownHref = parseVideoIdFromUrl(input.href);
-    if (ownHref) {
-      return ownHref;
-    }
-
+    // The link is authoritative when YouTube has not yet replaced its image.
+    const href = input.getAttribute?.("href") || input.href;
+    if (href) return parseVideoIdFromUrl(href);
+    const parentLink = input.closest?.("a[href]");
+    if (parentLink)
+      return parseVideoIdFromUrl(
+        parentLink.getAttribute?.("href") || parentLink.href,
+      );
     const link = input.querySelector?.("a[href]");
-    const linkedId =
-      parseVideoIdFromUrl(link?.getAttribute?.("href")) ||
-      parseVideoIdFromUrl(link?.href);
-    if (linkedId) {
-      return linkedId;
-    }
-
-    const image = input.querySelector?.('img[src*="/vi/"]');
-    return parseVideoIdFromUrl(image?.getAttribute?.("src"));
-  }
-
-  function extractVideoTitle(videoElement) {
-    let current = videoElement;
-
-    for (let depth = 0; depth < 5 && current; depth += 1) {
-      const titleElement = current.querySelector?.("#video-title");
-      if (titleElement?.innerText) {
-        return titleElement.innerText.trim();
-      }
-      current = current.parentElement;
-    }
-
-    return "";
+    if (link)
+      return parseVideoIdFromUrl(link.getAttribute?.("href") || link.href);
+    const image = input.querySelector?.(
+      'img[src*="/vi/"], img[src*="/vi_webp/"]',
+    );
+    return parseVideoIdFromUrl(
+      input.getAttribute?.("src") || input.src || image?.getAttribute?.("src"),
+    );
   }
 
   function isWatchHistoryPage() {
@@ -156,10 +116,10 @@
 
   function getCurrentVideoTitle() {
     const titleSelectors = [
+      "ytd-reel-video-renderer[is-active] h2",
       "h1.ytd-video-primary-info-renderer",
       "h1.ytd-watch-metadata",
       ".ytd-video-primary-info-renderer h1",
-      'meta[property="og:title"]',
     ];
 
     for (const selector of titleSelectors) {
@@ -168,20 +128,16 @@
         continue;
       }
 
-      if (element.tagName === "META") {
-        return element.getAttribute("content") || "";
-      }
-
-      return element.textContent?.trim() || "";
+      const title = element.textContent?.trim();
+      if (title) return title;
     }
 
-    return document.title.replace(" - YouTube", "");
+    return document.title.replace(/\s+-\s+YouTube\s*$/i, "").trim();
   }
 
   watchmarker.core = {
     videoSelectors,
     extractVideoId,
-    extractVideoTitle,
     isWatchHistoryPage,
     findVideos,
     debounce,

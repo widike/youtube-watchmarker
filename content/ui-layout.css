@@ -1,0 +1,136 @@
+/*
+ * Layout templates used by every full page:
+ *   .page-heading + .section-stack
+ *   .surface-card > .section-heading + domain content
+ *   .page-toolbar > .toolbar-actions / .segmented-control
+ * Keep shared typography, surfaces and spacing here; page CSS owns its content.
+ */
+@layer components {
+  .page-heading,
+  .section-heading,
+  .page-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+  .page-heading {
+    padding-block: var(--space-8) var(--space-6);
+  }
+  .page-heading h1 {
+    font-size: var(--font-page);
+    line-height: 1.25;
+    font-weight: 650;
+    letter-spacing: -1px;
+    overflow-wrap: anywhere;
+  }
+  .page-heading > :first-child,
+  .section-heading > :first-child {
+    min-inline-size: 0;
+  }
+  .page-heading > :last-child:not(:first-child) {
+    flex-shrink: 0;
+  }
+  .section-stack {
+    display: grid;
+    gap: var(--space-6);
+  }
+  .surface-card {
+    min-inline-size: 0;
+    padding: var(--card-padding);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--surface);
+  }
+  .section-heading {
+    align-items: flex-start;
+    margin-block-end: var(--space-5);
+  }
+  .section-heading h2 {
+    font-size: var(--font-section);
+    line-height: 1.5;
+    font-weight: 650;
+    letter-spacing: -0.2px;
+  }
+  .section-heading p {
+    margin-block-start: var(--space-2);
+    color: var(--muted);
+    font-size: var(--font-small);
+    overflow-wrap: anywhere;
+  }
+  .page-toolbar {
+    flex-wrap: wrap;
+    padding-block: var(--space-3);
+  }
+  .toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .segmented-control {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    inline-size: fit-content;
+    max-inline-size: 100%;
+    padding: var(--space-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+  }
+  .segmented-control > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 32px;
+    padding: var(--space-1) var(--space-3);
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--font-small);
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .segmented-control > .icon-button {
+    inline-size: 32px;
+    block-size: 32px;
+    padding: 0;
+  }
+  .segmented-control > button:hover {
+    background: var(--soft);
+    color: var(--ink);
+  }
+  .segmented-control > [aria-pressed="true"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .summary-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2) var(--space-4);
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-small);
+  }
+  .summary-list dt {
+    color: var(--muted);
+  }
+  .summary-list dd {
+    margin: 0;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 600px) {
+    .page-heading {
+      align-items: flex-start;
+      flex-direction: column;
+      padding-block-start: var(--space-6);
+    }
+    .section-heading {
+      flex-wrap: wrap;
+    }
+  }
+}

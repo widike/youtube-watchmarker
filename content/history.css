@@ -1,0 +1,5 @@
+/* History cards and virtualization are shared by the full page and popup. */
+@import url("options-history.css");
+@import url("history-cards.css");
+@import url("options-history-controls.css");
+@import url("history-virtual.css");

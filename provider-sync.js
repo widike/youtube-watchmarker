@@ -1,217 +1,136 @@
-// @ts-check
+import {
+  acknowledgeVideos,
+  localPage,
+  pendingVideos,
+  readMetadata,
+  saveVideos,
+  writeMetadata,
+} from "./history-storage.js";
+export { mergeVideoData } from "./history-records.js";
 
-/**
- * Provider Sync Utilities
- * Handles synchronization logic between database providers
- */
+import { syncWatchTime } from "./watch-time-sync.js";
 
-import { logger } from "./logger.js";
+const DAY = 24 * 60 * 60 * 1000;
 
-/**
- * Storage key for last delta sync timestamp
- */
-export const DELTA_SYNC_STORAGE_KEY = "last_delta_sync_timestamp";
-export const SUPABASE_SYNC_BATCH_SIZE = 100;
-
-/**
- * Import videos through a provider in bounded batches.
- * @param {Object} provider - Provider with importVideos(videos)
- * @param {Array} videos - Videos to import
- * @param {number} batchSize - Maximum rows per import call
- * @returns {Promise<number>} Number of videos passed to the provider
- */
-export async function importVideosInBatches(
-  provider,
-  videos,
-  batchSize = SUPABASE_SYNC_BATCH_SIZE,
-) {
-  if (!videos || videos.length === 0) {
-    return 0;
-  }
-
-  let imported = 0;
+export async function importVideosInBatches(provider, videos, batchSize = 100) {
   for (let i = 0; i < videos.length; i += batchSize) {
-    const batch = videos.slice(i, i + batchSize);
-    await provider.importVideos(batch);
-    imported += batch.length;
+    await provider.importVideos(videos.slice(i, i + batchSize));
   }
-
-  return imported;
+  return videos.length;
 }
 
-/**
- * Perform delta sync - only sync videos modified since last sync
- * Much more efficient than full sync for large databases
- * @param {Object} indexedDBProvider - IndexedDB provider instance
- * @param {Object} supabaseProvider - Supabase provider instance
- * @returns {Promise<Object>} Sync result with stats
- */
-export async function performDeltaSync(indexedDBProvider, supabaseProvider) {
-  if (!supabaseProvider || !supabaseProvider.isConnected) {
-    return { success: false, error: "Supabase not available" };
+// No watch-date watermark: imports can contain arbitrarily old watches.
+// The outbox tracks local changes; stable ID pages reconcile the remote union.
+export class HistorySync {
+  constructor(db, remote, now = Date.now) {
+    this.db = db;
+    this.remote = remote;
+    this.now = now;
+    this.running = null;
   }
 
-  try {
-    // Load last sync timestamp
-    const result = await chrome.storage.local.get([DELTA_SYNC_STORAGE_KEY]);
-    const lastSync = result[DELTA_SYNC_STORAGE_KEY] || 0;
-    const now = Date.now();
-    const [localCount, remoteCount] = await Promise.all([
-      indexedDBProvider.getVideoCount(),
-      supabaseProvider.getVideoCount(),
-    ]);
-    const syncStart = localCount > 0 && remoteCount === 0 ? 0 : lastSync;
-
-    if (syncStart === 0 && lastSync > 0) {
-      logger.info(
-        "Supabase is empty; rebuilding it from the complete local watch history",
-      );
+  sync({ forceDownload = true } = {}) {
+    if (!this.running) {
+      this.running = this.run(forceDownload).finally(() => {
+        this.running = null;
+      });
     }
-
-    // Get videos modified since last sync from IndexedDB
-    const modifiedVideos = await indexedDBProvider.getVideosByDateRange(
-      syncStart,
-      now,
-    );
-
-    if (modifiedVideos.length === 0) {
-      logger.debug("Delta sync: no new videos to sync");
-      return { success: true, synced: 0 };
-    }
-
-    const synced = await importVideosInBatches(
-      supabaseProvider,
-      modifiedVideos,
-    );
-
-    // Update last sync timestamp
-    await chrome.storage.local.set({
-      [DELTA_SYNC_STORAGE_KEY]: now,
-    });
-
-    logger.info(`Delta sync complete: synced ${synced} videos`);
-    return { success: true, synced };
-  } catch (error) {
-    logger.error("Delta sync failed:", error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Perform initial full sync from Supabase to IndexedDB
- * Used when setting up Supabase for the first time
- * @param {Object} indexedDBProvider - IndexedDB provider instance
- * @param {Object} supabaseProvider - Supabase provider instance
- * @returns {Promise<Object>} Sync result
- */
-export async function performInitialSync(indexedDBProvider, supabaseProvider) {
-  if (!supabaseProvider.isConnected) {
-    return { success: false, error: "Supabase not connected" };
+    return this.running;
   }
 
-  try {
-    logger.info("Starting initial sync from Supabase...");
-
-    // Get all videos from Supabase
-    const supabaseVideos = await supabaseProvider.getAllVideos();
-
-    if (supabaseVideos.length === 0) {
-      logger.info("Initial sync: no videos in Supabase");
-      return { success: true, imported: 0 };
-    }
-
-    // Import to IndexedDB (will merge with existing)
-    await importVideosInBatches(indexedDBProvider, supabaseVideos, 500);
-
-    // Update last sync timestamp to now
-    await chrome.storage.local.set({
-      [DELTA_SYNC_STORAGE_KEY]: Date.now(),
-    });
-
-    logger.info(
-      `Initial sync complete: imported ${supabaseVideos.length} videos from Supabase`,
-    );
-    return { success: true, imported: supabaseVideos.length };
-  } catch (error) {
-    logger.error("Initial sync failed:", error.message);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Sync data between two providers (bidirectional merge)
- * @param {Object} provider1 - First provider instance
- * @param {Object} provider2 - Second provider instance
- * @returns {Promise<boolean>} Success status
- */
-export async function syncProviders(provider1, provider2) {
-  try {
-    // Get all data from both providers
-    const data1 = await provider1.getAllVideos();
-    const data2 = await provider2.getAllVideos();
-
-    // Merge data (keep the most recent timestamp for each video)
-    const mergedData = mergeVideoData(data1, data2);
-
-    // Update both providers with merged data
-    await importVideosInBatches(provider1, mergedData, 500);
-    await importVideosInBatches(provider2, mergedData);
-
-    return true;
-  } catch (error) {
-    console.error(
-      "Data sync failed:",
-      JSON.stringify(
-        {
-          error: error.message,
-          errorName: error.name,
-          errorStack: error.stack,
-        },
-        null,
-        2,
-      ),
-    );
-    throw error;
-  }
-}
-
-/**
- * Merge video data from two sources
- * @param {Array} data1 - First data set
- * @param {Array} data2 - Second data set
- * @returns {Array} Merged data
- */
-export function mergeVideoData(data1, data2) {
-  const merged = new Map();
-
-  // Add all videos from data1
-  data1.forEach((video) => {
-    merged.set(video.strIdent, video);
-  });
-
-  // Merge with data2, keeping the most recent timestamp
-  data2.forEach((video) => {
-    const existing = merged.get(video.strIdent);
-    if (!existing) {
-      merged.set(video.strIdent, video);
-    } else {
-      // Keep the video with the most recent timestamp
-      const mergedVideo = {
-        ...existing,
-        ...video,
-        intTimestamp: Math.max(
-          existing.intTimestamp || 0,
-          video.intTimestamp || 0,
-        ),
-        intCount: Math.max(existing.intCount || 1, video.intCount || 1),
-        strTitle:
-          (video.intTimestamp || 0) >= (existing.intTimestamp || 0)
-            ? video.strTitle || existing.strTitle
-            : existing.strTitle || video.strTitle,
+  async run(forceDownload) {
+    const deadline = this.now() + 20_000;
+    let uploaded = 0;
+    let downloaded = 0;
+    try {
+      // Repair missing cloud rows daily, including after a cloud restore.
+      // Cursor progress is durable, so a worker restart resumes safely.
+      const repair = (await readMetadata(this.db, "repair")) || {
+        completedAt: 0,
+        after: "",
       };
-      merged.set(video.strIdent, mergedVideo);
+      if (
+        this.now() < repair.completedAt ||
+        this.now() - repair.completedAt >= DAY
+      ) {
+        while (this.now() < deadline) {
+          const rows = await localPage(this.db, repair.after);
+          if (!rows.length) {
+            await writeMetadata(this.db, "repair", {
+              completedAt: this.now(),
+              after: "",
+            });
+            break;
+          }
+          await saveVideos(this.db, rows);
+          repair.after = rows.at(-1).strIdent;
+          await writeMetadata(this.db, "repair", repair);
+        }
+      }
+      if (!this.remote.isConnected) await this.remote.init();
+      while (this.now() < deadline) {
+        const entries = await pendingVideos(this.db);
+        if (!entries.length) break;
+        const success = await this.remote.importVideos(
+          entries.map((entry) => entry.video),
+        );
+        if (!success) throw new Error("Upload was not acknowledged");
+        await acknowledgeVideos(this.db, entries);
+        uploaded += entries.length;
+      }
+      const time = await syncWatchTime(this.db, this.remote, {
+        now: this.now,
+        deadline: Math.min(deadline, this.now() + 6000),
+        forceDownload,
+      });
+      let after = (await readMetadata(this.db, "downloadAfter")) || "";
+      const lastDownload = (await readMetadata(this.db, "lastDownload")) || 0;
+      const shouldDownload =
+        forceDownload ||
+        after ||
+        this.now() < lastDownload ||
+        this.now() - lastDownload >= 5 * 60_000;
+      let complete = !shouldDownload;
+      while (shouldDownload && this.now() < deadline) {
+        const rows = await this.remote.getVideoPage(after);
+        if (!rows.length) {
+          await writeMetadata(this.db, "downloadAfter", "");
+          await writeMetadata(this.db, "lastDownload", this.now());
+          complete = true;
+          break;
+        }
+        await saveVideos(this.db, rows, { pending: false });
+        after = rows.at(-1).strIdent;
+        await writeMetadata(this.db, "downloadAfter", after);
+        downloaded += rows.length;
+      }
+      const pending = (await pendingVideos(this.db, 1)).length > 0;
+      const previous = (await readMetadata(this.db, "syncStatus")) || {};
+      const status = {
+        ...previous,
+        error: null,
+        uploaded,
+        downloaded,
+        timeUploaded: time.uploaded,
+        timeDownloaded: time.downloaded,
+        inProgress: !complete || pending || !time.complete,
+        lastAttempt: this.now(),
+        lastSuccess:
+          shouldDownload && complete && !pending && time.complete
+            ? this.now()
+            : previous.lastSuccess || 0,
+      };
+      await writeMetadata(this.db, "syncStatus", status);
+      return { success: true, ...status };
+    } catch (error) {
+      const previous = (await readMetadata(this.db, "syncStatus")) || {};
+      await writeMetadata(this.db, "syncStatus", {
+        ...previous,
+        error: error.message,
+        lastAttempt: this.now(),
+        inProgress: false,
+      });
+      return { success: false, error: error.message };
     }
-  });
-
-  return Array.from(merged.values());
+  }
 }

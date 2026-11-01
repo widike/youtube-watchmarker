@@ -1,0 +1,10 @@
+/* Full-page layout; shared components come from ui.css. */
+@import url("options-navigation.css");
+@import url("options-shell.css");
+@import url("history.css");
+@import url("options-settings.css");
+@import url("options-sync.css");
+@import url("options-duration.css");
+@import url("statistics.css");
+@import url("statistics-words.css");
+@import url("statistics-heatmaps.css");

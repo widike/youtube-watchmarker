@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://raw.githubusercontent.com/explosion/spacy-lookups-data/180c5da7bead0535aee0b493910f8520bac7d966/spacy_lookups_data/data/de_lemma_lookup.json",
+    "sha256": "7af969d5db747dccc1bf88d5eb64f4941ae4ff14570053287bf57ca253e9bcea"
+  },
+  {
+    "url": "https://www.auswaertiges-amt.de/resource/blob/264784/b884adc328130d148762fd146e138f99/ods-data.ods",
+    "sha256": "915f383849e63e3124a5f82efd2fefe29eee34a460596890d6d08fdf79251943"
+  },
+  {
+    "url": "https://deutsch.lingolia.com/en/vocabulary/laender-nationalitaeten",
+    "sha256": "3b8f9f625e19d8714f904027375b1ae362e9aae6c989146132e350d8755c89a5"
+  }
+]

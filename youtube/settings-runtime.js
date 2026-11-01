@@ -7,18 +7,18 @@
   class ContentSettingsStore {
     constructor() {
       this.cache = {};
-      this.settingKeys = [
-        "stylesheet_Fadeout",
-        "stylesheet_Grayout",
-        "stylesheet_Showbadge",
-        "stylesheet_Showdate",
-        "stylesheet_Hideprogress",
-        "idVisualization_Fadeout",
-        "idVisualization_Grayout",
-        "idVisualization_Showbadge",
-        "idVisualization_Showdate",
-        "idVisualization_Hideprogress",
+      this.features = [
+        "Fadeout",
+        "Grayout",
+        "Showbadge",
+        "Showdate",
+        "Showcount",
+        "Hideprogress",
       ];
+      this.settingKeys = this.features.flatMap((name) => [
+        `stylesheet_${name}`,
+        `idVisualization_${name}`,
+      ]);
     }
 
     async load() {

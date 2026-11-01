@@ -1,8 +1,4 @@
-// @ts-check
-
-import { clearButtonBusy, setButtonBusy } from "./button-state.js";
-import { renderWatchHistoryTable } from "./watch-history-table.js";
-
+// Requests stay bounded; the UI accumulates records as the reader scrolls.
 export class HistorySearchController {
   constructor({
     client,
@@ -12,190 +8,211 @@ export class HistorySearchController {
     searchIcon,
     searchSpinner,
     resultsContainer,
-    initialLoadingElement = null,
-    pageSize = 50,
-    compact = false,
-    emptyMessages,
-    onDeleteSuccess = async () => {},
+    batchSize = 50,
     onSearchSuccess = async () => {},
+    onDeleteSuccess = async () => {},
+    renderResults,
+    getSearchOptions = () => ({}),
   }) {
-    this.client = client;
-    this.feedback = feedback;
-    this.queryInput = queryInput;
-    this.searchButton = searchButton;
-    this.searchIcon = searchIcon;
-    this.searchSpinner = searchSpinner;
-    this.resultsContainer = resultsContainer;
-    this.initialLoadingElement = initialLoadingElement;
-    this.compact = compact;
-    this.emptyMessages = emptyMessages;
-    this.onDeleteSuccess = onDeleteSuccess;
-    this.onSearchSuccess = onSearchSuccess;
+    Object.assign(this, {
+      client,
+      feedback,
+      queryInput,
+      searchButton,
+      searchIcon,
+      searchSpinner,
+      resultsContainer,
+      onSearchSuccess,
+      onDeleteSuccess,
+      renderResults,
+      getSearchOptions,
+      batchSize,
+    });
+    this.requestId = 0;
+    this.results = [];
+    this.nextOffset = 0;
     this.state = {
       currentQuery: "",
-      currentPage: 1,
-      pageSize,
+      period: "all",
       totalResults: 0,
       isSearching: false,
+      isLoadingMore: false,
+      hasMore: false,
+      loadError: "",
     };
   }
 
   initialize() {
-    this.searchButton?.addEventListener("click", () => {
-      void this.search();
-    });
-
+    this.searchButton?.addEventListener("click", () => void this.search());
     this.queryInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
         void this.search();
       }
     });
-
-    let timeoutId;
     this.queryInput?.addEventListener("input", () => {
-      clearTimeout(timeoutId);
-
-      timeoutId = setTimeout(() => {
-        this.state.currentPage = 1;
-        this.state.currentQuery = this.queryInput.value.trim();
-        void this.search();
-      }, 300);
+      clearTimeout(this.debounceTimer);
+      // Invalidate immediately, before the debounce, so old batches cannot
+      // appear under a newly typed query or trigger another stale request.
+      ++this.requestId;
+      this.state.wordGroup = "";
+      this.state.hasMore = false;
+      this.debounceTimer = setTimeout(() => void this.search(), 300);
     });
   }
 
   async loadInitialResults() {
-    this.state.currentQuery = "";
-    this.state.currentPage = 1;
-    await this.search({ silent: true });
+    await this.search();
   }
 
-  async search({ silent = false } = {}) {
-    if (this.state.isSearching) {
+  async search({ wordGroup } = {}) {
+    if (this.disposed) return;
+    clearTimeout(this.debounceTimer);
+    ++this.requestId;
+    this.results = [];
+    this.nextOffset = 0;
+    const query = this.queryInput?.value.trim() || "";
+    this.state.wordGroup =
+      wordGroup ??
+      (query === this.state.currentQuery ? this.state.wordGroup : "");
+    this.state.currentQuery = query;
+    this.state.totalResults = 0;
+    this.state.hasMore = false;
+    this.state.loadError = "";
+    await this.fetchBatch({ reset: true });
+  }
+
+  async loadMore() {
+    if (
+      this.disposed ||
+      this.deleting ||
+      this.state.isSearching ||
+      this.state.isLoadingMore ||
+      !this.state.hasMore ||
+      this.state.loadError
+    )
       return;
-    }
+    await this.fetchBatch();
+  }
 
-    this.state.currentQuery =
-      this.queryInput?.value.trim() || this.state.currentQuery;
-    this.state.isSearching = true;
-    this.setSearchingState(true);
+  async retry() {
+    if (this.disposed || this.state.isSearching || this.state.isLoadingMore)
+      return;
+    this.state.loadError = "";
+    await this.fetchBatch({ reset: this.results.length === 0 });
+  }
 
+  async fetchBatch({ reset = false } = {}) {
+    const requestId = ++this.requestId;
+    const offset = this.nextOffset;
+    this.state.isSearching = reset;
+    this.state.isLoadingMore = !reset;
+    this.setSearchingState();
+    this.render({ reset });
     try {
       const response = await this.client.sendMessage({
         action: "search-videos",
         query: this.state.currentQuery,
-        page: this.state.currentPage,
-        pageSize: this.state.pageSize,
+        ...(this.state.wordGroup ? { wordGroup: this.state.wordGroup } : {}),
+        offset,
+        limit: this.batchSize,
+        ...this.getSearchOptions(),
       });
-
-      if (!response?.success) {
+      if (requestId !== this.requestId) return;
+      if (!response?.success)
         throw new Error(response?.error || "Search failed");
-      }
-
-      const results = response.objVideos || response.results || [];
+      const batch = response.objVideos || [];
+      const records = new Map(
+        this.results.map((video) => [video.entryId || video.strIdent, video]),
+      );
+      for (const video of batch)
+        records.set(video.entryId || video.strIdent, video);
+      this.results = [...records.values()];
+      this.nextOffset = offset + batch.length;
       this.state.totalResults = response.totalResults || 0;
-
-      this.hideInitialLoading();
-      renderWatchHistoryTable({
-        container: this.resultsContainer,
-        results,
-        state: this.state,
-        compact: this.compact,
-        emptyMessages: this.emptyMessages,
-        onDelete: (videoId, button) => this.deleteVideo(videoId, button),
-        onPageChange: (page) => {
-          this.state.currentPage = page;
-          void this.search();
-        },
-      });
-
-      await this.onSearchSuccess(results);
+      this.state.hasMore =
+        batch.length > 0 && this.nextOffset < this.state.totalResults;
+      await this.onSearchSuccess(batch);
     } catch (_error) {
-      this.hideInitialLoading();
-
-      if (!silent) {
-        this.feedback.error(
-          this.state.currentQuery
-            ? "Search failed. Please try again."
-            : "Failed to load watch history.",
-        );
-      }
-
-      this.resultsContainer.innerHTML = `
-                <div class="alert alert-${silent ? "info" : "danger"} ${this.compact ? "m-3" : ""}">
-                    <i class="fas fa-${silent ? "info-circle" : "exclamation-circle"} me-2"></i>
-                    ${silent ? this.emptyMessages.default : "An error occurred. Please try again."}
-                </div>
-            `;
+      if (requestId !== this.requestId) return;
+      this.state.loadError = reset
+        ? "Could not load history."
+        : "Could not load more videos.";
     } finally {
-      this.setSearchingState(false);
-      this.state.isSearching = false;
+      if (requestId === this.requestId) {
+        this.state.isSearching = false;
+        this.state.isLoadingMore = false;
+        this.setSearchingState();
+        this.render();
+      }
     }
   }
 
+  render({ reset = false } = {}) {
+    if (this.disposed) return;
+    this.renderResults({
+      container: this.resultsContainer,
+      results: this.results,
+      state: this.state,
+      reset,
+      onDelete: (id, button) => this.deleteVideo(id, button),
+      onLoadMore: () => void this.loadMore(),
+      onRetry: () => void this.retry(),
+    });
+  }
+
   async deleteVideo(videoId, button) {
+    if (this.disposed || this.deleting) return;
     if (
       !confirm(
-        "Are you sure you want to delete this video from your watch history?",
+        "Delete all watches of this video from shared history on all devices?",
       )
-    ) {
+    )
       return;
-    }
-
+    button.disabled = true;
+    this.deleting = true;
+    // Ignore a batch captured before deletion shifts the server-side offset.
+    ++this.requestId;
+    this.state.isSearching = this.state.isLoadingMore = false;
     try {
-      setButtonBusy(button, "Deleting...");
-
       const response = await this.client.sendMessage({
         action: "search-delete",
         videoId,
       });
-
-      if (!response?.success) {
-        throw new Error(response?.error || "Delete failed");
-      }
-
-      if (response.youtubeHistory?.success === false) {
-        this.feedback.success(
-          `Video deleted locally. YouTube history was not changed: ${response.youtubeHistory.error}`,
-        );
-      } else {
-        this.feedback.success("Video deleted successfully");
-      }
-
-      const totalPagesAfterDelete = Math.ceil(
-        (this.state.totalResults - 1) / this.state.pageSize,
-      );
-      if (
-        this.state.currentPage > totalPagesAfterDelete &&
-        totalPagesAfterDelete > 0
-      ) {
-        this.state.currentPage = totalPagesAfterDelete;
-      }
-
+      if (!response?.success)
+        throw new Error(response?.error || "Deletion failed");
+      const before = this.results.length;
+      this.results = this.results.filter((video) => video.strIdent !== videoId);
+      const removed = before - this.results.length;
+      this.nextOffset = Math.max(0, this.nextOffset - removed);
+      this.state.totalResults = Math.max(0, this.state.totalResults - removed);
+      this.state.hasMore = this.nextOffset < this.state.totalResults;
       await this.onDeleteSuccess();
-      await this.search();
     } catch (error) {
-      this.feedback.error(`Delete failed: ${error.message}`);
-      clearButtonBusy(button);
+      button.disabled = false;
+      this.feedback.error(`Could not delete video: ${error.message}`);
+    } finally {
+      this.deleting = false;
+      this.setSearchingState();
+      this.render();
     }
   }
 
-  setSearchingState(isSearching) {
-    this.searchIcon?.classList.toggle("d-none", isSearching);
-    this.searchSpinner?.classList.toggle("d-none", !isSearching);
-
-    if (this.searchButton) {
-      this.searchButton.disabled = isSearching;
-    }
-
-    if (this.resultsContainer) {
-      this.resultsContainer.classList.toggle("search-loading", isSearching);
-    }
+  dispose() {
+    this.disposed = true;
+    ++this.requestId;
+    clearTimeout(this.debounceTimer);
   }
 
-  hideInitialLoading() {
-    if (this.initialLoadingElement) {
-      this.initialLoadingElement.style.display = "none";
-    }
+  setSearchingState() {
+    const { isSearching, isLoadingMore } = this.state;
+    if (this.searchIcon) this.searchIcon.hidden = isSearching;
+    if (this.searchSpinner) this.searchSpinner.hidden = !isSearching;
+    if (this.searchButton) this.searchButton.disabled = isSearching;
+    this.resultsContainer?.classList.toggle("search-loading", isSearching);
+    this.resultsContainer?.setAttribute(
+      "aria-busy",
+      String(isSearching || isLoadingMore),
+    );
   }
 }

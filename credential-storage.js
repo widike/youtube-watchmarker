@@ -13,7 +13,9 @@ function getProjectUrl(projectId) {
 }
 
 function isPublishableKey(value) {
-  return typeof value === "string" && value.startsWith("sb_publishable_");
+  return (
+    typeof value === "string" && /^sb_publishable_[A-Za-z0-9_-]+$/.test(value)
+  );
 }
 
 export class CredentialStorage {
@@ -61,8 +63,8 @@ export class CredentialStorage {
     return {
       refreshToken: await this.encryption.encrypt(session.refreshToken),
       userId: await this.encryption.encrypt(session.userId),
-      email: session.email
-        ? await this.encryption.encrypt(session.email)
+      historyOwnerId: session.historyOwnerId
+        ? await this.encryption.encrypt(session.historyOwnerId)
         : null,
     };
   }
@@ -144,9 +146,9 @@ export class CredentialStorage {
           record.session.refreshToken,
         ),
         userId,
-        email: record.session.email
-          ? await this.encryption.decrypt(record.session.email)
-          : null,
+        historyOwnerId: record.session.historyOwnerId
+          ? await this.encryption.decrypt(record.session.historyOwnerId)
+          : userId,
         expiresAt: hasMatchingAccessSession ? accessSession.expiresAt : 0,
       };
     } catch (error) {
@@ -196,7 +198,6 @@ export class CredentialStorage {
       projectId: configuration.projectId,
       publishableKey: this.maskSensitiveValue(configuration.publishableKey),
       authenticated: Boolean(session),
-      userEmail: session?.email || null,
       storedAt: configuration.storedAt,
     };
   }
@@ -209,7 +210,6 @@ export class CredentialStorage {
     return {
       configured: Boolean(configuration),
       authenticated: Boolean(session),
-      userEmail: session?.email || null,
       storedAt: configuration?.storedAt || null,
     };
   }

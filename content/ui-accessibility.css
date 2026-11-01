@@ -1,0 +1,40 @@
+@layer accessibility {
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline-color: Highlight;
+    }
+    .search-box:focus-within {
+      outline: 2px solid Highlight;
+    }
+    .switch-input {
+      appearance: auto;
+    }
+    .switch-input::before {
+      display: none;
+    }
+    .app-navigation a[aria-current],
+    .segmented-control [aria-pressed="true"] {
+      outline: 2px solid Highlight;
+    }
+    .primary-button,
+    .quiet-button,
+    .icon-button,
+    .search-submit {
+      border: 1px solid ButtonText;
+    }
+  }
+  @media (prefers-contrast: more) {
+    :root {
+      --line: var(--control-line);
+    }
+  }
+}

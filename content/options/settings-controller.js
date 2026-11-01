@@ -4,13 +4,13 @@ const SETTING_LABELS = {
   idCondition_Brownav: "Browser Navigation",
   idCondition_Browhist: "Browser History",
   idCondition_Youprog: "YouTube Progress",
-  idCondition_Youbadge: "YouTube Badge",
   idCondition_Youhist: "YouTube History",
   idCondition_Yourating: "Video Rating",
   idVisualization_Fadeout: "Fade Out",
   idVisualization_Grayout: "Grayscale",
   idVisualization_Showbadge: "Show Badge",
-  idVisualization_Showdate: "Show Date",
+  idVisualization_Showdate: "Last Watch Date",
+  idVisualization_Showcount: "Watch Count",
   idVisualization_Hideprogress: "Hide Progress Bar",
 };
 
@@ -37,9 +37,6 @@ export class SettingsController {
     element.addEventListener("change", async () => {
       try {
         await chrome.storage.sync.set({ [id]: element.checked });
-        this.feedback.success(
-          `${SETTING_LABELS[id]} ${element.checked ? "enabled" : "disabled"}`,
-        );
       } catch (error) {
         element.checked = !element.checked;
         this.feedback.error(

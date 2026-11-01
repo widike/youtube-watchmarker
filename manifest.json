@@ -7,13 +7,15 @@
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsS1HxwtZvwfhVxoOBcI+POpVn6+ooD5nQimC2eGVXcTYQW1VaHpCjj63abAAp7WaocT1qffRbW0LrFvSH2F651JPaKD6uskUMiL0PFNT7tY2Qh9dxxyaW/phRkRPDlLBCNIpLhp5gMRX39XAIZJBu2Auv3IuUBSjdgHzqnX95JbFhRpHSJIJG0iHZWHgl8C0F14olBwIUhg+ulit631fTFgdyiPDvaT2Dmy/rtXUHv7A6IIMPdMOjQ93Lo7ZjhEr13RMEgh1FnBk8kQhCQpYOIVBaZklR240RvQNnfgJAUBXl5Ab5oyIHzWs/25d4PuYF3B2yKku4o9WxTtk3JniZQIDAQAB",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "alarms",
     "history",
     "tabs",
     "cookies",
-    "webRequest"
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
+    "https://www.googleapis.com/*",
     "https://www.youtube.com/*",
     "https://m.youtube.com/*",
     "https://*.supabase.co/*"
@@ -27,9 +29,12 @@
     {
       "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*"],
       "js": [
+        "shared/video-identity.js",
         "youtube/core.js",
         "youtube/settings-runtime.js",
         "youtube/rendering.js",
+        "youtube/watch-time.js",
+        "youtube/playback.js",
         "youtube/interactions.js",
         "youtube/app.js"
       ]

@@ -1,0 +1,189 @@
+@layer pages {
+  .stats-cell-missing {
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0 3px,
+      color-mix(in srgb, var(--muted) 24%, transparent) 3px 4px
+    );
+  }
+  .stats-heatmap-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 5px 3px 10px;
+    scrollbar-width: thin;
+  }
+  .stats-week-hours {
+    display: grid;
+    grid-template-columns: 32px repeat(24, minmax(18px, 1fr));
+    gap: 4px;
+    min-width: 560px;
+    color: var(--muted);
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+  .stats-week-summary {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .stats-week-summary > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-block: 10px;
+    background: var(--soft);
+    border-radius: 6px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-week-layout {
+    display: flex;
+    gap: 4px;
+    min-width: 560px;
+  }
+  .stats-week-labels {
+    display: grid;
+    grid-template-rows: repeat(7, 1fr);
+    width: 32px;
+    flex: 0 0 32px;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 10px;
+    align-items: center;
+  }
+  .stats-week-grid {
+    display: grid;
+    grid-template-columns: repeat(24, minmax(18px, 1fr));
+    gap: 4px;
+    flex: 1;
+  }
+  .stats-cell {
+    border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+    padding: 0;
+    border-radius: 3px;
+    min-width: 0;
+    height: 22px;
+  }
+  .stats-cell:focus-visible {
+    outline-offset: 2px;
+    z-index: 1;
+  }
+  .stats-cell:hover {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .stats-calendar-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .stats-calendar-summary > span {
+    white-space: nowrap;
+  }
+  .stats-calendar-year + .stats-calendar-year {
+    margin-top: 12px;
+  }
+  .stats-calendar-year h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .stats-calendar-year .stats-heatmap-scroll {
+    padding-block: 3px;
+  }
+  .stats-calendar-layout {
+    display: flex;
+    gap: 4px;
+    width: max-content;
+  }
+  .stats-calendar-grid {
+    display: grid;
+    grid-template-rows: repeat(7, 13px);
+    grid-auto-flow: column;
+    grid-auto-columns: 13px;
+    gap: 4px;
+  }
+  .stats-calendar-grid .stats-cell {
+    width: 13px;
+    height: 13px;
+    border-radius: 3px;
+  }
+  .stats-calendar-months {
+    display: grid;
+    grid-auto-columns: 17px;
+    margin-left: 36px;
+    margin-bottom: 7px;
+    width: max-content;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .stats-calendar-months span {
+    white-space: nowrap;
+  }
+  [data-level="0"] {
+    background: var(--soft);
+  }
+  [data-level="1"] {
+    background: light-dark(#c7e4d3, #284b3c);
+  }
+  [data-level="2"] {
+    background: light-dark(#8fc8a7, #3e7759);
+  }
+  [data-level="3"] {
+    background: light-dark(#4e996c, #73ad88);
+  }
+  [data-level="4"] {
+    background: light-dark(#245d43, #b1e0bf);
+  }
+  .stats-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 8px;
+  }
+  .stats-legend span {
+    border-radius: 4px;
+    padding: 3px 6px;
+    color: light-dark(#1b3929, #fff);
+    border: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-legend [data-level="3"] {
+    color: #0a1b12;
+  }
+  .stats-legend [data-level="4"] {
+    color: light-dark(#fff, #102b1c);
+  }
+  @media (forced-colors: active) {
+    .stats-cell {
+      forced-color-adjust: none;
+      border: 1px solid CanvasText;
+    }
+    .stats-cell[data-level="0"] {
+      background: Canvas;
+    }
+    .stats-cell[data-level="1"] {
+      background: color-mix(in srgb, CanvasText 25%, Canvas);
+    }
+    .stats-cell[data-level="2"] {
+      background: color-mix(in srgb, CanvasText 50%, Canvas);
+    }
+    .stats-cell[data-level="3"] {
+      background: color-mix(in srgb, CanvasText 75%, Canvas);
+    }
+    .stats-cell[data-level="4"] {
+      background: CanvasText;
+    }
+    .stats-timeline svg {
+      fill: CanvasText;
+    }
+  }
+}

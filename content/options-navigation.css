@@ -1,0 +1,79 @@
+@layer pages {
+  .app-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-width);
+    padding: 36px 22px 20px;
+    display: flex;
+    flex-direction: column;
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+  }
+  .app-navigation {
+    display: grid;
+    gap: 6px;
+  }
+  .app-navigation a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 9px;
+    text-decoration: none;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 13px;
+  }
+  .app-navigation a > i {
+    width: 17px;
+    font-size: 15px;
+  }
+  .app-navigation a:hover {
+    color: var(--ink);
+    background: var(--soft);
+  }
+  .app-navigation a[aria-current] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 650;
+  }
+  .nav-dot {
+    margin-left: auto;
+    height: 6px;
+    width: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .app-navigation a:not([aria-current]) .nav-dot {
+    display: none;
+  }
+  .sidebar-library {
+    margin-top: auto;
+    padding: 20px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    background: var(--page);
+  }
+  .library-symbol {
+    color: var(--accent);
+    display: block;
+    margin-bottom: 13px;
+  }
+  .sidebar-library > strong {
+    display: block;
+    font-size: 28px;
+    font-weight: 650;
+    letter-spacing: -1px;
+    line-height: 1.2;
+  }
+  .sidebar-library > span:not(.library-symbol) {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .sidebar-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 20px 0 0 3px;
+  }
+}

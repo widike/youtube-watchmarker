@@ -12,20 +12,23 @@ import { createHandler } from "../handler-wrapper.js";
 /**
  * Synchronize browser history
  */
-export const handleHistorySynchronize = createHandler(async (request) => {
-  const { intTimestamp = 0, skipExisting = false } = request;
+export const handleHistorySynchronize = createHandler(
+  async (request) => {
+    const { intTimestamp = 0, skipExisting = false } = request;
 
-  const result = await History.synchronize(
-    intTimestamp,
-    skipExisting,
-    (progress) => {
-      logger.debug("History sync progress:", progress);
-    },
-  );
+    const result = await History.synchronize(
+      intTimestamp,
+      skipExisting,
+      (progress) => {
+        logger.debug("History sync progress:", progress);
+      },
+    );
 
-  return {
-    response: result,
-    videoCount: result.videoCount || 0,
-    skippedCount: result.skippedCount || 0,
-  };
-}, "handleHistorySynchronize");
+    return {
+      response: result,
+      videoCount: result.videoCount || 0,
+      skippedCount: result.skippedCount || 0,
+    };
+  },
+  { name: "handleHistorySynchronize" },
+);

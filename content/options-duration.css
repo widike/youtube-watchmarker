@@ -1,0 +1,18 @@
+@layer pages {
+  .duration-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .duration-controls input {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+  .duration-setup [data-duration-status] {
+    margin-bottom: 0;
+  }
+  .duration-api-link {
+    margin-block-start: var(--space-3);
+    font-size: var(--font-small);
+  }
+}

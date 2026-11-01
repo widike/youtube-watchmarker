@@ -1,0 +1,71 @@
+@layer pages {
+  :root {
+    /* TanStack maintains the scroll position as measured rows change height. */
+    overflow-anchor: none;
+    /* Measurement corrections must apply immediately. */
+    scroll-behavior: auto;
+  }
+  .history-results {
+    --history-columns: 1;
+    overflow-anchor: none;
+    scroll-behavior: auto;
+  }
+  .history-virtual-canvas {
+    position: relative;
+    width: 100%;
+  }
+  .history-virtual-row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding-bottom: 8px;
+  }
+  .history-virtual-row:has(.day-heading) {
+    padding-bottom: 0;
+  }
+  .history-undated-divider {
+    height: 24px;
+    margin-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .history-load-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 12px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .history-load-state[hidden] {
+    display: none;
+  }
+  [data-view="grid"].history-results {
+    --history-columns: 4;
+  }
+  [data-view="grid"] .history-virtual-row {
+    padding-bottom: 12px;
+  }
+  [data-view="grid"] .history-virtual-row .video-list {
+    grid-template-columns: repeat(var(--history-columns), minmax(0, 1fr));
+  }
+  .popup .history-virtual-row {
+    padding-bottom: 4px;
+  }
+  .popup .history-load-state {
+    min-height: 42px;
+    font-size: 10px;
+  }
+  @media (max-width: 1100px) {
+    [data-view="grid"].history-results {
+      --history-columns: 2;
+    }
+  }
+  @media (max-width: 480px) {
+    [data-view="grid"].history-results {
+      --history-columns: 1;
+    }
+  }
+}

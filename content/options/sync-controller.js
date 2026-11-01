@@ -9,12 +9,20 @@ const SYNC_ACTIONS = {
 };
 
 export class SyncController {
-  constructor({ client, feedback, elements, onDataChanged, refreshSearch }) {
+  constructor({
+    client,
+    feedback,
+    elements,
+    onDataChanged,
+    refreshSearch,
+    invalidateSources,
+  }) {
     this.client = client;
     this.feedback = feedback;
     this.elements = elements;
     this.onDataChanged = onDataChanged;
     this.refreshSearch = refreshSearch;
+    this.invalidateSources = invalidateSources;
   }
 
   bindEvents() {
@@ -64,50 +72,38 @@ export class SyncController {
     }
 
     if (stats.skippedWithoutDate > 0) {
-      parts.push(`skipped ${stats.skippedWithoutDate} without a source date`);
+      parts.push(`${stats.skippedWithoutDate} undated skipped`);
     }
 
     if (stats.changed === 0 && stats.unchanged > 0) {
       parts.push(`${stats.unchanged} unchanged`);
     }
 
-    return `${label} synchronized. ${parts.join(", ")}.`;
+    return `${label} · ${parts.join(" · ")}`;
   }
 
   async syncProviders() {
     try {
-      setButtonBusy(this.elements.syncDatabaseButton, "Syncing...");
-
-      const providers = await this.client.sendMessage({
-        action: "database-provider-list",
-      });
-      if (
-        !providers?.success ||
-        !providers.providers?.some(
-          (provider) => provider.id === "supabase" && provider.isAvailable,
-        )
-      ) {
-        throw new Error("Supabase is not configured");
-      }
+      setButtonBusy(this.elements.syncDatabaseButton, "Syncing…");
 
       const response = await this.client.sendMessage({
-        action: "database-provider-sync",
-        providers: ["indexeddb", "supabase"],
+        action: "sync-manager-sync-now",
       });
 
       if (!response?.success) {
         throw new Error(response?.error || "Sync failed");
       }
 
-      this.feedback.success(
-        response.message || "Databases synchronized successfully",
-      );
+      this.elements.syncSummary.textContent = response.inProgress
+        ? "Syncing…"
+        : "Up to date";
       await this.onDataChanged();
       await this.refreshSearch();
     } catch (error) {
-      this.feedback.error(`Database sync failed: ${error.message}`);
+      this.elements.syncSummary.textContent = `Sync failed · ${error.message}`;
     } finally {
       clearButtonBusy(this.elements.syncDatabaseButton);
+      this.invalidateSources();
     }
   }
 
@@ -115,7 +111,7 @@ export class SyncController {
     const config = SYNC_ACTIONS[type];
 
     try {
-      setButtonBusy(button, "Syncing...");
+      setButtonBusy(button, "Syncing…");
 
       const response = await this.client.sendMessage({ action: config.action });
       if (!response?.success) {
@@ -133,12 +129,13 @@ export class SyncController {
       this.feedback.error(`${config.label} sync failed: ${error.message}`);
     } finally {
       clearButtonBusy(button);
+      this.invalidateSources();
     }
   }
 
   async syncAll() {
     try {
-      setButtonBusy(this.elements.syncAllButton, "Syncing all...");
+      setButtonBusy(this.elements.syncAllButton, "Syncing…");
 
       const responses = await Promise.allSettled([
         this.client.sendMessage({ action: SYNC_ACTIONS.history.action }),
@@ -164,9 +161,7 @@ export class SyncController {
         return sum + this.getSyncStats(result.value).changed;
       }, 0);
 
-      this.feedback.success(
-        `All sources synchronized. Total changed: ${total}. ${summary.join(" | ")}`,
-      );
+      this.feedback.success(summary.join(" · "));
       await this.onDataChanged();
 
       if (total > 0) {
@@ -176,6 +171,7 @@ export class SyncController {
       this.feedback.error(`Sync all failed: ${error.message}`);
     } finally {
       clearButtonBusy(this.elements.syncAllButton);
+      this.invalidateSources();
     }
   }
 }

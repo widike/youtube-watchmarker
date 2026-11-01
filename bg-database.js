@@ -1,6 +1,5 @@
+import { upgradeHistoryStorage } from "./history-storage.js";
 import { databaseProviderFactory } from "./database-provider-factory.js";
-import { credentialStorage } from "./credential-storage.js";
-import { supabaseDatabaseProvider } from "./supabase-database-provider.js";
 import { SyncManagerInstance } from "./bg-sync-manager.js";
 import { DATABASE, ERRORS } from "./constants.js";
 import { logger } from "./logger.js";
@@ -79,6 +78,8 @@ export class DatabaseManager {
           });
         }
 
+        upgradeHistoryStorage(db, openRequest.transaction);
+
         // Create indexes if they don't exist
         if (!store.indexNames.contains(DATABASE.INDEXES.IDENT)) {
           store.createIndex(DATABASE.INDEXES.IDENT, DATABASE.INDEXES.IDENT, {
@@ -111,6 +112,11 @@ export class DatabaseManager {
 
       openRequest.onsuccess = () => {
         this.database = openRequest.result;
+        this.database.onversionchange = () => {
+          this.database.close();
+          this.database = null;
+          this.isInitialized = false;
+        };
         resolve();
       };
     });
@@ -141,7 +147,7 @@ export class DatabaseManager {
         throw new Error(ERRORS.PROVIDER_NOT_FOUND);
       }
 
-      return await provider.getAllVideos();
+      return await provider.getAllVideos({ includeDeleted: true });
     } catch (error) {
       logger.error("Failed to export data:", error);
       throw error;
@@ -171,233 +177,6 @@ export class DatabaseManager {
       throw error;
     }
   }
-
-  /**
-   * Reset database (clear all data)
-   * @returns {Promise<void>}
-   */
-  async reset() {
-    try {
-      const provider = this.providerFactory.getCurrentProvider();
-      if (!provider) {
-        throw new Error(ERRORS.PROVIDER_NOT_FOUND);
-      }
-
-      await provider.clearAllVideos();
-      logger.info("Database reset successfully");
-    } catch (error) {
-      logger.error("Failed to reset database:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Enable sync
-   * @param {string} provider - Provider type
-   * @param {number} interval - Sync interval in milliseconds
-   * @returns {Promise<void>}
-   */
-  async enableSync(provider, interval) {
-    try {
-      await this.syncManager.enableSync(provider, interval);
-      logger.info("Sync enabled");
-    } catch (error) {
-      logger.error("Failed to enable sync:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Disable sync
-   * @returns {Promise<void>}
-   */
-  async disableSync() {
-    try {
-      await this.syncManager.disableSync();
-      logger.info("Sync disabled");
-    } catch (error) {
-      logger.error("Failed to disable sync:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Sync now
-   * @returns {Promise<void>}
-   */
-  async syncNow() {
-    try {
-      await this.syncManager.syncNow();
-      logger.info("Sync completed");
-    } catch (error) {
-      logger.error("Failed to sync:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get sync status
-   * @returns {Promise<Object>} Sync status information
-   */
-  async getSyncStatus() {
-    try {
-      return await this.syncManager.getStatus();
-    } catch (error) {
-      logger.error("Failed to get sync status:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Switch database provider
-   * @param {string} provider - Provider name
-   * @returns {Promise<boolean>} Success status
-   */
-  async switchProvider(provider) {
-    try {
-      const success = await this.providerFactory.switchProvider(provider);
-      if (success) {
-        logger.info(`Switched to ${provider} provider`);
-      }
-      return success;
-    } catch (error) {
-      logger.error("Failed to switch provider:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get provider status
-   * @returns {Promise<Object>} Provider status information
-   */
-  async getProviderStatus() {
-    try {
-      return this.providerFactory.getProviderStatus();
-    } catch (error) {
-      logger.error("Failed to get provider status:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get available providers
-   * @returns {Promise<Array>} List of available providers
-   */
-  async getAvailableProviders() {
-    try {
-      return this.providerFactory.getAvailableProviders();
-    } catch (error) {
-      logger.error("Failed to get available providers:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Migrate data between providers
-   * @param {string} fromProvider - Source provider
-   * @param {string} toProvider - Target provider
-   * @returns {Promise<boolean>} Success status
-   */
-  async migrateData(fromProvider, toProvider) {
-    try {
-      const success = await this.providerFactory.migrateData(
-        fromProvider,
-        toProvider,
-      );
-      if (success) {
-        logger.info(`Migrated data from ${fromProvider} to ${toProvider}`);
-      }
-      return success;
-    } catch (error) {
-      logger.error("Failed to migrate data:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Test Supabase connection
-   * @returns {Promise<boolean>} Connection test result
-   */
-  async testSupabase() {
-    try {
-      return await supabaseDatabaseProvider.testConnection();
-    } catch (error) {
-      logger.error("Failed to test Supabase:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Check Supabase table existence
-   * @returns {Promise<boolean>} Table existence status
-   */
-  async checkSupabaseTable() {
-    try {
-      return await supabaseDatabaseProvider.checkTableExists();
-    } catch (error) {
-      logger.error("Failed to check Supabase table:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Clear Supabase credentials
-   * @returns {Promise<void>}
-   */
-  async clearSupabase() {
-    try {
-      await credentialStorage.clearCredentials();
-      logger.info("Supabase credentials cleared");
-    } catch (error) {
-      logger.error("Failed to clear Supabase credentials:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get Supabase credentials (masked)
-   * @returns {Promise<Object>} Masked credentials
-   */
-  async getSupabaseCredentials() {
-    try {
-      return await credentialStorage.getMaskedCredentials();
-    } catch (error) {
-      logger.error("Failed to get Supabase credentials:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get Supabase status
-   * @returns {Promise<Object>} Supabase status information
-   */
-  async getSupabaseStatus() {
-    try {
-      const [isConfigured, hasAuthenticatedSession] = await Promise.all([
-        credentialStorage.hasConfiguration(),
-        credentialStorage.hasAuthenticatedSession(),
-      ]);
-      let isConnected = false;
-
-      if (isConfigured) {
-        try {
-          isConnected = await supabaseDatabaseProvider.testConnection();
-        } catch (error) {
-          logger.warn("Supabase connection test failed:", error);
-        }
-      }
-
-      return {
-        configured: isConfigured,
-        connected: isConnected,
-        hasCredentials: hasAuthenticatedSession,
-      };
-    } catch (error) {
-      logger.error("Failed to get Supabase status:", error);
-      throw error;
-    }
-  }
 }
 
-// Global instance
 export const Database = new DatabaseManager();

@@ -1,185 +1,122 @@
-// @ts-check
-
-/**
- * Database provider action handlers
- * Handles provider switching, status, syncing, and migration
- */
-
 import { credentialStorage } from "../credential-storage.js";
 import { databaseProviderFactory } from "../database-provider-factory.js";
 import { createHandler } from "../handler-wrapper.js";
 import { supabaseAuthClient } from "../supabase-auth-client.js";
 import { supabaseDatabaseProvider } from "../supabase-database-provider.js";
+import { decodeConnection, encodeConnection } from "../device-link.js";
 
-/**
- * Get database provider status
- */
+let connecting = false;
+
 export const handleProviderStatus = createHandler(
-  async () => {
-    const status = databaseProviderFactory.getProviderStatus();
-    return { status };
-  },
-  { name: "handleProviderStatus", requiresRequest: false },
+  async () => ({ status: await databaseProviderFactory.getProviderStatus() }),
+  { name: "handleProviderStatus" },
 );
 
-/**
- * Switch database provider
- */
-export const handleProviderSwitch = createHandler(async (request) => {
-  const { provider } = request;
-
-  if (!provider || !["indexeddb", "supabase"].includes(provider)) {
-    return { success: false, error: "Invalid provider type" };
-  }
-
-  if (provider === "indexeddb") {
-    const success = await databaseProviderFactory.switchToIndexedDB();
-    if (success) {
-      return { message: `Successfully switched to ${provider}` };
-    } else {
-      return { success: false, error: `Failed to switch to ${provider}` };
+export const handleSupabaseConnect = createHandler(
+  async (request) => {
+    if (connecting)
+      throw new Error("A device connection is already in progress");
+    connecting = true;
+    try {
+      if (databaseProviderFactory.sync.running)
+        throw new Error(
+          "Sync is running. Wait for it to finish before changing the connection.",
+        );
+      const link = request.connectionCode
+        ? decodeConnection(request.connectionCode)
+        : null;
+      const saved = await credentialStorage.getConfiguration();
+      const configuration =
+        link?.configuration || request.configuration || saved;
+      const validation = credentialStorage.validateConfiguration(configuration);
+      if (!validation.isValid) throw new Error(validation.errors.join(". "));
+      const active = {
+        ...configuration,
+        supabaseUrl: `https://${configuration.projectId}.supabase.co`,
+      };
+      const current = await credentialStorage.getSession();
+      if (!link && current)
+        throw new Error(
+          "Already connected. Use Create connection code to link another device.",
+        );
+      // Do not replace an established device identity with a new anonymous user.
+      if (!link && !(await databaseProviderFactory.canCreateHistory()))
+        throw new Error(
+          "Link this history using a connection code from another connected device.",
+        );
+      const session =
+        saved?.projectId === active.projectId && current
+          ? {
+              ...current,
+              accessToken: await supabaseAuthClient.getAccessToken(),
+            }
+          : await supabaseAuthClient.createDeviceSession(active);
+      session.historyOwnerId = await supabaseAuthClient.deviceRpc(
+        active,
+        session,
+        link ? "watchmarker_claim_link" : "watchmarker_history_owner",
+        link ? { p_token: link.token } : {},
+      );
+      if (typeof session.historyOwnerId !== "string" || !session.historyOwnerId)
+        throw new Error("The sync service did not return a history identity");
+      await databaseProviderFactory.assertIdentity(configuration, session);
+      await credentialStorage.storeAuthenticatedConfiguration(
+        configuration,
+        session,
+      );
+      await supabaseDatabaseProvider.close();
+      // Local recording stays available while the initial cloud restore runs.
+      void databaseProviderFactory.performDeltaSync().catch(() => {});
+      return { auth: { authenticated: true } };
+    } finally {
+      connecting = false;
     }
-  } else if (provider === "supabase") {
-    await databaseProviderFactory.switchToSupabase();
-    return { message: `Successfully switched to ${provider}` };
-  }
-}, "handleProviderSwitch");
-
-/**
- * Get available providers
- */
-export const handleProviderList = createHandler(
-  async () => {
-    const providers = await databaseProviderFactory.getAvailableProviders();
-    return { providers };
   },
-  { name: "handleProviderList", requiresRequest: false },
+  { name: "handleSupabaseConnect" },
 );
 
-/**
- * Migrate data between providers
- */
-export const handleProviderMigrate = createHandler(async (request) => {
-  const { fromProvider, toProvider } = request;
+export const handleSupabaseCreateLink = createHandler(
+  async () => {
+    const configuration = await credentialStorage.getConfiguration();
+    const session = await credentialStorage.getSession();
+    if (!configuration || !session)
+      throw new Error("Connect this device first");
+    session.accessToken = await supabaseAuthClient.getAccessToken();
+    const token = await supabaseAuthClient.deviceRpc(
+      configuration,
+      session,
+      "watchmarker_create_link",
+    );
+    if (!/^[a-f0-9]{64}$/.test(token))
+      throw new Error("Invalid connection code returned by sync service");
+    return { connectionCode: encodeConnection(configuration, token) };
+  },
+  { name: "handleSupabaseCreateLink" },
+);
 
-  if (!fromProvider || !toProvider) {
-    return { success: false, error: "Missing source or target provider" };
-  }
-
-  const success = await databaseProviderFactory.migrateData(
-    fromProvider,
-    toProvider,
-  );
-  if (success) {
-    return {
-      message: `Successfully migrated data from ${fromProvider} to ${toProvider}`,
-    };
-  } else {
-    return { success: false, error: "Migration failed" };
-  }
-}, "handleProviderMigrate");
-
-/**
- * Sync data between providers
- */
-export const handleProviderSync = createHandler(async (request) => {
-  const { providers } = request;
-
-  if (!providers || !Array.isArray(providers) || providers.length !== 2) {
-    return { success: false, error: "Invalid providers array" };
-  }
-
-  const success = await databaseProviderFactory.syncProviders(
-    providers[0],
-    providers[1],
-  );
-  if (success) {
-    return {
-      message: `Successfully synced data between ${providers[0]} and ${providers[1]}`,
-    };
-  } else {
-    return { success: false, error: "Sync failed" };
-  }
-}, "handleProviderSync");
-
-function requireEmailAndPassword(request) {
-  const email = request.email?.trim();
-  const password = request.password;
-  if (!email || !password) {
-    throw new Error("Email and password are required");
-  }
-  return { email, password };
-}
-
-export const handleSupabaseSaveCredentials = createHandler(async (request) => {
-  const { configuration } = request;
-  const validation = credentialStorage.validateConfiguration(configuration);
-  if (!validation.isValid) {
-    throw new Error(validation.errors.join(". "));
-  }
-
-  const { email, password } = requireEmailAndPassword(request);
-  const { auth, session } = await supabaseAuthClient.authenticate(
-    {
-      ...configuration,
-      supabaseUrl: `https://${configuration.projectId}.supabase.co`,
-    },
-    email,
-    password,
-  );
-  await credentialStorage.storeAuthenticatedConfiguration(
-    configuration,
-    session,
-  );
-  await supabaseDatabaseProvider.close();
-  return { auth };
-}, "handleSupabaseSaveCredentials");
-
-/**
- * Test Supabase connection
- */
 export const handleSupabaseTest = createHandler(
   async () => {
     await supabaseAuthClient.testSession();
-    const success = await supabaseDatabaseProvider.testConnection();
-    if (success) {
-      return { message: "Supabase connection test successful" };
-    } else {
-      return { success: false, error: "Supabase connection test failed" };
-    }
+    await supabaseDatabaseProvider.testConnection();
+    return {};
   },
-  { name: "handleSupabaseTest", requiresRequest: false },
+  { name: "handleSupabaseTest" },
 );
 
-/**
- * Get Supabase credentials (masked)
- */
 export const handleSupabaseGetCredentials = createHandler(
-  async () => {
-    const credentials = await credentialStorage.getMaskedCredentials();
-    return { credentials };
-  },
-  { name: "handleSupabaseGetCredentials", requiresRequest: false },
+  async () => ({ credentials: await credentialStorage.getMaskedCredentials() }),
+  { name: "handleSupabaseGetCredentials" },
 );
 
-/**
- * Get Supabase status
- */
 export const handleSupabaseGetStatus = createHandler(
-  async () => {
-    const status = await credentialStorage.getCredentialStatus();
-    return { status };
-  },
-  { name: "handleSupabaseGetStatus", requiresRequest: false },
+  async () => ({ status: await credentialStorage.getCredentialStatus() }),
+  { name: "handleSupabaseGetStatus" },
 );
 
-/**
- * Check if Supabase table exists
- */
 export const handleSupabaseCheckTable = createHandler(
   async () => {
     const tableStatus = await supabaseDatabaseProvider.checkTableStatus();
     return { tableExists: tableStatus.exists, tableStatus };
   },
-  { name: "handleSupabaseCheckTable", requiresRequest: false },
+  { name: "handleSupabaseCheckTable" },
 );

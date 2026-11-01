@@ -7,7 +7,7 @@
   class YouTubeWatchmarkerApp {
     constructor() {
       this.isProcessing = false;
-      this.lastSnapshot = "";
+      this.refreshPending = false;
       this.settingsStore = new watchmarker.ContentSettingsStore();
       this.backgroundClient = new watchmarker.BackgroundClient();
       this.styleManager = new watchmarker.ContentStyleManager(
@@ -16,8 +16,12 @@
       this.videoMarkerManager = new watchmarker.VideoMarkerManager(
         this.backgroundClient,
       );
-      this.interactionManager = new watchmarker.InteractionManager(
+      this.playbackTracker = new watchmarker.PlaybackTracker(
+        this.backgroundClient,
         this.videoMarkerManager,
+      );
+      this.interactionManager = new watchmarker.InteractionManager(
+        this.playbackTracker,
       );
       this.pageObserverManager = new watchmarker.PageObserverManager(() =>
         this.refresh(),
@@ -34,6 +38,7 @@
 
       this.registerMessageListener();
       this.registerSettingsListener();
+      this.playbackTracker.initialize();
       this.interactionManager.initialize();
       this.pageObserverManager.initialize();
 
@@ -43,6 +48,7 @@
     registerMessageListener() {
       chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (message.action === "youtube-refresh") {
+          this.videoMarkerManager.invalidate();
           void this.refresh();
         }
 
@@ -50,6 +56,7 @@
           this.videoMarkerManager.updateWatchState(
             message.videoId,
             message.timestamp || 0,
+            message.count,
           );
         }
 
@@ -59,18 +66,11 @@
 
     registerSettingsListener() {
       this.settingsStore.onChange(async (changes) => {
-        const visualSettingChanged = [
-          "stylesheet_Fadeout",
-          "stylesheet_Grayout",
-          "stylesheet_Showbadge",
-          "stylesheet_Showdate",
-          "stylesheet_Hideprogress",
-          "idVisualization_Fadeout",
-          "idVisualization_Grayout",
-          "idVisualization_Showbadge",
-          "idVisualization_Showdate",
-          "idVisualization_Hideprogress",
-        ].some((key) => changes[key]);
+        if (Object.keys(changes).some((key) => key.startsWith("idCondition_")))
+          this.playbackTracker.retrySettings();
+        const visualSettingChanged = this.settingsStore.settingKeys.some(
+          (key) => changes[key],
+        );
 
         if (visualSettingChanged) {
           await this.styleManager.render();
@@ -80,28 +80,24 @@
     }
 
     async refresh() {
-      if (this.isProcessing || !core.isRuntimeAvailable()) {
+      if (!core.isRuntimeAvailable()) return;
+      if (this.isProcessing) {
+        this.refreshPending = true;
         return;
       }
 
       this.isProcessing = true;
 
       try {
-        if (core.isWatchHistoryPage()) {
-          this.videoMarkerManager.clearMarks();
-          this.lastSnapshot = window.location.href;
-          return;
-        }
-
-        const videos = core.findVideos();
-        const nextSnapshot = `${window.location.href}:${document.title}:${videos.length}`;
-        if (nextSnapshot === this.lastSnapshot) {
-          return;
-        }
-
-        this.lastSnapshot = nextSnapshot;
-
-        await this.videoMarkerManager.processVideos(videos);
+        do {
+          this.refreshPending = false;
+          this.playbackTracker.refresh();
+          if (core.isWatchHistoryPage()) {
+            this.videoMarkerManager.clearMarks();
+          } else {
+            await this.videoMarkerManager.processVideos(core.findVideos());
+          }
+        } while (this.refreshPending);
       } catch (error) {
         core.logError("Failed to refresh YouTube watch markers", error);
       } finally {
@@ -109,6 +105,8 @@
       }
     }
   }
+
+  watchmarker.YouTubeWatchmarkerApp = YouTubeWatchmarkerApp;
 
   function bootstrap() {
     const app = new YouTubeWatchmarkerApp();

@@ -1,23 +1,25 @@
 // @ts-check
 
 const THEME_STORAGE_KEY = "theme";
+const THEMES = ["system", "light", "dark"];
+const THEME_ICONS = {
+  system: "fas fa-desktop",
+  light: "fas fa-sun",
+  dark: "fas fa-moon",
+};
 
 export class ThemeController {
   constructor({ toggleButton, iconElement }) {
     this.toggleButton = toggleButton;
     this.iconElement = iconElement;
-    this.systemThemeListener = null;
+    this.theme = "system";
+    this.systemThemeQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
   }
 
   async initialize() {
-    const savedTheme = await this.readSavedTheme();
-    const theme = savedTheme || this.getSystemTheme();
-
-    this.applyTheme(theme);
-
-    if (!savedTheme) {
-      this.bindSystemTheme();
-    }
+    this.theme = await this.readSavedTheme();
+    this.bindSystemTheme();
+    this.applyTheme();
 
     if (this.toggleButton) {
       this.toggleButton.addEventListener("click", () => {
@@ -27,47 +29,51 @@ export class ThemeController {
   }
 
   async toggleTheme() {
-    const currentTheme =
-      document.documentElement.getAttribute("data-bs-theme") || "light";
-    const nextTheme = currentTheme === "dark" ? "light" : "dark";
+    const nextTheme = THEMES[(THEMES.indexOf(this.theme) + 1) % THEMES.length];
 
-    this.applyTheme(nextTheme);
+    this.theme = nextTheme;
+    this.applyTheme();
     await chrome.storage.local.set({ [THEME_STORAGE_KEY]: nextTheme });
   }
 
-  applyTheme(theme) {
-    const normalizedTheme = theme === "dark" ? "dark" : "light";
-    document.documentElement.setAttribute("data-bs-theme", normalizedTheme);
+  applyTheme() {
+    const resolvedTheme =
+      this.theme === "system" ? this.getSystemTheme() : this.theme;
+    document.documentElement.setAttribute("data-theme", resolvedTheme);
 
     if (this.iconElement) {
-      this.iconElement.className =
-        normalizedTheme === "dark" ? "fas fa-moon" : "fas fa-sun";
+      this.iconElement.className = THEME_ICONS[this.theme];
+    }
+
+    if (this.toggleButton) {
+      const currentLabel = this.theme === "system" ? "System" : resolvedTheme;
+      const nextTheme =
+        THEMES[(THEMES.indexOf(this.theme) + 1) % THEMES.length];
+      const label = `Theme: ${currentLabel}. Switch to ${nextTheme} theme`;
+      this.toggleButton.setAttribute("aria-label", label);
+      this.toggleButton.title = label;
     }
   }
 
   async readSavedTheme() {
     try {
       const result = await chrome.storage.local.get([THEME_STORAGE_KEY]);
-      return result[THEME_STORAGE_KEY] || null;
+      const theme = result[THEME_STORAGE_KEY];
+      return THEMES.includes(theme) ? theme : "system";
     } catch (_error) {
-      return null;
+      return "system";
     }
   }
 
   getSystemTheme() {
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    return this.systemThemeQuery?.matches ? "dark" : "light";
   }
 
   bindSystemTheme() {
-    const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!mediaQuery) {
-      return;
-    }
-
-    this.systemThemeListener = (event) =>
-      this.applyTheme(event.matches ? "dark" : "light");
-    mediaQuery.addEventListener("change", this.systemThemeListener);
+    this.systemThemeQuery?.addEventListener("change", () => {
+      if (this.theme === "system") {
+        this.applyTheme();
+      }
+    });
   }
 }

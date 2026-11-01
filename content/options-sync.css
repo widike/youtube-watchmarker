@@ -1,0 +1,132 @@
+@layer pages {
+  .connection-body {
+    padding-block-start: var(--space-4);
+  }
+  .connection-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: var(--space-4);
+    margin-block-start: var(--space-4);
+  }
+  .connection-field {
+    min-inline-size: 0;
+  }
+  .settings-card .field-note,
+  .field-note {
+    color: var(--muted);
+    font-size: 12px;
+    margin-block: var(--space-2) var(--space-4);
+    overflow-wrap: anywhere;
+  }
+  .connection-status {
+    margin-block-start: var(--space-4);
+    font-size: 12px;
+  }
+  .connection-status:empty {
+    display: none;
+  }
+  .source-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 28px;
+    margin-block: 12px 0;
+  }
+  .source-metrics[hidden] {
+    display: none;
+  }
+  .source-metrics > div {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 3px;
+  }
+  .source-metrics dt {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .source-metrics dd {
+    color: var(--ink);
+    font-size: 19px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+  .source-metrics [data-count="newCount"] {
+    color: var(--accent);
+  }
+  .source-row .source-status {
+    font-size: 11px;
+    margin-block: 10px 0;
+  }
+  .source-row .source-status:empty {
+    display: none;
+  }
+  .source-row .source-error {
+    color: var(--red);
+  }
+  .sync-card .sync-connect-form,
+  .sync-card .connection-body,
+  .sync-card .device-link-panel {
+    max-inline-size: 760px;
+  }
+  .sync-card .section-heading {
+    align-items: center;
+    margin-block-end: var(--space-2);
+  }
+  .sync-card h2 {
+    margin: 0;
+  }
+  .sync-summary {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .sync-summary.sync-attention {
+    color: var(--red);
+  }
+  .sync-connect-form,
+  .sync-code-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block-start: var(--space-4);
+  }
+  .sync-connect-form .text-input,
+  .sync-code-row .text-input {
+    flex: 1;
+    inline-size: 0;
+  }
+  .sync-connect-form > button,
+  .sync-code-row > button {
+    flex-shrink: 0;
+    min-block-size: var(--control-height);
+  }
+  .sync-card .sync-project-setup {
+    border: 0;
+    padding: 0;
+    margin-block-start: var(--space-3);
+  }
+  .sync-project-setup > summary {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  #sync-connected {
+    margin-block-start: var(--space-4);
+  }
+  .device-link-panel {
+    padding: var(--space-3);
+    margin-block-start: var(--space-3);
+    border-radius: var(--radius-control);
+    background: var(--soft);
+  }
+  .device-link-panel .sync-code-row {
+    margin-block-start: var(--space-2);
+  }
+  .device-link-panel .field-note {
+    margin-block-end: 0;
+  }
+  .sync-card .connection-status {
+    margin-block-end: 0;
+    overflow-wrap: anywhere;
+  }
+}

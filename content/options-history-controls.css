@@ -1,0 +1,46 @@
+@layer pages {
+  .history-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 70px 20px;
+    gap: 16px;
+    text-align: center;
+  }
+  .empty-icon {
+    display: grid;
+    place-items: center;
+    height: 60px;
+    width: 60px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 20px;
+    font-size: 20px;
+  }
+  .history-empty h3 {
+    font-size: 20px;
+    letter-spacing: -0.5px;
+  }
+  .history-empty p {
+    color: var(--muted);
+    font-size: 13px;
+    max-width: 330px;
+  }
+  @media (max-width: 600px) {
+    .library-toolbar {
+      flex-wrap: wrap;
+    }
+  }
+  @media (max-width: 480px) {
+    .filter-controls {
+      gap: 6px;
+    }
+    .display-controls {
+      margin-left: auto;
+    }
+    .day-heading > span {
+      font-size: 9px;
+    }
+  }
+}

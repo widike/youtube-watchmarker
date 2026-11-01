@@ -94,9 +94,6 @@ export class AlarmManager {
    */
   async setupSynchronizationAlarm() {
     try {
-      // Clear any existing alarms to prevent duplicates
-      await chrome.alarms.clear(ALARM_CONFIG.SYNC.name);
-
       // Get sync interval from settings
       const result = await chrome.storage.sync.get(["sync_interval_minutes"]);
       const syncInterval =
@@ -108,6 +105,12 @@ export class AlarmManager {
         syncInterval,
         ALARM_CONFIG.SYNC.minIntervalMinutes,
       );
+
+      // Worker restarts must not postpone the next scheduled import indefinitely.
+      const existing = await chrome.alarms.get(ALARM_CONFIG.SYNC.name);
+      if (existing?.periodInMinutes === periodInMinutes) {
+        return;
+      }
 
       this.logger.info(
         `Setting up synchronization alarm with ${periodInMinutes} minute interval`,

@@ -1,0 +1,72 @@
+@layer variants {
+  .stats-peek {
+    display: block;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    padding: 4px 0 6px;
+    color: var(--ink);
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 160ms ease;
+  }
+  .stats-peek:hover {
+    background-color: var(--soft);
+  }
+  #popup-statistics {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .stats-peek-values,
+  .stats-peek-loading {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+  }
+  .stats-peek-metric {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    gap: 8px;
+    padding-inline: 12px;
+    border-left: 1px solid var(--line);
+  }
+  .stats-peek-metric:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .stats-peek-metric:last-child {
+    padding-right: 0;
+  }
+  .stats-peek-metric dt {
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .stats-peek-metric dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-peek-duration {
+    color: var(--ink);
+    font-size: 18px;
+    font-weight: 650;
+    letter-spacing: -0.5px;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .stats-peek-unit {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+  .stats-peek-loading {
+    height: 24px;
+    gap: 28px;
+    align-items: center;
+  }
+  .stats-peek-loading > span {
+    height: 18px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+}

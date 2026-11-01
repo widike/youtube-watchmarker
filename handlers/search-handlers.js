@@ -8,38 +8,57 @@
 import { logger } from "../logger.js";
 import { Search } from "../bg-search.js";
 import { createHandler } from "../handler-wrapper.js";
+import { Database } from "../bg-database.js";
+import { readWatchTime } from "../watch-time-storage.js";
+import { durationStorage } from "../background/duration-runtime.js";
+import { enrichHistoryVideos } from "../history-video-statistics.js";
 
 /**
  * Search for videos
  */
-export const handleSearchVideos = createHandler(async (request) => {
-  const query = request.query || "";
-  const page = Number(request.page || 1);
-  const pageSize = Number(request.pageSize || 50);
-  const skip = Math.max(page - 1, 0) * pageSize;
-  const length = pageSize;
+export const handleSearchVideos = createHandler(
+  async (request) => {
+    const query = request.query || "";
+    const skip = Math.max(0, Math.floor(Number(request.offset) || 0));
+    const length = Math.min(
+      100,
+      Math.max(1, Math.floor(Number(request.limit) || 50)),
+    );
 
-  const result = await Search.lookup(query, skip, length);
+    const result = await Search.lookup(query, skip, length, {
+      wordGroup: request.wordGroup,
+      period: request.period,
+      sort: request.sort,
+    });
 
-  return {
-    objVideos: result.videos,
-    totalResults: result.totalResults,
-  };
-}, "handleSearchVideos");
+    const [time, durations] = await Promise.all([
+      readWatchTime(Database.database),
+      durationStorage.readCache(),
+    ]);
+    return {
+      objVideos: enrichHistoryVideos(result.videos, time, durations),
+      totalResults: result.totalResults,
+    };
+  },
+  { name: "handleSearchVideos" },
+);
 
 /**
  * Delete a video from database and history
  */
-export const handleSearchDelete = createHandler(async (request) => {
-  const { videoId } = request;
+export const handleSearchDelete = createHandler(
+  async (request) => {
+    const { videoId } = request;
 
-  if (!videoId) {
-    return { success: false, error: "Missing video ID" };
-  }
+    if (!videoId) {
+      return { success: false, error: "Missing video ID" };
+    }
 
-  const result = await Search.delete(videoId, (progress) => {
-    logger.debug("Delete progress:", progress);
-  });
+    const result = await Search.delete(videoId, (progress) => {
+      logger.debug("Delete progress:", progress);
+    });
 
-  return { success: true, ...result };
-}, "handleSearchDelete");
+    return { success: true, ...result };
+  },
+  { name: "handleSearchDelete" },
+);
