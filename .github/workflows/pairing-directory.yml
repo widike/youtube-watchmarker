@@ -25,6 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Apply directory database setup
+        env:
+          UPGRADE_SOURCE: "false"
         run: node scripts/apply-pairing-sql.js
       - name: Deploy verified pairing endpoint
         run: npx --yes supabase@2.122.0 functions deploy pairing-directory --project-ref "$PAIRING_DIRECTORY_PROJECT_ID"
+      - name: Upgrade this installation after the directory is available
+        if: inputs.upgrade_source
+        run: node scripts/apply-pairing-sql.js
