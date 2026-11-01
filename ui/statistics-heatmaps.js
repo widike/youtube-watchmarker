@@ -44,31 +44,47 @@ export function calendar(stats, year) {
   const months = days.filter((date) => date.endsWith("-01"));
   const watches = days.reduce((sum, date) => sum + (counts.get(date) || 0), 0);
   const total = days.reduce((sum, date) => sum + (time.get(date) || 0), 0);
-  const measured = Boolean(stats.time.first);
+  const hasTime = (date) => (time.get(date) || 0) > 0;
   const missing = new Map(
     (stats.time.missingDaily || []).map(({ date, count }) => [date, count]),
   );
   const detail = (date) =>
     [
-      time.has(date) ? duration(time.get(date)) : "",
+      hasTime(date)
+        ? duration(time.get(date))
+        : `${number(counts.get(date) || 0)} activity records`,
       missing.has(date)
         ? `${number(missing.get(date))} watches without duration`
         : "",
-      `${number(counts.get(date) || 0)} activity records`,
+      hasTime(date) ? `${number(counts.get(date) || 0)} activity records` : "",
     ]
       .filter(Boolean)
       .join("; ");
-  return `<div class="stats-calendar-summary"><h3 id="stats-calendar-${year}">${year}</h3><span>${total > 0 ? `${duration(total)}${days.some((date) => missing.has(date)) ? " (partial)" : ""} · ` : ""}${number(watches)} records</span></div>
-    <div class="stats-heatmap-scroll"><div class="stats-calendar-months" aria-hidden="true">${months.map((date) => `<span style="grid-column:${Math.floor((days.indexOf(date) + offset) / 7) + 1}">${escape(localDate(date).toLocaleDateString(undefined, { month: "short" }))}</span>`).join("")}</div><div class="stats-calendar-layout"><div class="stats-week-labels" aria-hidden="true">${weekdays.map((day) => `<span>${day}</span>`).join("")}</div><div class="stats-calendar-grid" data-heatmap="calendar" role="group" aria-label="Daily viewing for ${year}. Arrow up/down move one day; left/right move one week.">${Array.from({ length: offset }, () => '<span aria-hidden="true"></span>').join("")}${days.map((date, index) => cell(`${dateLabel(date)}: ${detail(date)}`, measured ? calendarLevel(time.get(date) || 0) : watchLevel(counts.get(date) || 0), index, measured && (date < stats.time.first || missing.has(date)))).join("")}</div></div></div>`;
+  return `<div class="stats-calendar-summary"><h3 id="stats-calendar-${year}">${year}</h3><span>${total > 0 ? `${duration(total)}${days.some((date) => missing.has(date) || (!hasTime(date) && counts.get(date) > 0)) ? " (partial)" : ""} · ` : ""}${number(watches)} records</span></div>
+    <div class="stats-heatmap-scroll"><div class="stats-calendar-months" aria-hidden="true">${months.map((date) => `<span style="grid-column:${Math.floor((days.indexOf(date) + offset) / 7) + 1}">${escape(localDate(date).toLocaleDateString(undefined, { month: "short" }))}</span>`).join("")}</div><div class="stats-calendar-layout"><div class="stats-week-labels" aria-hidden="true">${weekdays.map((day) => `<span>${day}</span>`).join("")}</div><div class="stats-calendar-grid" data-heatmap="calendar" role="group" aria-label="Daily viewing for ${year}. Arrow up/down move one day; left/right move one week.">${Array.from({ length: offset }, () => '<span aria-hidden="true"></span>').join("")}${days.map((date, index) => cell(`${dateLabel(date)}: ${detail(date)}`, hasTime(date) ? calendarLevel(time.get(date)) : watchLevel(counts.get(date) || 0), index, hasTime(date) && missing.has(date))).join("")}</div></div></div>`;
 }
 
 export function calendarLegend(stats) {
-  const measured = Boolean(stats.time.first);
-  const labels = measured
-    ? ["0", "<¼ h", "¼–1 h", "1–3 h", "3+ h"]
-    : ["0", "1–4", "5–9", "10–19", "20+"];
-  const label = `${measured ? "Hours" : "Records"} per day${stats.time.estimatedTotal > 0 ? " · includes estimates" : ""}`;
-  return `<div class="stats-legend" role="group" aria-label="${label}" title="${label}">${labels.map((value, index) => `<span data-level="${index}">${escape(value)}</span>`).join("")}</div>`;
+  const timedDays = new Set(
+    stats.time.daily.filter(({ count }) => count > 0).map(({ date }) => date),
+  );
+  const measured = timedDays.size > 0;
+  const counts = stats.daily.some(
+    ({ date, count }) => count > 0 && !timedDays.has(date),
+  );
+  const scales = [];
+  if (measured)
+    scales.push([
+      `Hours per day${stats.time.estimatedTotal > 0 ? " · includes estimates" : ""}`,
+      ["0", "<¼ h", "¼–1 h", "1–3 h", "3+ h"],
+    ]);
+  if (counts || !measured)
+    scales.push([
+      `Records per day${measured ? " · when watch time is missing" : ""}`,
+      ["0", "1–4", "5–9", "10–19", "20+"],
+    ]);
+  const label = scales.map(([label]) => label).join("; ");
+  return `<div class="stats-legend" role="group" aria-label="${label}" title="${label}">${scales.map(([label, labels]) => `<div class="stats-legend-scale"><strong>${label}</strong>${labels.map((value, index) => `<span data-level="${index}">${escape(value)}</span>`).join("")}</div>`).join("")}</div>`;
 }
 
 export function bindHeatmaps(root) {

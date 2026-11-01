@@ -240,6 +240,10 @@ try {
     await check(
       "calendar stacks compact years with one shared legend and day detail",
       async () => {
+        const { verifyMixedCalendar } = await import(
+          "./statistics-calendar.browser.js"
+        );
+        verifyMixedCalendar(assert);
         const years = [
           ...document.querySelectorAll(".stats-calendar-year h3"),
         ].map(({ textContent }) => textContent);
