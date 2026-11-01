@@ -2,7 +2,8 @@
 
 Historical watch time can be estimated with the official YouTube Data API.
 In **Sync & data → Backfill video durations**, enter an API key with YouTube
-Data API v3 enabled and select **Start**. The key is encrypted in local storage;
+Data API v3 enabled and select **Save & start**. To replace a saved key, paste
+the new key and select **Save & resume**. The key is encrypted in local storage;
 it is sent only to the official API and is never synced or returned in status
 responses. **Pause** stops background requests; **Remove key & cache** also
 removes cached durations and their estimates, preserving measured playback.

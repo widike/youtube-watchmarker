@@ -5,6 +5,7 @@ export class DurationController {
     this.status = root.querySelector("[data-duration-status]");
     this.generation = 0;
     this.onShow = () => void this.refresh();
+    this.onInput = () => this.updateSubmitLabel();
     this.onSubmit = (event) => {
       event.preventDefault();
       void this.control("start");
@@ -18,6 +19,7 @@ export class DurationController {
   initialize() {
     this.form.addEventListener("submit", this.onSubmit);
     this.form.addEventListener("click", this.onClick);
+    this.form.addEventListener("input", this.onInput);
     window.addEventListener("hashchange", this.onShow);
     window.addEventListener("focus", this.onShow);
     document.addEventListener("visibilitychange", this.onShow);
@@ -56,13 +58,21 @@ export class DurationController {
     const input = this.form.querySelector("input");
     input.placeholder = configured ? "Replace saved key" : "";
     input.required = !configured;
-    this.form.querySelector('[type="submit"]').textContent = configured
-      ? "Resume"
-      : "Start";
+    this.updateSubmitLabel();
     this.form.querySelector('[data-duration-command="pause"]').disabled =
       !enabled;
     this.form.querySelector('[data-duration-command="forget"]').disabled =
       !configured;
+  }
+
+  updateSubmitLabel() {
+    const configured = this.backfill?.configured;
+    const hasNewKey = Boolean(this.form.querySelector("input").value.trim());
+    this.form.querySelector('[type="submit"]').textContent = configured
+      ? hasNewKey
+        ? "Save & resume"
+        : "Resume"
+      : "Save & start";
   }
 
   async refresh() {
@@ -145,6 +155,7 @@ export class DurationController {
     clearTimeout(this.timer);
     this.form.removeEventListener("submit", this.onSubmit);
     this.form.removeEventListener("click", this.onClick);
+    this.form.removeEventListener("input", this.onInput);
     window.removeEventListener("hashchange", this.onShow);
     window.removeEventListener("focus", this.onShow);
     document.removeEventListener("visibilitychange", this.onShow);
