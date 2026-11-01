@@ -1,6 +1,7 @@
 // @ts-check
 
 import { clearButtonBusy, setButtonBusy } from "../../ui/button-state.js";
+import { renderSyncStatus } from "./sync-status.js";
 
 const SYNC_ACTIONS = {
   history: { action: "history-synchronize", label: "Browser history" },
@@ -85,6 +86,10 @@ export class SyncController {
   async syncProviders() {
     try {
       setButtonBusy(this.elements.syncDatabaseButton, "Syncing…");
+      renderSyncStatus(this.elements.syncSummary, {
+        configured: true,
+        inProgress: true,
+      });
 
       const response = await this.client.sendMessage({
         action: "sync-manager-sync-now",
@@ -94,13 +99,15 @@ export class SyncController {
         throw new Error(response?.error || "Sync failed");
       }
 
-      this.elements.syncSummary.textContent = response.inProgress
-        ? "Syncing…"
-        : "Up to date";
+      renderSyncStatus(this.elements.syncSummary, {
+        configured: true,
+        inProgress: response.inProgress,
+        lastSuccess: response.inProgress ? undefined : Date.now(),
+      });
       await this.onDataChanged();
       await this.refreshSearch();
     } catch (error) {
-      this.elements.syncSummary.textContent = `Sync failed · ${error.message}`;
+      renderSyncStatus(this.elements.syncSummary, { error: error.message });
     } finally {
       clearButtonBusy(this.elements.syncDatabaseButton);
       this.invalidateSources();

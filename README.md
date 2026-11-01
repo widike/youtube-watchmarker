@@ -267,17 +267,17 @@ Normal restoration does not require an exported file.
    followed by [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
    and [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
    in the project's SQL Editor. All seven preserve existing history.
-   **Sync & data → Set up your first device → Copy setup SQL** copies all seven in order.
+   **Sync & data → First device setup → Copy setup SQL** copies all seven in order.
    Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)
    to register your public Turnstile site key and configure its secret in Supabase.
    For an existing project, apply the import-reconciliation migration so the
    server's materialized `int_count` also reflects correction receipts. Updated
    extension clients already reconcile downloaded events even before that SQL
    migration; older server triggers retain inflated summary counters until it runs.
-3. Under **Set up your first device**, enter the project ID and publishable
+3. Under **First device setup**, enter the project ID and publishable
    key, then choose **Start syncing**.
    If this device is already connected, keep its session and skip this step.
-4. Choose **Add a device** on a connected computer. The connection code is copied
+4. Choose **Create connection code** under **Sync & data** on a connected computer. The connection code is copied
    automatically; a copy button is also available. Paste it into the other
    MacBook's code field and choose **Connect**.
    Create another code for SmartTube and paste it through the TV's phone setup

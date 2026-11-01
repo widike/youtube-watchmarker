@@ -45,15 +45,25 @@
       <div
         id="sync-summary"
         class="sync-summary"
+        data-state="checking"
         role="status"
         aria-live="polite"
+        aria-atomic="true"
       >
-        Checking sync…
+        <i class="fas fa-clock sync-state-icon" aria-hidden="true"></i>
+        <div>
+          <strong class="sync-state-label">Checking connection…</strong>
+          <span class="sync-state-detail">Reading cloud sync status</span>
+        </div>
       </div>
       <div id="sync-connected" hidden>
-        <button class="quiet-button" id="create-link" type="button">
-          <i class="fas fa-plus" aria-hidden="true"></i>Add a device
+        <button class="primary-button" id="create-link" type="button">
+          <i class="fas fa-plus" aria-hidden="true"></i>Create connection code
         </button>
+        <p class="field-note">
+          Connect another device to this history. The code is copied
+          automatically.
+        </p>
         <div id="device-link-panel" class="device-link-panel" hidden>
           <label for="generated-connection-code" class="field-label"
             >Connection code</label
@@ -82,6 +92,12 @@
         </div>
       </div>
       <div id="sync-setup" hidden>
+        <p class="field-note" id="connection-code-help">
+          On a connected device, open <strong>Sync &amp; data</strong> and
+          choose <strong>Create connection code</strong>. Paste it here within
+          10 minutes. For your first device, use
+          <strong>First device setup</strong> below.
+        </p>
         <form id="connect-device-form" class="sync-connect-form">
           <label class="visually-hidden" for="connection-code"
             >Connection code</label
@@ -93,6 +109,7 @@
             autocomplete="off"
             spellcheck="false"
             placeholder="Paste a connection code"
+            aria-describedby="connection-code-help"
             required
           />
           <button
@@ -133,8 +150,26 @@
                 />
               </div>
             </div>
-            <p class="field-note">
-              Enable Anonymous Sign-Ins in Supabase; run setup SQL.
+            <p class="field-note" id="first-device-help">
+              In your
+              <a
+                href="https://supabase.com/dashboard"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Supabase dashboard</a
+              >, copy the project ID from the project URL and the publishable
+              key from <strong>Settings → API Keys</strong>. Enable anonymous
+              sign-ins under
+              <strong>Authentication → Sign In / Providers</strong>, then copy
+              and run the setup SQL in <strong>SQL Editor</strong>. Complete the
+              <a
+                href="https://github.com/widike/youtube-watchmarker/blob/main/docs/anonymous-sign-ins.md#captcha-and-signup-abuse"
+                target="_blank"
+                rel="noopener noreferrer"
+                >CAPTCHA setup</a
+              >, then choose <strong>Start syncing</strong> to connect this
+              device; you can then create connection codes for your other
+              devices.
             </p>
             <div class="toolbar-actions">
               <button

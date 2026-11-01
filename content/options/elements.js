@@ -28,6 +28,8 @@ export function createOptionsElements() {
     supabaseProjectId: requireElement("supabase_project_id"),
     supabaseApiKey: requireElement("supabase_api_key"),
     connectionCode: requireElement("connection-code"),
+    connectionCodeHelp: requireElement("connection-code-help"),
+    firstDeviceHelp: requireElement("first-device-help"),
     createLinkButton: requireElement("create-link"),
     generatedConnectionCode: requireElement("generated-connection-code"),
     deviceLinkPanel: requireElement("device-link-panel"),

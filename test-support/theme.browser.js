@@ -3,6 +3,7 @@ import { ToastService } from "../ui/toast-service.js";
 import { videoCard } from "../ui/history-library.js";
 import { verifyDisclosureLayout } from "./sync-layout.browser.js";
 import { verifyPageTemplates } from "./page-templates.browser.js";
+import { verifySyncStates } from "./sync-status.browser.js";
 
 const fixture = window.fixture;
 const results = [];
@@ -193,6 +194,7 @@ try {
     async () => {
       location.hash = "sync";
       await waitFor(() => !element("#panel-sync").hidden);
+      await verifySyncStates(fixture, assert);
       await verifyDisclosureLayout(element("#project-setup-label"), [
         element("#cloud-heading"),
         element("#sync-summary"),

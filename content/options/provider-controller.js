@@ -1,5 +1,6 @@
 import { clearButtonBusy, setButtonBusy } from "../../ui/button-state.js";
 import { CaptchaChallenge } from "../../ui/captcha-challenge.js";
+import { renderSyncStatus, showSyncStatus } from "./sync-status.js";
 
 export class ProviderController {
   constructor({ client, elements, onDataChanged }) {
@@ -81,6 +82,8 @@ export class ProviderController {
       e.syncSetup.hidden = this.connected && !this.showSetup;
       e.syncSetupToggle.hidden = !this.connected;
       e.connectDeviceForm.hidden = this.connected;
+      e.connectionCodeHelp.hidden = this.connected;
+      e.firstDeviceHelp.hidden = this.connected;
       e.projectFields.hidden = this.connected;
       e.startSyncButton.hidden = this.connected;
       e.projectSetupLabel.textContent = this.connected
@@ -89,20 +92,7 @@ export class ProviderController {
       e.syncConnected.hidden = !this.connected;
       e.syncDatabaseButton.hidden = !this.connected;
       e.syncDatabaseButton.disabled = !this.connected;
-      e.syncSummary.classList.toggle("sync-attention", Boolean(status.error));
-      let message = "Local only";
-      if (this.connected) {
-        if (status.error) message = `Sync paused · ${status.error}`;
-        else if (status.pending || status.inProgress) {
-          const pending = Number(status.pending) || 0;
-          message = pending
-            ? `Syncing · ${pending.toLocaleString()} remaining`
-            : "Syncing…";
-        } else if (status.lastSuccess)
-          message = `Up to date · ${new Date(status.lastSuccess).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-        else message = "Connected";
-      }
-      e.syncSummary.textContent = message;
+      renderSyncStatus(e.syncSummary, status);
       if (!this.connected) this.clearConnectionCode();
       else if (this.linkExpiresAt && Date.now() >= this.linkExpiresAt) {
         this.clearConnectionCode();
@@ -113,7 +103,11 @@ export class ProviderController {
       this.lastAttempt = status.lastAttempt;
       this.loaded = true;
     } catch (error) {
-      e.syncSummary.textContent = `Sync status unavailable · ${error.message}`;
+      showSyncStatus(e.syncSummary, {
+        state: "attention",
+        label: "Connection status unavailable",
+        detail: error.message,
+      });
     }
   }
 

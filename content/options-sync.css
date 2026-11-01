@@ -86,13 +86,53 @@
     margin: 0;
   }
   .sync-summary {
-    color: var(--muted);
-    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border: 1px solid var(--control-line);
+    border-inline-start: 4px solid var(--muted);
+    border-radius: var(--radius-control);
+    background: var(--soft);
+    color: var(--ink);
     line-height: 1.6;
     overflow-wrap: anywhere;
   }
-  .sync-summary.sync-attention {
-    color: var(--red);
+  .sync-summary > div {
+    min-inline-size: 0;
+  }
+  .sync-state-icon {
+    flex-shrink: 0;
+    font-size: 20px;
+  }
+  .sync-state-label,
+  .sync-state-detail {
+    display: block;
+  }
+  .sync-state-label {
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .sync-state-detail {
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .sync-summary:is([data-state="connected"], [data-state="syncing"]) {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .sync-summary[data-state="attention"] {
+    color: var(--danger);
+    border-color: var(--danger-line);
+    background: var(--danger-soft);
+  }
+  .sync-summary[data-state="attention"] .sync-state-detail {
+    color: var(--danger);
+  }
+  #connection-code-help {
+    max-inline-size: 760px;
+    margin-block-start: var(--space-4);
   }
   .sync-connect-form,
   .sync-code-row {
