@@ -1,0 +1,4 @@
+project_id = "youtube-watchmarker"
+
+[functions.pairing-directory]
+verify_jwt = false

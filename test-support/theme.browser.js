@@ -251,7 +251,7 @@ try {
         "Empty code could be submitted",
       );
       const input = element("#connection-code");
-      input.value = "fixture-connection-code";
+      input.value = "kmt-pxr";
       input.dispatchEvent(new Event("input", { bubbles: true }));
       fixture.connectionError = "This code has expired";
       element("#connect-device-form").requestSubmit();
@@ -262,10 +262,7 @@ try {
         !element("#sync-setup").hidden,
         "Failed connection hid retry controls",
       );
-      assert(
-        input.value === "fixture-connection-code",
-        "Failed connection discarded input",
-      );
+      assert(input.value === "kmt-pxr", "Failed connection discarded input");
       fixture.connectionError = null;
       element("#connect-device-form").requestSubmit();
       await waitFor(
@@ -309,9 +306,7 @@ try {
           !element("#create-link").disabled,
       );
       assert(
-        element("#generated-connection-code").value.startsWith(
-          "watchmarker:1:",
-        ),
+        element("#generated-connection-code").value.startsWith("KMT-PXR"),
         "No code was available to copy",
       );
       assert(
@@ -327,8 +322,7 @@ try {
         ({ action }) => action === "supabase-connect",
       );
       assert(
-        sent.connectionCode === "fixture-connection-code" &&
-          !sent.configuration,
+        sent.connectionCode === "kmt-pxr" && !sent.configuration,
         "Device linking included hidden project fields",
       );
       assert(fixture.errors.length === 0, fixture.errors.join("\n"));

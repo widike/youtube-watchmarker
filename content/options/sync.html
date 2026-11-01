@@ -61,8 +61,7 @@
           <i class="fas fa-plus" aria-hidden="true"></i>Create connection code
         </button>
         <p class="field-note">
-          Connect another device to this history. The code is copied
-          automatically.
+          Enter the six-letter code on your other device.
         </p>
         <div id="device-link-panel" class="device-link-panel" hidden>
           <label for="generated-connection-code" class="field-label"
@@ -94,8 +93,8 @@
       <div id="sync-setup" hidden>
         <p class="field-note" id="connection-code-help">
           On a connected device, open <strong>Sync &amp; data</strong> and
-          choose <strong>Create connection code</strong>. Paste it here within
-          10 minutes. For your first device, use
+          choose <strong>Create connection code</strong>. Enter its six letters
+          within 10 minutes. For your first device, use
           <strong>First device setup</strong> below.
         </p>
         <form id="connect-device-form" class="sync-connect-form">
@@ -106,9 +105,12 @@
             class="text-input"
             type="text"
             id="connection-code"
-            autocomplete="off"
+            autocomplete="one-time-code"
+            autocapitalize="characters"
+            maxlength="7"
+            pattern="[A-Za-z]{3}-?[A-Za-z]{3}"
             spellcheck="false"
-            placeholder="Paste a connection code"
+            placeholder="KMT-PXR"
             aria-describedby="connection-code-help"
             required
           />

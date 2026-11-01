@@ -76,7 +76,7 @@ test("the widget only hands tokens to extension pages and encrypted private IPv4
 });
 
 test("widget configuration lookup sends only public configuration to the project's RPC", async (t) => {
-  const configuration = connectionConfiguration({
+  const configuration = await connectionConfiguration({
     configuration: {
       projectId: "abcdefghijklmnopqrst",
       publishableKey: "sb_publishable_test",
@@ -97,7 +97,7 @@ test("widget configuration lookup sends only public configuration to the project
   );
   assert.equal(request.headers.Authorization, undefined);
   assert.equal(request.body, "{}");
-  assert.throws(() =>
+  await assert.rejects(
     connectionConfiguration({
       configuration: {
         projectId: "attacker.example",

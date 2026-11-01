@@ -61,9 +61,7 @@ chrome.runtime = {
     if (action === "supabase-create-link")
       return {
         success: true,
-        connectionCode:
-          "watchmarker:1:abcdefghijklmnopqrst:sb_publishable_fixture:" +
-          "a".repeat(64),
+        connectionCode: "KMT-PXR",
       };
     return { success: true, objVideos: [], totalResults: 0 };
   },

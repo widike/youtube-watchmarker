@@ -18,8 +18,10 @@ invitations and memberships.
   depends on user-editable metadata or merely having the `authenticated` role.
 - Browser roles cannot delete or truncate tables, edit existing events, access
   private membership/invitation tables, or call old administrative helpers.
-- Device-link RPCs have fixed empty search paths. Invitations contain 256 random
-  bits, expire after ten minutes and are stored as hashes. They connect one
+- Device-link RPCs have fixed empty search paths. Invitations use six random
+  letters, expire after ten minutes and are stored as hashes, with durable
+  server-side guessing limits. Registration proofs use separate high-entropy
+  secrets. See [device pairing](device-pairing.md). Invitations connect one
   independent Auth identity; retrying by that identity is idempotent.
 
 Each device keeps an encrypted refresh token and an access token in trusted

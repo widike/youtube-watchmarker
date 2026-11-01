@@ -61,7 +61,7 @@ export class ProviderController {
   updateButtons() {
     const e = this.elements;
     e.connectDeviceButton.disabled =
-      this.busy || !e.connectionCode.value.trim();
+      this.busy || !/^[a-z]{3}-?[a-z]{3}$/i.test(e.connectionCode.value.trim());
     e.startSyncButton.disabled =
       this.busy ||
       !e.supabaseProjectId.value.trim() ||
@@ -228,6 +228,7 @@ export class ProviderController {
         "20261101040000_playback_time_sync.sql",
         "20261101050000_anonymous_access_hardening.sql",
         "20261101060000_captcha_configuration.sql",
+        "20261101070000_short_connection_codes.sql",
       ];
       const sql = await Promise.all(
         migrations.map(async (name) => {

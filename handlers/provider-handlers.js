@@ -3,7 +3,12 @@ import { databaseProviderFactory } from "../database-provider-factory.js";
 import { createHandler } from "../handler-wrapper.js";
 import { supabaseAuthClient } from "../supabase-auth-client.js";
 import { supabaseDatabaseProvider } from "../supabase-database-provider.js";
-import { decodeConnection, encodeConnection } from "../device-link.js";
+import {
+  decodeConnection,
+  encodeConnection,
+  loadConnectionProject,
+  registerConnection,
+} from "../device-link.js";
 import {
   connectionConfiguration,
   loadCaptchaConfiguration,
@@ -13,7 +18,9 @@ let connecting = false;
 
 export const handleSupabaseCaptchaConfiguration = createHandler(
   async (request) => ({
-    captcha: await loadCaptchaConfiguration(connectionConfiguration(request)),
+    captcha: await loadCaptchaConfiguration(
+      await connectionConfiguration(request),
+    ),
   }),
   { name: "handleSupabaseCaptchaConfiguration" },
 );
@@ -33,12 +40,13 @@ export const handleSupabaseConnect = createHandler(
         throw new Error(
           "Sync is running. Wait for it to finish before changing the connection.",
         );
-      const link = request.connectionCode
+      const token = request.connectionCode
         ? decodeConnection(request.connectionCode)
         : null;
       const saved = await credentialStorage.getConfiguration();
       const configuration =
-        link?.configuration || request.configuration || saved;
+        (token ? await loadConnectionProject(token) : request.configuration) ||
+        saved;
       const validation = credentialStorage.validateConfiguration(configuration);
       if (!validation.isValid) throw new Error(validation.errors.join(". "));
       const active = {
@@ -46,12 +54,12 @@ export const handleSupabaseConnect = createHandler(
         supabaseUrl: `https://${configuration.projectId}.supabase.co`,
       };
       const current = await credentialStorage.getSession();
-      if (!link && current)
+      if (!token && current)
         throw new Error(
           "Already connected. Use Create connection code to link another device.",
         );
       // Do not replace an established device identity with a new anonymous user.
-      if (!link && !(await databaseProviderFactory.canCreateHistory()))
+      if (!token && !(await databaseProviderFactory.canCreateHistory()))
         throw new Error(
           "Link this history using a connection code from another connected device.",
         );
@@ -68,11 +76,13 @@ export const handleSupabaseConnect = createHandler(
       session.historyOwnerId = await supabaseAuthClient.deviceRpc(
         active,
         session,
-        link ? "watchmarker_claim_link" : "watchmarker_history_owner",
-        link ? { p_token: link.token } : {},
+        token ? "watchmarker_claim_link" : "watchmarker_history_owner",
+        token ? { p_token: token } : {},
       );
       if (typeof session.historyOwnerId !== "string" || !session.historyOwnerId)
-        throw new Error("The sync service did not return a history identity");
+        throw new Error(
+          "Code incorrect, expired or already used, or too many attempts. Check the code or try again in 10 minutes.",
+        );
       await databaseProviderFactory.assertIdentity(configuration, session);
       await credentialStorage.storeAuthenticatedConfiguration(
         configuration,
@@ -96,14 +106,16 @@ export const handleSupabaseCreateLink = createHandler(
     if (!configuration || !session)
       throw new Error("Connect this device first");
     session.accessToken = await supabaseAuthClient.getAccessToken();
-    const token = await supabaseAuthClient.deviceRpc(
-      configuration,
-      session,
-      "watchmarker_create_link",
-    );
-    if (!/^[a-f0-9]{64}$/.test(token))
-      throw new Error("Invalid connection code returned by sync service");
-    return { connectionCode: encodeConnection(configuration, token) };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const invitation = await supabaseAuthClient.deviceRpc(
+        configuration,
+        session,
+        "watchmarker_create_short_link",
+      );
+      if (await registerConnection(configuration, invitation))
+        return { connectionCode: encodeConnection(invitation.code) };
+    }
+    throw new Error("Could not reserve a connection code. Try again shortly.");
   },
   { name: "handleSupabaseCreateLink" },
 );

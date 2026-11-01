@@ -265,9 +265,10 @@ Normal restoration does not require an exported file.
    followed by [import reconciliation](supabase/migrations/20261101030000_import_reconciliation.sql)
    followed by [playback-time sync](supabase/migrations/20261101040000_playback_time_sync.sql)
    followed by [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
-   and [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
-   in the project's SQL Editor. All seven preserve existing history.
-   **Sync & data → First device setup → Copy setup SQL** copies all seven in order.
+   followed by [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
+   and [short connection codes](supabase/migrations/20261101070000_short_connection_codes.sql)
+   in the project's SQL Editor. All eight preserve existing history.
+   **Sync & data → First device setup → Copy setup SQL** copies all eight in order.
    Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)
    to register your public Turnstile site key and configure its secret in Supabase.
    For an existing project, apply the import-reconciliation migration so the
@@ -277,13 +278,17 @@ Normal restoration does not require an exported file.
 3. Under **First device setup**, enter the project ID and publishable
    key, then choose **Start syncing**.
    If this device is already connected, keep its session and skip this step.
-4. Choose **Create connection code** under **Sync & data** on a connected computer. The connection code is copied
-   automatically; a copy button is also available. Paste it into the other
-   MacBook's code field and choose **Connect**.
-   Create another code for SmartTube and paste it through the TV's phone setup
-   page. Complete device verification before saving. The code includes the public project details;
-   they do not need to be entered again. Codes expire after ten minutes, connect
+4. Choose **Create connection code** under **Sync & data** on a connected computer.
+   Enter the six letters (for example **KMT-PXR**) on the new device and choose
+   **Connect**. Lowercase and an omitted hyphen also work; a copy button is available.
+   For SmartTube, enter the code in the TV's Phone setup page and complete device
+   verification before saving. A shared temporary pairing directory resolves each
+   code to its issuing installation's public project settings. Different
+   installations keep their own databases; new devices enter no project ID or key.
+   Codes expire after ten minutes, connect
    one device, and are replaced when their issuing device creates another code.
+   Existing installations must apply the short-code migration and update both
+   clients. See [pairing directory deployment and privacy](docs/device-pairing.md).
 5. Reload the updated extension on both MacBooks. Other sync clients, including
    SmartTube, need to write watch events using the version 4 contract for their
    rewatches to appear individually; counter-only writes cannot supply past dates.

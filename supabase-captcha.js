@@ -1,10 +1,11 @@
 import { credentialStorage } from "./credential-storage.js";
-import { decodeConnection } from "./device-link.js";
+import { decodeConnection, loadConnectionProject } from "./device-link.js";
 import { validateCaptchaConfiguration } from "./verification/protocol.js";
 
-export function connectionConfiguration(request) {
+export async function connectionConfiguration(request) {
+  if (request.connectionCode) decodeConnection(request.connectionCode);
   const configuration = request.connectionCode
-    ? decodeConnection(request.connectionCode).configuration
+    ? await loadConnectionProject(request.connectionCode)
     : request.configuration;
   const validation = credentialStorage.validateConfiguration(configuration);
   if (!validation.isValid) throw new Error(validation.errors.join(". "));

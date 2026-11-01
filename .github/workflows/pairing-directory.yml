@@ -1,0 +1,30 @@
+name: Deploy pairing directory
+
+on:
+  workflow_dispatch:
+    inputs:
+      upgrade_source:
+        description: Also upgrade device linking when this project hosts Watchmarker history
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pairing-directory-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      PAIRING_DIRECTORY_PROJECT_ID: coogjvcuzhgdngjcjmww
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      UPGRADE_SOURCE: ${{ inputs.upgrade_source }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Apply directory database setup
+        run: node scripts/apply-pairing-sql.js
+      - name: Deploy verified pairing endpoint
+        run: npx --yes supabase@2.122.0 functions deploy pairing-directory --project-ref "$PAIRING_DIRECTORY_PROJECT_ID"
