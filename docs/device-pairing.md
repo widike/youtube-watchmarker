@@ -27,7 +27,7 @@ destination database is resolved separately for each code.
    to the shared history. Local history identity checks precede credential storage
    and upload. Wrong, expired, consumed or rate-limited codes cannot connect.
 
-SmartTube accepts the code directly in **Settings → Content → Cloud sync**.
+SmartTube accepts the code directly in **Settings → Extensions → Cloud sync**.
 Verification runs inside the TV app in an origin-restricted Android WebView.
 Cloud sync does not open the LAN Phone setup screen or require its numeric PIN.
 The general Phone setup service remains available for other TV settings and backups.
