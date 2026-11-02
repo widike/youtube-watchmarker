@@ -1,6 +1,6 @@
 {
   "name": "youtube-watchmarker",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Chrome extension that automatically marks videos on YouTube that you have already watched",
   "type": "module",
   "engines": {

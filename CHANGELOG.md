@@ -1,48 +1,40 @@
 # Changelog
 
-## 1.2.2 — 2026-11-02
+## 1.3.0 — 2026-11-02
 
-A maintenance release for video deletion, history metadata and popup fixes.
+History and viewing-time fixes, clearer popup layouts, and an organized extension
+package with local development configuration excluded.
 
-- The trash action now completes deletion across local history, Supabase and
-  the signed-in YouTube account, including older YouTube history pages.
-  Pending remote deletions retry automatically after failures or restarts,
-  with clearer status and protection against stale devices restoring entries.
-  Saved records remain behind deletion markers; this is not a permanent purge.
-- Missing video titles are recovered from browser history without creating new
-  watch events. Playback also handles delayed titles and ignores loading labels.
-- History duration badges refresh automatically without losing loaded pages or
-  scroll position. Displaying videos with missing lengths wakes idle backfill
-  while preserving pause, retry and quota limits.
-- The popup uses clearer statistics cards, overlays video lengths on thumbnails,
-  and keeps playback progress within each thumbnail, including in forced colors.
-- Watched badges show a count only for repeat watches; single views omit “×1”.
+- Video deletion completes across local history, Supabase and the signed-in
+  YouTube account, including older history pages. Pending remote deletions retry
+  after failures and restarts; deletion markers prevent stale devices restoring
+  entries. Saved records remain behind those markers.
+- Missing titles are recovered from browser history without creating watch events.
+  Playback handles delayed titles and ignores loading labels.
+- Historical viewing estimates stop at the next timestamped video, with limits for
+  video length, elapsed time and the selected period. Average-week charts retain
+  imported records with known hours without inventing hours for date-only records.
+- Browser and YouTube imports respect the installation's saved tracking boundary,
+  preventing newer visits from bypassing the one-minute playback requirement.
+  Existing saved history is retained.
+- Repeated watches on the same day share a card while preserving individual play
+  details. Duration badges refresh without losing loaded history or scroll position.
+  Missing lengths wake idle backfill while preserving pause, retry and quota limits;
+  unfinished live-video lengths are retried.
+- Popup statistics have clearer periods, thumbnail duration overlays and playback
+  progress, including in forced colors. Single views omit the redundant “×1” badge.
+- Runtime code is grouped by responsibility under `extension/`; tests and fixtures
+  live under `tests/`. Build checks validate manifest, module and asset paths.
+- Release ZIPs contain the installable extension and licenses. Machine-specific
+  `.mcp.json`, `.codex/`, credentials and generated development output stay local.
 
-Update the existing extension folder, reload it at `chrome://extensions`, and
-refresh open YouTube tabs. No additional database migration is required from 1.2.1.
-If you installed the earlier 1.2.2 package, replace it with the rebuilt ZIP and reload.
+For a release ZIP, extract it into the existing extension installation folder,
+reload at `chrome://extensions`, and refresh YouTube tabs. For a source checkout,
+run `npm ci` and `npm run build`, then select `extension/` using **Load unpacked**.
+The extension's public identity key is unchanged. No additional database migration
+is required from 1.2.0.
 
-[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.2.1...v1.2.2)
-
-## 1.2.1 — 2026-11-02
-
-A small maintenance release with today's viewing-history and display fixes.
-
-- Historical viewing estimates now stop at the next timestamped video start,
-  with limits for video length, elapsed time and the selected period.
-- The average-week chart includes imported records with known hours and keeps
-  consistent activity units. Date-only records do not invent hourly activity.
-- Browser and YouTube history imports only backfill dates before the installation's
-  saved tracking boundary, preventing newer visits from bypassing the one-minute
-  playback requirement. Existing saved history is retained.
-- Repeated watches of a video on the same day share one card while retaining
-  individual play details, with clearer separators and improved layout.
-- Unfinished live-video durations are retried instead of cached as final lengths.
-
-Update the existing extension folder, reload it at `chrome://extensions`, and
-refresh open YouTube tabs. No additional database migration is required from 1.2.0.
-
-[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.2.0...v1.2.1)
+[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.2.0...v1.3.0)
 
 ## 1.2.0 — 2026-11-01
 
