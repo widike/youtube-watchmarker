@@ -110,9 +110,9 @@
     flex-wrap: wrap;
     gap: 4px 10px;
   }
-  .video-play + .video-play {
-    border-left: 1px solid currentColor;
-    padding-left: 12px;
+  .video-play:not(:last-child) {
+    border-right: 1px solid currentColor;
+    padding-right: 12px;
   }
   .video-percentage {
     color: var(--accent);
