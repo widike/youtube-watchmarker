@@ -119,10 +119,12 @@
         return;
       }
 
-      target.setAttribute(
-        "watchcount",
-        ` ×${this.watchStates.get(videoId).count}`,
-      );
+      const count = this.watchStates.get(videoId).count;
+      if (count > 1) {
+        target.setAttribute("watchcount", ` ×${count}`);
+      } else {
+        target.removeAttribute("watchcount");
+      }
 
       if (timestamp) {
         const watchDate = new Date(timestamp).toLocaleDateString(undefined, {
