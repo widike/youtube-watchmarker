@@ -6,7 +6,7 @@ YouTube keeps track of your watch history and automatically marks videos that yo
 
 ## Installation
 
-Download `youtube-watchmarker-1.2.0.zip` from the
+Download `youtube-watchmarker-1.2.1.zip` from the
 [latest GitHub release](https://github.com/widike/youtube-watchmarker/releases/latest),
 extract it, and select the extracted folder using **Load unpacked** at
 `chrome://extensions` in Chrome 126 or newer. You can also load the repository
@@ -14,7 +14,7 @@ as an unpacked extension. Keep the extracted folder for future Chrome sessions.
 Reload the extension and refresh existing YouTube tabs after updating.
 
 See [the changelog](CHANGELOG.md) for the major improvements and cloud-sync
-upgrade requirements in version 1.2.0.
+upgrade requirements.
 
 ## Current Features
 

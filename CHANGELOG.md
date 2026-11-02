@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.1 — 2026-11-02
+
+A small maintenance release with today's viewing-history and display fixes.
+
+- Historical viewing estimates now stop at the next timestamped video start,
+  with limits for video length, elapsed time and the selected period.
+- The average-week chart includes imported records with known hours and keeps
+  consistent activity units. Date-only records do not invent hourly activity.
+- Browser and YouTube history imports only backfill dates before the installation's
+  saved tracking boundary, preventing newer visits from bypassing the one-minute
+  playback requirement. Existing saved history is retained.
+- Repeated watches of a video on the same day share one card while retaining
+  individual play details, with clearer separators and improved layout.
+- Unfinished live-video durations are retried instead of cached as final lengths.
+
+Update the existing extension folder, reload it at `chrome://extensions`, and
+refresh open YouTube tabs. No additional database migration is required from 1.2.0.
+
+[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.2.0...v1.2.1)
+
 ## 1.2.0 — 2026-11-01
 
 This release updates the extension from 1.0.5 with a rebuilt local-first history,
