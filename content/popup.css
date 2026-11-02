@@ -1,6 +1,7 @@
 @layer variants {
   body.popup {
     --radius-card: var(--radius-control);
+    --popup-thumbnail-width: 104px;
     width: 600px;
     height: 580px;
     overflow: hidden;
@@ -122,7 +123,7 @@
     overflow: hidden;
   }
   .popup .video-thumbnail {
-    width: 104px;
+    width: var(--popup-thumbnail-width);
     aspect-ratio: auto;
     border-radius: 0;
   }
@@ -145,6 +146,32 @@
   .popup .video-meta > span,
   .popup .video-meta > time {
     gap: 4px;
+  }
+  .popup .video-link:has(.video-thumbnail) .video-duration {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: #000c;
+    color: #fff;
+    font-weight: 600;
+  }
+  .popup .video-link:has(.video-thumbnail) .video-duration > i {
+    --fa-display: none;
+  }
+  .popup .video-percentage {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .popup .video-progress {
+    right: auto;
+    width: var(--popup-thumbnail-width);
   }
   .popup-footer {
     display: flex;
@@ -196,5 +223,20 @@
     padding: 9px 12px;
     border-radius: var(--radius-control);
     margin-top: 12px;
+  }
+}
+
+@layer accessibility {
+  @media (forced-colors: active) {
+    .popup .video-meta > .video-duration {
+      background: Canvas;
+      color: CanvasText;
+    }
+    .popup .video-progress {
+      background: Canvas;
+    }
+    .popup .video-progress > span {
+      background: Highlight;
+    }
   }
 }
