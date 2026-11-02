@@ -52,7 +52,10 @@ test("every period filters rankings, title words, weekday averages and hourly ac
 
 test("average week shows saved dated activity without requiring measured playback duration", () => {
   const stats = summarizeHistory(videos, { period: "month", now });
-  assert.equal(stats.time.first, null);
+  assert(
+    stats.time.estimated > 0,
+    "timestamps can estimate time without measurements",
+  );
   const html = averageWeek(stats);
   assert.match(html, /Average records per weekday/);
   assert(stats.weekdayAverages.some(({ average }) => average > 0));
@@ -76,7 +79,7 @@ test("average week shows saved dated activity without requiring measured playbac
   assert.equal(imports.unknown, 19);
   assert.equal(
     imports.averageWeek.reduce((sum, { count }) => sum + count, 0),
-    0,
+    1,
   );
   assert.match(averageWeek(imports), /Average records per weekday/);
 });
@@ -101,7 +104,7 @@ test("calendar totals and cells use complete annual history for every selected p
 
 test("duration outside the selected period cannot hide its known hourly watch activity", () => {
   const from = now - 40 * DAY;
-  const stats = summarizeHistory(videos, {
+  const stats = summarizeHistory(videos.slice(0, 1), {
     period: "month",
     now,
     time: [

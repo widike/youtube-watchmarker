@@ -33,12 +33,12 @@ export function dashboard(stats) {
   const measured = stats.time.selected > 0;
   const timeChange =
     stats.time.estimated > 0
-      ? "Includes full-length history estimates. Estimates are Watchmarker calculations, not YouTube watch-time data."
+      ? "Includes history estimates ending when the next video starts, capped by video length and elapsed time. Date-only records use video lengths within a shared daily budget. Estimates are Watchmarker calculations, not YouTube watch-time data."
       : stats.period === "all"
         ? "Measured across synced devices"
         : `${comparison(stats.time.selected, stats.time.previous, "playback time")} · all devices`;
   return `<div class="stats-metrics${measured ? "" : " stats-metrics-counts"}">
-    ${measured ? metric("Hours watched", `${stats.time.estimated > 0 ? "≈ " : ""}${escape(hours(stats.time.selected))} <em>h</em>`, timeChange) + metric("Daily viewing time", `${stats.time.estimated > 0 ? "≈ " : ""}${duration(stats.time.average)}`, "Average playback time per day") : ""}
+    ${measured ? metric("Hours watched", `${stats.time.estimated > 0 ? "≈ " : ""}${escape(hours(stats.time.selected))} <em>h</em>`, timeChange) + metric("Daily viewing time", `${stats.time.estimated > 0 ? "≈ " : ""}${duration(stats.time.average)}`, stats.time.estimated > 0 ? timeChange : "Average playback time per day") : ""}
     ${metric("Recorded activity", number(stats.selected), change)}
     ${metric("Different videos", number(stats.unique), "Distinct videos in this period")}
     </div>

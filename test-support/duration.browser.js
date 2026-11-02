@@ -124,8 +124,10 @@ export async function verifyDurationBackfill(assert) {
       durations: await storage.readCache(now),
     });
     assert(
-      Math.abs(stats.time.selected - (600 + 1) / 3600) < 1e-10,
-      "Measured playback and historical estimate were double-counted",
+      // Ten historical minutes, one second before the next video's start for
+      // the unavailable video, and one measured second for that next video.
+      Math.abs(stats.time.selected - (600 + 1 + 1) / 3600) < 1e-10,
+      "Timestamp estimates and matching measured playback were not reconciled",
     );
     now += DURATION_TTL + 60_000;
     db.close();

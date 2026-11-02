@@ -53,9 +53,10 @@ export async function fetchDurations(
     throw new Error("A batch must contain 1–50 unique video IDs");
   const url = new URL(ENDPOINT);
   url.search = new URLSearchParams({
-    part: "contentDetails",
+    part: "contentDetails,liveStreamingDetails",
     id: ids.join(","),
-    fields: "items(id,contentDetails(duration))",
+    fields:
+      "items(id,contentDetails(duration),liveStreamingDetails(actualStartTime,actualEndTime))",
     key: apiKey,
   }).toString();
   let response;
@@ -133,7 +134,9 @@ export async function fetchDurations(
   const durations = new Map(
     body.items.map((video) => [
       video.id,
-      parseDuration(video.contentDetails?.duration),
+      video.liveStreamingDetails && !video.liveStreamingDetails.actualEndTime
+        ? null
+        : parseDuration(video.contentDetails?.duration),
     ]),
   );
   return ids.map((strIdent) => {

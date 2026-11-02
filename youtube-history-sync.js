@@ -13,6 +13,7 @@ export function synchronizeHistory(
 ) {
   return synchronizeYouTubeSource(manager, onProgress, {
     preview,
+    historicalOnly: true,
     signal,
     url: YOUTUBE.URLS.HISTORY,
     label: "YouTube history",

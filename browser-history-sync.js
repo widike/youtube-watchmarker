@@ -7,6 +7,7 @@ import {
 import { searchBrowserHistory } from "./browser-history-search.js";
 import { mergeSourceVideo } from "./history-source.js";
 import { summarizeSource } from "./source-preview.js";
+import { historyImportCutoff } from "./history-import-policy.js";
 
 export async function synchronizeBrowserHistory(
   manager,
@@ -15,6 +16,7 @@ export async function synchronizeBrowserHistory(
   onProgress,
   { preview = false, signal } = {},
 ) {
+  const cutoff = await historyImportCutoff();
   const provider = manager.getProvider();
   const keepAlive = setInterval(() => {
     void chrome.runtime.getPlatformInfo();
@@ -33,8 +35,8 @@ export async function synchronizeBrowserHistory(
   let failedCount = 0;
   try {
     signal?.throwIfAborted();
-    // Snapshot the upper bound: new visits belong to the next sync.
-    const endTime = Date.now() + 1;
+    // Visits since measured tracking began can never establish a watch.
+    const endTime = Math.min(Date.now() + 1, cutoff);
     if (startTime < endTime) {
       for await (const items of searchBrowserHistory(startTime, endTime, {
         signal,
@@ -51,6 +53,12 @@ export async function synchronizeBrowserHistory(
           if (!Number.isFinite(item.lastVisitTime) || item.lastVisitTime <= 0) {
             result.skippedCount++;
             result.unknownTimestampCount++;
+            continue;
+          }
+          // HistoryItem describes a URL's latest visit, which must also pass
+          // the boundary even when Chrome matched an older visit to that URL.
+          if (item.lastVisitTime >= cutoff) {
+            result.skippedCount++;
             continue;
           }
           mergeHistoryItem(videos, item, id);

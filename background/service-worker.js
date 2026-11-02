@@ -15,6 +15,7 @@ import {
   handleDurationControl,
 } from "../handlers/duration-handlers.js";
 import { logger } from "../logger.js";
+import { historyImportCutoff } from "../history-import-policy.js";
 import { withWatchmarkerRefresh } from "../watch-notifications.js";
 import { messageRouter } from "../message-router.js";
 import { settingsManager } from "../settings-manager.js";
@@ -195,6 +196,7 @@ async function initializeServiceWorker() {
   logger.info("Initializing service worker context...");
 
   await restrictSensitiveStorageAccess();
+  await historyImportCutoff();
   await settingsManager.initialize();
   await initializeDatabaseProviders();
 

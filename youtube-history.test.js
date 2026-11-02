@@ -21,7 +21,7 @@ function page(items, tabIndex = 0) {
     tabRenderer: {
       selected: true,
       content: {
-        sectionListRenderer: { contents: items },
+        sectionListRenderer: { contents: [section(items)] },
       },
     },
   });
@@ -45,7 +45,7 @@ const section = (items) => ({
 const response = (items) => ({
   onResponseReceivedActions: [
     {
-      appendContinuationItemsAction: { continuationItems: items },
+      appendContinuationItemsAction: { continuationItems: [section(items)] },
     },
   ],
 });
@@ -102,6 +102,11 @@ function setup(t, initial, continuations, existing = []) {
   });
   const previousChrome = globalThis.chrome;
   globalThis.chrome = {
+    storage: {
+      local: {
+        get: async () => ({ measuredHistoryStart: Date.now() + 86_400_000 }),
+      },
+    },
     runtime: { id: "fixture-extension", getPlatformInfo: async () => ({}) },
     declarativeNetRequest: { updateSessionRules: async () => {} },
     cookies: {

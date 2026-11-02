@@ -43,14 +43,14 @@ test("historical lengths count once per dated watch, across years and rolling pe
     period: "day",
     durations: [cached()],
   });
-  assert.equal(stats.time.selected, 1);
-  assert.equal(stats.time.estimated, 1);
-  assert.equal(stats.time.estimatedTotal, 3);
-  assert.equal(stats.time.totals.all, 3);
-  assert.equal(stats.time.totals.week, 2);
+  assert.equal(stats.time.selected, 1 / 3600);
+  assert.equal(stats.time.estimated, 1 / 3600);
+  assert.equal(stats.time.estimatedTotal, 2 + 1 / 3600);
+  assert.equal(stats.time.totals.all, 2 + 1 / 3600);
+  assert.equal(stats.time.totals.week, 1 + 1 / 3600);
   assert.equal(stats.unknown, 20);
   assert.equal(stats.time.daily.length, 3);
-  assert.match(dashboard(stats), /Includes full-length history estimates/);
+  assert.match(dashboard(stats), /ending when the next video starts/);
   assert.match(dashboard(stats), /not YouTube watch-time data/);
 });
 

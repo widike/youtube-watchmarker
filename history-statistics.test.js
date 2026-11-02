@@ -58,7 +58,7 @@ test("rolling periods count watch occurrences, boundaries and comparisons exactl
   );
 });
 
-test("approximate and undated imports never invent hourly activity or dates", () => {
+test("inferred imports use their saved hours while date-only and undated imports do not", () => {
   const stats = summarizeHistory(
     [
       video("abcdefghijk", [
@@ -82,8 +82,17 @@ test("approximate and undated imports never invent hourly activity or dates", ()
   assert.equal(stats.unknown, 9);
   assert.equal(
     stats.averageWeek.reduce((n, { count }) => n + count, 0),
-    1,
+    3,
   );
+  for (const [age, count] of [
+    [1, 0],
+    [2, 1],
+    [3, 1],
+  ]) {
+    const date = new Date(now - age * DAY);
+    const index = ((date.getDay() + 6) % 7) * 24 + date.getHours();
+    assert.equal(stats.averageWeek[index].count, count);
+  }
   assert.equal(
     stats.daily.reduce((n, { count }) => n + count, 0),
     4,

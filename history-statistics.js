@@ -4,6 +4,7 @@ import {
   calendarDays,
   dayKey,
   localDate,
+  hasWatchHour,
   PERIODS,
   DAY,
 } from "./statistics-dates.js";
@@ -88,11 +89,9 @@ export function summarizeHistory(
       };
       row.count++;
       unique.set(video.strIdent, row);
-      if (entry.watchPrecision !== "exact") {
-        approximate++;
-        continue;
-      }
-      exact++;
+      if (entry.watchPrecision === "exact") exact++;
+      else approximate++;
+      if (!hasWatchHour(entry.intTimestamp, entry.watchPrecision)) continue;
       const date = new Date(entry.intTimestamp);
       rhythm[((date.getDay() + 6) % 7) * 24 + date.getHours()]++;
     }

@@ -82,12 +82,19 @@ exports are retained unchanged. Lifetime counters and undated counts never enter
 period totals. Activity is not proof of completed viewing. New live playbacks
 require at least 60 seconds of measured viewing before navigation, progress or
 rating signals can mark a video. Each replay needs its own minute; shorter videos
-and short loops do not qualify. History imports remain unchanged because they
-do not supply measured viewing time. Subtracting distinct videos from mixed-source
+and short loops do not qualify. Browser and YouTube history imports only backfill
+dates before this installation first ran with the import boundary. That boundary
+is stored locally at the start of that day and persists across restarts. Source
+history cannot prove a minute of viewing, so dates on or after the boundary and
+undated YouTube history cards are excluded, including in manual imports and
+previews. This also excludes newer unmeasured activity from other devices;
+qualified plays can still arrive through Watchmarker cloud sync. Existing saved
+history is retained; use the reconciliation preview below for old overlaps.
+Subtracting distinct videos from mixed-source
 records cannot establish repeat watches, so Insights does not show that claim.
 Browser and YouTube source imports also skip timestamps already recorded for
 that video, including playback timestamps. YouTube's day-only imports check the
-whole local calendar day. Different dated activity remains importable.
+whole local calendar day. Different dates before the boundary remain importable.
 Liked-video imports have no watch timestamp, so they skip already-known video
 IDs entirely, including deleted videos. New likes are imported once as undated
 records and do not contribute to period activity totals.
@@ -133,8 +140,9 @@ sync. See [the duration sync contract](docs/playback-time-sync.md) for measureme
 retry, recovery, privacy and schema-upgrade details. Install sync schema 4 and
 update every client before relying on complete cross-device measured totals.
 
-Historical video lengths can optionally estimate older watch time. These remain
-clearly marked estimates, with synced measurements taking priority. See
+Historical viewing estimates stop when the next timestamped video starts.
+Optional video lengths cap those intervals and estimate date-only records.
+These remain clearly marked estimates, with synced measurements taking priority. See
 [historical duration estimates](docs/historical-duration-estimates.md) for setup,
 API-key storage, quota limits, retries, expiry and estimation limits.
 

@@ -23,6 +23,7 @@ const check = async (name, fn) => {
 const ready = () =>
   $("#panel-statistics").getAttribute("aria-busy") === "false";
 import { verifyStatisticsPeriods } from "./statistics-periods.browser.js";
+import { verifyAverageWeek } from "./statistics-week.browser.js";
 import { verifyWordCloud } from "./statistics-words.browser.js";
 import { verifyPageTemplates } from "./page-templates.browser.js";
 function contrast(foreground, background) {
@@ -152,7 +153,10 @@ try {
     );
     await check(
       "all period controls refresh watch averages, title words and ranked video counts",
-      () => verifyStatisticsPeriods({ $, assert, waitFor, ready }),
+      async () => {
+        await verifyStatisticsPeriods({ $, assert, waitFor, ready });
+        await verifyAverageWeek({ $, assert, waitFor, ready });
+      },
     );
     await check(
       "actual options app loads a complete, responsive statistics dashboard",

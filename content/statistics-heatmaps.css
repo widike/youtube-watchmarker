@@ -27,6 +27,11 @@
     gap: 4px;
     margin-bottom: 14px;
   }
+  .stats-week-note {
+    margin: 0 0 4px;
+    color: var(--muted);
+    font-size: 11px;
+  }
   .stats-week-summary > div {
     display: flex;
     flex-direction: column;

@@ -118,6 +118,9 @@ export class HistoryVirtualList {
       sort: this.args.sort,
       columns,
     });
+    this.totalCards = this.args.state.hasMore
+      ? -1
+      : this.rows.reduce((total, row) => total + (row.videos?.length || 0), 0);
     const margin =
       this.canvas.getBoundingClientRect().top +
       (this.root
@@ -244,7 +247,7 @@ export class HistoryVirtualList {
         ? `<div class="day-heading"><h3>${escapeHtml(row.day)}</h3></div>`
         : row.separator
           ? '<div class="history-undated-divider" role="separator" aria-label="Undated history"></div>'
-          : `<ul class="video-list">${row.videos.map(({ video, index }) => videoCard(video, row.fullDate, Boolean(this.args.onDelete), index, this.args.state.totalResults)).join("")}</ul>`;
+          : `<ul class="video-list">${row.videos.map(({ video, index }) => videoCard(video, row.fullDate, Boolean(this.args.onDelete), index, this.totalCards)).join("")}</ul>`;
       if (node.markup !== html) {
         node.innerHTML = html;
         node.markup = html;

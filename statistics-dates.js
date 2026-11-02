@@ -8,6 +8,23 @@ export const PERIODS = {
   all: { label: "All time", days: null },
 };
 
+// Imported timestamps retain their time of day even when their source is
+// inferred. Only explicit day-only records and unqualified local midnights
+// lack an hour, matching the dates shown in the history library.
+export function hasWatchHour(timestamp, precision) {
+  const date = new Date(Number(timestamp));
+  return (
+    Number(timestamp) > 0 &&
+    Number.isFinite(date.getTime()) &&
+    precision !== "day" &&
+    (precision === "exact" ||
+      date.getHours() !== 0 ||
+      date.getMinutes() !== 0 ||
+      date.getSeconds() !== 0 ||
+      date.getMilliseconds() !== 0)
+  );
+}
+
 export function dayKey(value) {
   const date = new Date(value);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;

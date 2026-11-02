@@ -78,9 +78,9 @@ test("a source day and URL snapshots overlap tracked sessions without collapsing
     now,
   );
   assert.equal(
-    estimates.rows.length,
-    2,
-    "duration must use the same reconciled evidence",
+    estimates.rows.reduce((sum, row) => sum + row.milliseconds, 0),
+    2000,
+    "the first watch stops at replay, which has no elapsed time yet",
   );
 });
 

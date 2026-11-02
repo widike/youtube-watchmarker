@@ -41,10 +41,13 @@ test("API requests persist missing-video skip markers and retry returned live du
       const parsed = new URL(url);
       assert.equal(parsed.origin, "https://www.googleapis.com");
       assert.equal(parsed.searchParams.get("id"), ids.join(","));
-      assert.equal(parsed.searchParams.get("part"), "contentDetails");
+      assert.equal(
+        parsed.searchParams.get("part"),
+        "contentDetails,liveStreamingDetails",
+      );
       assert.equal(
         parsed.searchParams.get("fields"),
-        "items(id,contentDetails(duration))",
+        "items(id,contentDetails(duration),liveStreamingDetails(actualStartTime,actualEndTime))",
       );
       assert.equal(options.credentials, "omit");
       return response(200, {
@@ -74,6 +77,35 @@ test("empty successful responses skip all requested IDs without claiming they we
     fetcher: async () => response(200, { items: [] }),
   });
   assert(rows.every((row) => row.unavailable && row.seconds === null));
+});
+
+test("unfinished streams never supply estimated viewing time, even with a nonzero runtime", async () => {
+  for (const liveStreamingDetails of [
+    {},
+    { actualStartTime: "2026-10-01T00:00:00Z" },
+    { actualEndTime: "2026-10-02T00:00:00Z" },
+  ]) {
+    const [row] = await fetchDurations([id], "key", {
+      now,
+      fetcher: async () =>
+        response(200, {
+          items: [
+            {
+              id,
+              contentDetails: { duration: "PT2H" },
+              liveStreamingDetails,
+            },
+          ],
+        }),
+    });
+    const ended = Boolean(liveStreamingDetails.actualEndTime);
+    assert.equal(row.seconds, ended ? 7200 : null);
+    assert.equal(
+      row.expiresAt,
+      now + (ended ? DURATION_TTL : PENDING_DURATION_TTL),
+    );
+    assert.equal(row.unavailable, undefined);
+  }
 });
 
 test("videoNotFound skips a single video and requires isolation for a failed batch", async () => {

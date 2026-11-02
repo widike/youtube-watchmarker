@@ -134,7 +134,7 @@ test(
         t.diagnostic(result.name);
         assert.equal(result.passed, true, result.error || result.name);
       }
-      assert.equal(results.length, 7);
+      assert.equal(results.length, 8);
     } finally {
       clearTimeout(timer);
       child.kill();

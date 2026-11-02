@@ -22,6 +22,7 @@ function setup(
   const writes = [];
   const oldChrome = globalThis.chrome;
   globalThis.chrome = {
+    storage: { local: { get: async () => ({}), set: async () => {} } },
     runtime: {},
     history: {
       search(query, cb) {

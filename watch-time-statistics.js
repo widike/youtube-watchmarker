@@ -5,6 +5,7 @@ import {
   PERIODS,
   DAY,
 } from "./statistics-dates.js";
+import { budgetWatchTime } from "./watch-time-budgets.js";
 
 export function summarizeWatchTime(rows, videos, { period, now }) {
   const duration = PERIODS[period].days * DAY;
@@ -17,50 +18,47 @@ export function summarizeWatchTime(rows, videos, { period, now }) {
   const daily = new Map();
   const timeline = new Map();
   const rhythm = Array(168).fill(0);
-  const totals = Object.fromEntries(
-    Object.keys(PERIODS).map((key) => [key, 0]),
-  );
   let selected = 0;
   let estimated = 0;
   let estimatedTotal = 0;
-  let previous = 0;
   let firstAt = Infinity;
-  for (const row of rows) {
-    if (
-      row.from <= (deleted.get(row.strIdent) || 0) ||
-      row.to > now ||
-      (row.estimated ? row.to !== row.from : row.to <= row.from)
-    )
-      continue;
+  const eligible = rows.filter(
+    (row) =>
+      row.from > (deleted.get(row.strIdent) || 0) &&
+      row.to <= now &&
+      Number.isFinite(row.milliseconds) &&
+      row.milliseconds > 0 &&
+      (row.estimated ? row.to >= row.from : row.to > row.from),
+  );
+  const all = budgetWatchTime(eligible, 0, now);
+  const valid = all.map(({ row, count }) =>
+    row.estimated ? { ...row, milliseconds: count * 3_600_000 } : row,
+  );
+  const sum = (values) => values.reduce((total, { count }) => total + count, 0);
+  const totals = Object.fromEntries(
+    Object.entries(PERIODS).map(([name, range]) => [
+      name,
+      sum(budgetWatchTime(valid, range.days ? now - range.days * DAY : 0, now)),
+    ]),
+  );
+  const previous =
+    period === "all"
+      ? 0
+      : sum(budgetWatchTime(valid, cutoff - duration, cutoff, true));
+  for (const { row, date, count } of all) {
+    if (!count) continue;
     firstAt = Math.min(firstAt, row.from);
-    const count = row.milliseconds / 3_600_000;
     if (row.estimated) estimatedTotal += count;
-    const key = dayKey(row.minute);
-    daily.set(key, (daily.get(key) || 0) + count);
-    // Imported lengths are assigned to their dated watch occurrence. Actual
-    // minute snapshots retain their measured span and boundary proration.
-    const portion = (start, end) =>
-      row.estimated
-        ? row.from >= start && row.from <= end
-          ? count
-          : 0
-        : (Math.max(0, Math.min(row.to, end) - Math.max(row.from, start)) /
-            (row.to - row.from)) *
-          count;
-    for (const [name, range] of Object.entries(PERIODS))
-      totals[name] += portion(range.days ? now - range.days * DAY : 0, now);
-    previous +=
-      period === "all"
-        ? 0
-        : portion(cutoff - duration, row.estimated ? cutoff - 1 : cutoff);
-    const value = portion(cutoff, now);
-    if (!value) continue;
-    selected += value;
-    if (row.estimated) estimated += value;
-    timeline.set(key, (timeline.get(key) || 0) + value);
+    daily.set(date, (daily.get(date) || 0) + count);
+  }
+  for (const { row, date: key, count } of budgetWatchTime(valid, cutoff, now)) {
+    if (!count) continue;
+    selected += count;
+    if (row.estimated) estimated += count;
+    timeline.set(key, (timeline.get(key) || 0) + count);
     const date = new Date(row.minute);
     if (!row.estimated || row.exactHour)
-      rhythm[((date.getDay() + 6) % 7) * 24 + date.getHours()] += value;
+      rhythm[((date.getDay() + 6) % 7) * 24 + date.getHours()] += count;
   }
   const first = Number.isFinite(firstAt) ? dayKey(firstAt) : null;
   const start = cutoff || (first ? localDate(first).getTime() : now);

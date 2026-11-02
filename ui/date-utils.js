@@ -1,4 +1,5 @@
 // @ts-check
+import { hasWatchHour } from "../statistics-dates.js";
 
 const fullDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
@@ -24,16 +25,7 @@ export function describeWatchDate(timestamp, fullDate = false, precision) {
   const date = new Date(Number(timestamp));
   if (Number.isNaN(date.getTime())) return null;
 
-  // YouTube history supplies calendar dates as local midnight. The stored
-  // timestamp has no precision flag, so never present midnight as an exact time.
-  const dateOnly =
-    precision === "day" ||
-    (precision !== "exact" &&
-      date.getHours() === 0 &&
-      date.getMinutes() === 0 &&
-      date.getSeconds() === 0 &&
-      date.getMilliseconds() === 0);
-  if (dateOnly) {
+  if (!hasWatchHour(timestamp, precision)) {
     const datetime = [
       String(date.getFullYear()).padStart(4, "0"),
       String(date.getMonth() + 1).padStart(2, "0"),

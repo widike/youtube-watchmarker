@@ -3,6 +3,10 @@ import { logger } from "./logger.js";
 import { extractInnerTubeConfig } from "./youtube-page-data.js";
 import { summarizeSource } from "./source-preview.js";
 import { requestYouTubeApi } from "./youtube-request.js";
+import {
+  historyImportCutoff,
+  isHistoricalWatch,
+} from "./history-import-policy.js";
 
 export async function synchronizeYouTubeSource(
   manager,
@@ -13,10 +17,12 @@ export async function synchronizeYouTubeSource(
     parsePage,
     parseContinuation,
     includeVideos = false,
+    historicalOnly = false,
     preview = false,
     signal,
   },
 ) {
+  const cutoff = historicalOnly ? await historyImportCutoff() : null;
   const provider = manager.getProvider();
   // Full history and playlist imports can exceed MV3's idle timeout during writes.
   const keepAlive = setInterval(() => {
@@ -41,6 +47,10 @@ export async function synchronizeYouTubeSource(
       if (seenVideos.has(occurrence)) continue;
       seenVideos.add(occurrence);
       result.totalSeen++;
+      if (historicalOnly && !isHistoricalWatch(video, cutoff)) {
+        result.skippedCount++;
+        continue;
+      }
       if (preview) {
         previewIds.add(video.strIdent);
         continue;

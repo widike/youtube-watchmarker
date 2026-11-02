@@ -93,6 +93,27 @@
   .video-watch-date {
     color: var(--ink);
   }
+  .video-meta > .video-plays {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    white-space: normal;
+  }
+  .video-play,
+  .video-play > span,
+  .video-play > time {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .video-play {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .video-play + .video-play {
+    border-left: 1px solid currentColor;
+    padding-left: 12px;
+  }
   .video-percentage {
     color: var(--accent);
     font-weight: 600;
@@ -172,6 +193,14 @@
     font-size: clamp(11px, 0.95vw, 14px);
     line-height: 1.35;
     color: #fff;
+  }
+  [data-view="grid"] .video-link:has(.video-plays) {
+    display: flex;
+    align-items: stretch;
+  }
+  [data-view="grid"] .video-link:has(.video-plays) .video-copy {
+    position: relative;
+    inset: auto;
   }
   [data-view="grid"] .video-meta {
     gap: 3px 10px;

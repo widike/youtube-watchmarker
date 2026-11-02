@@ -34,6 +34,7 @@ const loaded = () =>
     .filter((call) => call.action === "search-videos" && !call.query)
     .at(-1)?.offset || 0;
 import { verifyPopupHistory } from "./popup-history.browser.js";
+import { verifyGroupedHistory } from "./history-day-groups.browser.js";
 let popupMetadata;
 
 try {
@@ -85,8 +86,8 @@ try {
       "Virtual rendering discarded keyboard focus",
     );
     assert(
-      popup.querySelector(".video-item").getAttribute("aria-setsize") === "420",
-      "Missing accessible library size",
+      popup.querySelector(".video-item").getAttribute("aria-setsize") === "-1",
+      "The final card count is unknown until all watch entries are loaded",
     );
   });
   await test("popup append failures preserve history, retry once, and stop at the end", async () => {
@@ -330,6 +331,8 @@ try {
     controller.dispose();
     controller.library.dispose();
   });
+  await test("same-day repeats share a thumbnail with every play time visible", () =>
+    verifyGroupedHistory(library, assert, waitFor));
 } catch (error) {
   if (!results.some((result) => !result.passed))
     results.push({

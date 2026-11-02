@@ -49,6 +49,7 @@ for (
     const from = watched.getTime();
     time.push({
       strIdent: row.strIdent,
+      eventId: `fixture:${dayKey(date)}:${i}`,
       strTitle: row.strTitle,
       minute: Math.floor(from / 60_000) * 60_000,
       from,
@@ -82,7 +83,17 @@ for (const [index, age] of [2, 2, 60, 60].entries()) {
 }
 
 export function statistics(period, empty = false, noTime = false) {
-  return summarizeHistory(empty ? [] : videos, {
+  // The count-only state has neither measurements nor a timed watch sequence.
+  const history = noTime
+    ? videos.map((video) => ({
+        ...video,
+        watchEvents: video.watchEvents.map((event) => ({
+          ...event,
+          precision: "day",
+        })),
+      }))
+    : videos;
+  return summarizeHistory(empty ? [] : history, {
     period,
     now,
     time: empty || noTime ? [] : time,
