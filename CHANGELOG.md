@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.2 — 2026-11-02
+
+A maintenance release for video deletion and history metadata fixes.
+
+- The trash action now completes deletion across local history, Supabase and
+  the signed-in YouTube account, including older YouTube history pages.
+  Pending remote deletions retry automatically after failures or restarts,
+  with clearer status and protection against stale devices restoring entries.
+  Saved records remain behind deletion markers; this is not a permanent purge.
+- Missing video titles are recovered from browser history without creating new
+  watch events. Playback also handles delayed titles and ignores loading labels.
+- History duration badges refresh automatically without losing loaded pages or
+  scroll position. Displaying videos with missing lengths wakes idle backfill
+  while preserving pause, retry and quota limits.
+
+Update the existing extension folder, reload it at `chrome://extensions`, and
+refresh open YouTube tabs. No additional database migration is required from 1.2.1.
+
+[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.2.1...v1.2.2)
+
 ## 1.2.1 — 2026-11-02
 
 A small maintenance release with today's viewing-history and display fixes.
