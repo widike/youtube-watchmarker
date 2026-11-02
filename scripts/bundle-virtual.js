@@ -1,10 +1,10 @@
 import { build } from "esbuild";
 import { mkdir, copyFile } from "node:fs/promises";
 
-await mkdir("vendor", { recursive: true });
+await mkdir("extension/vendor", { recursive: true });
 await build({
   entryPoints: ["@tanstack/virtual-core"],
-  outfile: "vendor/tanstack-virtual.js",
+  outfile: "extension/vendor/tanstack-virtual.js",
   bundle: true,
   format: "esm",
   target: "chrome126",
@@ -14,6 +14,6 @@ await build({
 });
 await copyFile(
   "node_modules/@tanstack/virtual-core/LICENSE",
-  "vendor/TANSTACK-LICENSE.txt",
+  "extension/vendor/TANSTACK-LICENSE.txt",
 );
 process.exit(0);

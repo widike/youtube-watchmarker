@@ -10,7 +10,8 @@ Download `youtube-watchmarker-1.2.2.zip` from the
 [latest GitHub release](https://github.com/widike/youtube-watchmarker/releases/latest),
 extract it, and select the extracted folder using **Load unpacked** at
 `chrome://extensions` in Chrome 126 or newer. You can also load the repository
-as an unpacked extension. Keep the extracted folder for future Chrome sessions.
+by running `npm ci` and `npm run build`, then selecting the `extension/` folder
+with **Load unpacked**. Keep the extracted folder for future Chrome sessions.
 Reload the extension and refresh existing YouTube tabs after updating.
 
 See [the changelog](CHANGELOG.md) for the major improvements and cloud-sync
@@ -192,24 +193,39 @@ No new service, permissions, or chart library is required.
 - **IndexedDB**: Local database with proper indexing and transactions
 - **PostgREST API**: Direct PostgreSQL access via Supabase
 
-Run `npm ci` to install development dependencies. `npm run build` regenerates
-the bundled TanStack Virtual runtime in `vendor/`; the extension loads this local
-ES module without remote scripts. The generated bundle and its license are
-included so the unpacked extension can also load directly from the repository.
+Run `npm ci` to install development dependencies and `npm run build` to
+regenerate the bundled dependencies, copy the SQL migrations needed by the
+settings UI, and validate extension imports and assets. Load `extension/` in
+Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.2.2.zip`;
+the archive contains only the installable extension and its licenses.
+
+Use `npm test`, `npm run lint`, and `npm run format:check` for local checks.
+Chrome integration tests use the installed Google Chrome application; set
+`CHROME_PATH` when it is installed elsewhere.
 
 ### Code Structure
 
-- **`background/service-worker.js`** - Synchronous listener registration and background initialization
-- **`bg-database.js`** - Database operations with `DatabaseManager` class
-- **`bg-history.js`** - Browser history synchronization module
-- **`bg-youtube.js`** - YouTube API integration and data fetching
-- **`bg-search.js`** - Search functionality and video management
-- **`bg-sync-manager.js`** - Automatic synchronization management
-- **`youtube/`** - Content scripts for playback, marking, settings and page observation
-- **`history-playback.js`** - Atomic playback receipts, watch updates and pending uploads
-- **`content/options-page.js`** - Options page initialization and controllers
-- **`supabase-database-provider.js`** - Supabase cloud database integration
-- **`database-provider-factory.js`** - Local history and sync coordination
+- **`extension/`** — Self-contained Chrome extension; `manifest.json` lives here
+- **`extension/background/`** — Service worker, scheduling, settings and message routing
+- **`extension/handlers/`** — Message handlers grouped by domain
+- **`extension/history/`** — History records, imports, reconciliation and playback time
+- **`extension/providers/`** — IndexedDB, Supabase, credentials and device linking
+- **`extension/sources/`** — Browser/YouTube history, liked videos and source requests
+- **`extension/duration/`** and **`extension/statistics/`** — Duration estimates and statistics
+- **`extension/youtube/`** — YouTube content scripts
+- **`extension/content/`** and **`extension/ui/`** — Options page, styles and shared UI
+- **`extension/shared/`** and **`extension/vendor/`** — Shared utilities and bundled dependencies
+- **`extension/verification/`** — Public device-verification page, also deployed to GitHub Pages
+- **`tests/`** — Node and Chrome integration tests; fixtures and SQL checks in `tests/support/`
+- **`scripts/`**, **`data/`** — Build tools and pinned language-data sources
+- **`supabase/`** — Canonical migrations, Edge Function and deployment configuration
+- **`docs/`** — Design notes and setup documentation
+
+Machine-specific assistant/editor settings, environment files, credentials,
+dependencies and generated packages are ignored by Git. Keep `.mcp.json` and
+`.codex/` local. Public source code, database migrations and dependency licenses
+remain versioned. The manifest's `key` is a public key used to preserve the
+extension identity.
 
 ### Database Schema
 
@@ -386,12 +402,12 @@ Chrome checks also exercise infinite scrolling in the popup and full library,
 bounded rendering, search/filter resets, layout changes, retries, and deletion
 while retaining loaded history. These checks use isolated fixture records.
 
-`test-support/history-schema.sql` verifies merge rules, owner isolation, explicit
+`tests/support/history-schema.sql` verifies merge rules, owner isolation, explicit
 deletions, stale-client writes, append-only events, idempotent retries and repeat
 setup in a **disposable local Postgres
 database only**. It creates test Auth roles and must not run against a real project.
 
-`test-support/device-link.sql` separately checks three linked device identities,
+`tests/support/device-link.sql` separately checks three linked device identities,
 shared summary/event reads and writes, unrelated-user isolation, private-table
 access, expired and consumed codes, and repeat setup in a disposable database.
 

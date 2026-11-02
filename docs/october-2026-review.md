@@ -45,7 +45,7 @@ release announcement was established.
 
 ## Message boundary implemented in this review
 
-`message-router.js` now checks sender identity, restricts content origins and
+`extension/background/message-router.js` now checks sender identity, restricts content origins and
 privileged actions, validates video metadata, and uses one response/error path.
 Unused port routing and unused handler-management methods were removed. Regression
 tests cover authorized messages, blocked settings/credentials, spoofed origins,
@@ -56,7 +56,7 @@ validators, constants and tab-message retries were removed. Visual preferences
 share their key list and apply each configured stylesheet once. The unsupported
 native-badge detection control was removed.
 
-`history-playback.js` now commits a playback receipt, updated view count and upload
+`extension/history/history-playback.js` now commits a playback receipt, updated view count and upload
 obligation in one IndexedDB transaction. This replaces separate session-storage
 bookkeeping. Real Chrome checks cover a lost reply followed by reopening the
 database, transaction rollback, duplicate events, and deletion followed by an old

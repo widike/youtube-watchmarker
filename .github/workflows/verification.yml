@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - verification/**
+      - extension/verification/**
       - .github/workflows/verification.yml
   workflow_dispatch:
 
@@ -30,7 +30,7 @@ jobs:
       - name: Package the static verification page
         run: |
           mkdir -p _site/verification
-          cp verification/* _site/verification/
+          cp extension/verification/* _site/verification/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

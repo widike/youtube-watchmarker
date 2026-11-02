@@ -62,7 +62,7 @@ how broadly a word occurs across videos, rather than viewing duration or plays.
 ## Local language assets
 
 `npm run build` bundles the English lemmatizer, German lookup table, language
-detector and country names/demonyms into `vendor/`. The runtime performs no
+detector and country names/demonyms into `extension/vendor/`. The runtime performs no
 remote NLP requests and does not require Python or a spaCy installation. The
 English bundle is about 1.7 MB and the packed German table about 4.6 MB. Node
 builds from the checked-in compressed German source and pinned npm dependencies.

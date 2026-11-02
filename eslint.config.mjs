@@ -5,7 +5,7 @@ import eslintConfigPrettier from "eslint-config-prettier/flat";
 
 export default defineConfig([
   {
-    ignores: ["vendor/**"],
+    ignores: ["extension/vendor/**", "dist/**"],
   },
   {
     files: ["**/*.{js,mjs,cjs}"],

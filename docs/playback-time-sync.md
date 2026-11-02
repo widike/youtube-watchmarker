@@ -58,7 +58,7 @@ Past actual playback that no client measured cannot be reconstructed.
 The browser integration suite checks two-device convergence, replacement-device
 restoration, old local-data migration, lost replies, database reopen, in-flight
 revision protection, identity collisions and recovery after cloud loss.
-`test-support/playback-time-schema.sql` tests real PostgreSQL monotonic merges,
+`tests/support/playback-time-schema.sql` tests real PostgreSQL monotonic merges,
 linked-device access, unrelated-owner/anonymous isolation, immutable IDs,
 retained measurements and repeat migration setup in a disposable database.
 SmartTube tests exercise full-length wall time at 2× speed, pauses, seeks,

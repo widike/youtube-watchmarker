@@ -86,8 +86,8 @@ server environment secret and never enters either client or a response.
 
 ## Local verification
 
-- `node --test device-link.test.js device-connection.test.js pairing-directory.test.js`
-- `psql -f test-support/pairing-directory.sql` in a disposable local PostgreSQL
+- `node --test tests/device-link.test.js tests/device-connection.test.js tests/pairing-directory.test.js`
+- `psql -f tests/support/pairing-directory.sql` in a disposable local PostgreSQL
   database. This includes the prior history/RLS checks and verifies independent
   destinations, replacement, collisions, expiry, persistent rate limits and ACLs.
 - SmartTube's Watchmarker, pairing coordinator, native verification channel and

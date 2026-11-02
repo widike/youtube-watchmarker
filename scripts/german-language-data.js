@@ -1,6 +1,6 @@
 import { readFile, writeFile, copyFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
-import { searchText } from "../shared/search-text.js";
+import { searchText } from "../extension/shared/search-text.js";
 
 const directory = new URL("../data/word-language/", import.meta.url);
 
@@ -49,12 +49,12 @@ export async function bundleGermanLookup() {
     .map(([base, forms]) => [base, ...[...forms].sort()].join("\t"))
     .join("\n");
   await writeFile(
-    "vendor/german-lemmas.js",
+    "extension/vendor/german-lemmas.js",
     `// Generated from pinned spaCy German lookup data. See SPACY-LOOKUPS-LICENSE.txt.\nexport default ${JSON.stringify(packed)};\n`,
   );
   await copyFile(
     new URL("SPACY-LOOKUPS-LICENSE.txt", directory),
-    "vendor/SPACY-LOOKUPS-LICENSE.txt",
+    "extension/vendor/SPACY-LOOKUPS-LICENSE.txt",
   );
 }
 

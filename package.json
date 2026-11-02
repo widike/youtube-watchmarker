@@ -7,13 +7,14 @@
     "node": ">=26.12.1"
   },
   "scripts": {
-    "dev": "echo 'Development mode - load unpacked extension from this directory'",
-    "build": "node scripts/bundle-virtual.js && node scripts/bundle-word-language.js",
+    "dev": "echo 'Run npm run build, then load extension/ as an unpacked extension in Chrome'",
+    "build": "node scripts/bundle-virtual.js && node scripts/bundle-word-language.js && node scripts/prepare-extension.js && node scripts/check-extension.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test"
+    "test": "node --test tests",
+    "package": "npm run build && node scripts/package-extension.js"
   },
   "keywords": [
     "youtube",

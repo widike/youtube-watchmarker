@@ -1,10 +1,10 @@
 import { build } from "esbuild";
 import { mkdir, copyFile, writeFile } from "node:fs/promises";
 import countries from "world-countries";
-import { searchText } from "../shared/search-text.js";
+import { searchText } from "../extension/shared/search-text.js";
 import { bundleGermanLookup, germanGeography } from "./german-language-data.js";
 
-await mkdir("vendor", { recursive: true });
+await mkdir("extension/vendor", { recursive: true });
 const segmenter = new Intl.Segmenter("en", { granularity: "word" });
 const alias = (value) =>
   [...segmenter.segment(searchText(value))]
@@ -38,7 +38,7 @@ const families = countries.map(
   ],
 );
 await writeFile(
-  "vendor/country-word-families.js",
+  "extension/vendor/country-word-families.js",
   `// Generated from world-countries by npm run build. ODbL: WORLD-COUNTRIES-LICENSE.txt\nexport default ${JSON.stringify(families)};\n`,
 );
 await build({
@@ -47,7 +47,7 @@ await build({
       'export { default } from "wink-lemmatizer"; export { default as englishWords } from "wink-lexicon/src/wn-words.js";',
     resolveDir: process.cwd(),
   },
-  outfile: "vendor/lemmatizer.js",
+  outfile: "extension/vendor/lemmatizer.js",
   bundle: true,
   format: "esm",
   target: "chrome126",
@@ -60,7 +60,7 @@ await build({
     contents: 'export { franc } from "franc-min";',
     resolveDir: process.cwd(),
   },
-  outfile: "vendor/language-detector.js",
+  outfile: "extension/vendor/language-detector.js",
   bundle: true,
   format: "esm",
   target: "chrome126",
@@ -76,15 +76,15 @@ for (const [source, target] of [
 ])
   await copyFile(
     `node_modules/${source}/LICENSE`,
-    `vendor/${target}-LICENSE.txt`,
+    `extension/vendor/${target}-LICENSE.txt`,
   );
 await copyFile(
   "data/word-language/FRANC-LICENSE.txt",
-  "vendor/FRANC-MIN-LICENSE.txt",
+  "extension/vendor/FRANC-MIN-LICENSE.txt",
 );
 for (const source of ["trigram-utils", "n-gram", "collapse-white-space"])
   await copyFile(
     `node_modules/${source}/license`,
-    `vendor/${source.toUpperCase()}-LICENSE.txt`,
+    `extension/vendor/${source.toUpperCase()}-LICENSE.txt`,
   );
 process.exit(0);

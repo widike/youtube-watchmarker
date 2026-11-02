@@ -67,7 +67,7 @@ provider secret. The provider secret never enters either client or this reposito
 Setup order:
 
 1. Create a managed Cloudflare Turnstile widget restricted to `widike.github.io`.
-2. Publish `verification/` using `.github/workflows/verification.yml`. The page
+2. Publish `extension/verification/` using `.github/workflows/verification.yml`. The page
    URL is `https://widike.github.io/youtube-watchmarker/verification/`. Only the
    static verification files are published; no keys are embedded in the page.
 3. Apply `supabase/migrations/20261101060000_captcha_configuration.sql`, then
@@ -100,20 +100,20 @@ assistance is required.
 
 ## Local regression checks
 
-Run `psql -f test-support/anonymous-access.sql` only in a disposable local
+Run `psql -f tests/support/anonymous-access.sql` only in a disposable local
 PostgreSQL database. It creates fixture roles/schema, exercises device linking
 and playback, installs deliberately broad policies/grants, applies the hardening
 twice, then verifies ownership, ACLs, missing subjects and administrative RPC
 denials. Claims are simulated locally; this does not validate production Auth
 configuration, JWT signatures or CAPTCHA.
 
-Run `node --test supabase-auth-client.test.js supabase-security.test.js
-device-connection.test.js device-link.test.js message-router.test.js` for the
+Run `node --test tests/supabase-auth-client.test.js tests/supabase-security.test.js
+tests/device-connection.test.js tests/device-link.test.js tests/message-router.test.js` for the
 client-side security checks.
 
-`captcha-challenge.test.js` and `captcha-security.test.js` cover spoofed frame
+`tests/captcha-challenge.test.js` and `tests/captcha-security.test.js` cover spoofed frame
 messages, cancelled/expired attempts, invalid origins and missing tokens.
-`psql -f test-support/captcha-configuration.sql` checks the configuration RPC and
+`psql -f tests/support/captcha-configuration.sql` checks the configuration RPC and
 private table permissions in a disposable local database.
 
 Sources: [Supabase anonymous sign-ins](https://supabase.com/docs/guides/auth/auth-anonymous),

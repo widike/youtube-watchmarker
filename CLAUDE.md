@@ -1,80 +1,51 @@
-# CLAUDE.md
+# Repository guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+YouTube Watchmarker is a Chrome Manifest V3 extension that records watched
+YouTube videos locally and optionally synchronizes them with Supabase.
 
-## Project Overview
+## Development
 
-YouTube Watchmarker is a Chrome extension (Manifest V3) that tracks and marks watched YouTube videos. It extends YouTube's limited watch history by maintaining a complete local record and optionally syncing to Supabase cloud storage.
-
-## Development Commands
+Use Node 26.12.1 or newer and install dependencies with `npm ci`.
 
 ```bash
-npm run lint          # Run ESLint
-npm run lint:fix      # Run ESLint with auto-fix
-npm run format        # Format code with Prettier
-npm run format:check  # Check formatting without changes
+npm run build        # Regenerate bundled dependencies and runtime SQL; validate paths
+npm run dev          # Show unpacked extension instructions
+npm test             # Node tests, including Chrome integration checks
+npm run lint         # ESLint
+npm run format:check # Prettier
+npm run package      # Build dist/youtube-watchmarker-<version>.zip
 ```
 
-To develop: Load the extension as an unpacked extension in Chrome from the project root directory.
+Load `extension/` as an unpacked extension in Chrome 126 or newer after building.
+Set `CHROME_PATH` if Google Chrome is not installed at the default macOS path.
 
-## Architecture
+## Structure
 
-### Extension Entry Points
+- `extension/manifest.json` declares the runtime entry points.
+- `extension/background/service-worker.js` registers listeners and initializes
+  background modules. Message handlers live in `extension/handlers/`.
+- `extension/history/` owns history records, reconciliation and watch time.
+- `extension/providers/` owns IndexedDB, Supabase, device linking and credentials.
+- `extension/sources/` imports browser history, YouTube history and liked videos.
+- `extension/duration/` and `extension/statistics/` handle estimates and analytics.
+- `extension/youtube/` contains the content scripts declared in manifest order.
+- `extension/popup.html` and `extension/popup.js` provide the toolbar popup.
+- `extension/content/` contains the options page, controllers and styles.
+- `extension/ui/` and `extension/shared/` provide reusable UI and domain helpers.
+- `extension/vendor/` contains generated offline dependencies and their licenses.
+- `extension/verification/` contains the public device-verification page.
+- `tests/` contains Node and Chrome tests; `tests/support/` contains fixtures and SQL.
+- `supabase/` owns canonical migrations, pairing functions and server configuration.
+  Build copies migrations into ignored `extension/supabase/` for the settings UI.
+- `scripts/`, `data/` and `docs/` contain build tools, data sources and documentation.
 
-- **`background.js`** - Service worker entry point; initializes `ExtensionManager` which coordinates all modules
-- **`youtube.js`** - Content script injected into YouTube pages; contains `YouTubeWatchMarker` class for DOM manipulation
-- **`popup.js`** - Popup UI script for quick search functionality
-- **`content/index.js`** - Options page with `OptionsPageManager` class
+## Conventions
 
-### Module Organization
+Use ES modules and async/await. Keep application modules under 400 lines and
+separate them by responsibility. Register background message handlers through
+the message router. Content scripts use the shared content-script namespace;
+their manifest loading order matters.
 
-**Background modules (`bg-*.js`):**
-
-- `bg-database.js` - IndexedDB operations via `Database` class
-- `bg-history.js` - Browser history sync via `History` class
-- `bg-youtube.js` - YouTube API integration via `Youtube` class
-- `bg-search.js` - Search functionality via `Search` class
-- `bg-sync-manager.js` - Automatic synchronization scheduling
-
-**Handler modules (`handlers/`):**
-
-- Organized by domain: `database-handlers.js`, `youtube-handlers.js`, `search-handlers.js`, `history-handlers.js`, `provider-handlers.js`, `settings-handlers.js`
-- All handlers are registered in `ExtensionManager.registerMessageHandlers()`
-
-**Core utilities:**
-
-- `message-router.js` - Message passing between extension components
-- `settings-manager.js` - User settings management
-- `alarm-manager.js` - Chrome alarm scheduling for background tasks
-- `video-tracker.js` - Video watch detection
-- `database-provider-factory.js` - Switches between IndexedDB and Supabase providers
-- `supabase-database-provider.js` - Supabase cloud storage integration
-
-### Message Flow
-
-Content scripts and UI → `chrome.runtime.sendMessage()` → `messageRouter` → handler functions → background modules
-
-### Database Schema
-
-```javascript
-{
-  strIdent: "video_id",       // YouTube video ID (11 chars)
-  intTimestamp: 1234567890,   // Unix timestamp of last watch
-  strTitle: "Video Title",    // Video title
-  intCount: 1                 // View count
-}
-```
-
-## Code Conventions
-
-- ES6 modules throughout (`"type": "module"` in package.json)
-- Classes for major components (e.g., `ExtensionManager`, `YouTubeWatchMarker`)
-- Async/await patterns preferred over callbacks
-- `polyfill.js` must be imported first in background.js for Firefox compatibility
-- ESLint + Prettier for code quality (configured in `eslint.config.mjs`)
-
-## Browser Compatibility
-
-- Chrome/Chromium: Full support
-- Firefox: Requires polyfill.js; Supabase features may need manual setup
-- The manifest has Firefox-specific settings in `browser_specific_settings.gecko`
+Never publish local `.mcp.json`, `.codex/`, credentials, environment overrides,
+dependency directories or package output. Keep dependency licenses with shipped
+bundles. Use GitHub Actions for server deployment and validate locally first.
