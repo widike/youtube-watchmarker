@@ -126,12 +126,23 @@ function walkFeed(node, visit, timestamp = null) {
 
 function parseContents(contents) {
   const videos = [];
+  const deletionTargets = [];
   let nextToken = null;
-  walkFeed(contents, ({ video, token }) => {
-    if (video) videos.push(video);
+  walkFeed(contents, ({ video, node, token }) => {
+    if (video) {
+      videos.push(video);
+      deletionTargets.push({
+        videoId: video.strIdent,
+        tokens: [...findFeedbackTokens(node)],
+      });
+    }
     if (token) nextToken = token;
   });
-  return { videos, nextToken };
+  return { videos, nextToken, deletionTargets };
+}
+
+export function parseHistoryPageResponse(html) {
+  return parseContents(historyContents(html));
 }
 
 export function parseHistoryPage(html) {
@@ -171,21 +182,16 @@ export function parseHistoryContinuationResponse(json) {
   return parseContents(items);
 }
 
-function findFeedbackToken(node) {
-  if (!node || typeof node !== "object") return null;
-  if (node.feedbackEndpoint?.feedbackToken)
-    return node.feedbackEndpoint.feedbackToken;
+function findFeedbackTokens(node, tokens = new Set(), removal = false) {
+  if (!node || typeof node !== "object") return tokens;
+  const icon = node.icon?.iconType || node.iconName;
+  removal ||= ["DELETE", "CLOSE", "REMOVE", "REMOVE_FROM_HISTORY"].includes(
+    icon,
+  );
+  if (removal && node.feedbackEndpoint?.feedbackToken)
+    tokens.add(node.feedbackEndpoint.feedbackToken);
   for (const value of Object.values(node)) {
-    const token = findFeedbackToken(value);
-    if (token) return token;
+    findFeedbackTokens(value, tokens, removal);
   }
-  return null;
-}
-
-export function extractHistoryFeedbackToken(html, videoId) {
-  let result = null;
-  walkFeed(historyContents(html), ({ video, node }) => {
-    if (video?.strIdent === videoId) result = findFeedbackToken(node);
-  });
-  return result;
+  return tokens;
 }

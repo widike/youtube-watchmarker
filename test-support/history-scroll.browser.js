@@ -270,6 +270,40 @@ try {
       "List thumbnails missing after switching views",
     );
   });
+  await test("new duration badges update automatically without resetting loaded history or scroll", async () => {
+    await waitFor(() => ready(library));
+    const count = controller.results.length;
+    const offset = controller.nextOffset;
+    const scroll = window.scrollY;
+    const id = library.querySelector("[data-history-entry]").dataset
+      .historyEntry;
+    assert(
+      !library.querySelector(`[data-history-entry="${id}"] .video-duration`),
+      "Expected a card awaiting duration",
+    );
+    fixture.durationsReady = true;
+    for (const listener of fixture.storageListeners)
+      listener(
+        {
+          youtube_duration_state: {
+            oldValue: { cacheRevision: "before" },
+            newValue: { cacheRevision: "after" },
+          },
+        },
+        "local",
+      );
+    await waitFor(() =>
+      library.querySelector(`[data-history-entry="${id}"] .video-duration`),
+    );
+    assert(
+      controller.results.length === count && controller.nextOffset === offset,
+      "Metadata update reset pagination",
+    );
+    assert(
+      Math.abs(window.scrollY - scroll) <= 2,
+      "Metadata update moved the viewport",
+    );
+  });
   await test("library deletion preserves loaded history and corrects the next batch offset", async () => {
     window.confirm = () => true;
     const before = controller.results.length;

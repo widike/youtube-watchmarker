@@ -96,6 +96,26 @@ test("title changes reuse the qualified playback ID", async () => {
   assert.equal(reports().at(-1).title, "New &amp; title");
 });
 
+test("late titles reach both watch reports and watch-time snapshots", async () => {
+  const { document, emit, watch, reports, messages, tracker } = setup();
+  document.title = "YouTube";
+  await emit("playing");
+  assert.equal(tracker.session.title, "");
+  await watch(30_000);
+  document.title = "The actual title 😀 - YouTube";
+  await watch(30_000);
+  assert.equal(reports()[0].title, "The actual title 😀");
+  assert.ok(
+    messages
+      .filter(({ action }) => action === "youtube-watch-time")
+      .every(({ title }) => title === "The actual title 😀"),
+  );
+  document.title = "YouTube";
+  await watch(20_000);
+  assert.equal(tracker.session.title, "The actual title 😀");
+  assert.equal(reports().at(-1).title, "The actual title 😀");
+});
+
 test("an ad interruption preserves actual viewing without counting ad time", async () => {
   const { tracker, player, emit, watch, messages, reports } = setup();
   await emit("playing");

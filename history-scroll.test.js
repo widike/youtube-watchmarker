@@ -7,10 +7,13 @@ import { join, resolve, extname } from "node:path";
 import { spawn } from "node:child_process";
 
 const mockRuntime = `
-window.fixture = { calls: [], total: 420, failOffset: null, deleted: new Set(), errors: [], now: Date.now() };
+window.fixture = { calls: [], total: 420, failOffset: null, deleted: new Set(), errors: [], now: Date.now(), storageListeners: new Set() };
 window.addEventListener('error', (event) => fixture.errors.push(event.message));
 window.addEventListener('unhandledrejection', (event) => fixture.errors.push(String(event.reason?.stack || event.reason)));
-chrome.storage = { local: { get: async () => ({}), set: async () => {} } };
+chrome.storage = { local: { get: async () => ({}), set: async () => {} }, onChanged: {
+  addListener: listener => fixture.storageListeners.add(listener),
+  removeListener: listener => fixture.storageListeners.delete(listener)
+} };
 chrome.runtime = { sendMessage: async (request) => {
   if (request.action === 'history-statistics') return { success: true,
     statistics: (await import('/history-statistics.js')).summarizeHistory([]) };
@@ -21,6 +24,7 @@ chrome.runtime = { sendMessage: async (request) => {
     strIdent: String(i).padStart(11, 'a'), strTitle: 'Video ' + i,
     intTimestamp: fixture.now - Math.floor(i / 40) * 86400000, intCount: i % 5 + 1,
     watchPrecision: 'exact',
+    ...(fixture.durationsReady ? { durationSeconds: 600 } : {}),
     ...(i < 2 ? { durationSeconds: i ? 14459 : 600,
       watchedMilliseconds: i ? 7565000 : 120000, watchedPercent: i ? 98 : 50 } : {})
   })).filter(video => !fixture.deleted.has(video.strIdent));
@@ -134,7 +138,7 @@ test(
         t.diagnostic(result.name);
         assert.equal(result.passed, true, result.error || result.name);
       }
-      assert.equal(results.length, 8);
+      assert.equal(results.length, 9);
     } finally {
       clearTimeout(timer);
       child.kill();

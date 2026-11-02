@@ -156,3 +156,63 @@ test("malformed, mismatched and subframe watch events are rejected", async (t) =
     /Invalid watch event/,
   );
 });
+
+test("a missing content title falls back to the sender tab without adding a view", async (t) => {
+  const { tracker, manager } = await setup(t);
+  const tabSender = {
+    ...sender(),
+    tab: { id: 1, url: sender().url, title: "Recovered Grüße 😀 - YouTube" },
+  };
+  for (const title of ["", "YouTube", "Untitled video"]) {
+    await tracker.recordWatch({ ...event("progress"), title }, tabSender);
+    const video = await manager.lookup("aaaaaaaaaaa");
+    assert.equal(video.strTitle, "Recovered Grüße 😀");
+    assert.equal(video.intCount, 1);
+  }
+});
+
+test("missing live titles are recovered from history after recording a qualified watch", async (t) => {
+  const { tracker, manager, provider } = await setup(t);
+  chrome.history = {
+    search: async () => [
+      {
+        url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+        title: "Recovered from history - YouTube",
+      },
+    ],
+  };
+  provider.repairVideoTitle = async (videoId, title) => {
+    const video = await provider.getVideo(videoId);
+    assert.equal(video.intCount, 1);
+    await provider.putVideo({ ...video, strTitle: title });
+    return title;
+  };
+  const report = { ...event("progress"), videoId: "bbbbbbbbbbb", title: "" };
+  const source = {
+    ...sender(),
+    url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+  };
+  const video = await tracker.recordWatch(report, source);
+  assert.equal(video.strTitle, "Recovered from history");
+  await tracker.recordWatch(report, source);
+  assert.equal((await manager.lookup("bbbbbbbbbbb")).intCount, 1);
+});
+
+test("a tab that navigated ahead cannot supply another video's title", async (t) => {
+  const { tracker, manager } = await setup(t);
+  await tracker.recordWatch(event("progress"), sender());
+  await tracker.recordWatch(
+    { ...event("progress"), title: "" },
+    {
+      ...sender(),
+      tab: {
+        id: 1,
+        url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+        title: "Another video - YouTube",
+      },
+    },
+  );
+  const saved = await manager.lookup("aaaaaaaaaaa");
+  assert.equal(saved.strTitle, event("progress").title);
+  assert.equal(saved.intCount, 1);
+});

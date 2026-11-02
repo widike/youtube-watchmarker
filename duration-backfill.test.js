@@ -332,3 +332,66 @@ test("pause and forget prevent further requests; forget removes key/cache but pr
     /valid YouTube/,
   );
 });
+
+test("displayed missing durations wake completed backfill once and populate badges after restart", async () => {
+  const fixture = setup(1);
+  let job = new DurationBackfill(fixture.dependencies);
+  await job.tick();
+  fixture.advance(30_000);
+  await job.tick();
+  const latest = {
+    ...fixture.videos[0],
+    strIdent: "newest_____",
+    intTimestamp: fixture.now,
+  };
+  fixture.videos.push(latest);
+  await job.requestVideos([fixture.videos[0]]);
+  assert.equal(fixture.scheduled, fixture.now + 3_600_000);
+  await job.requestVideos([latest]);
+  assert.equal(fixture.scheduled, fixture.now + 30_000);
+  fixture.advance(10_000);
+  await job.requestVideos([latest]);
+  assert.equal(fixture.scheduled, fixture.now + 20_000);
+  job = new DurationBackfill(fixture.dependencies);
+  await job.initialize();
+  await job.tick();
+  assert.equal(fixture.calls.length, 1);
+  fixture.advance(20_000);
+  await job.tick();
+  assert.deepEqual(fixture.calls.at(-1).ids, [latest.strIdent]);
+  assert.equal(
+    fixture.cache.find((row) => row.strIdent === latest.strIdent).seconds,
+    600,
+  );
+});
+
+test("displayed videos cannot bypass paused, error, quota or retry states", async () => {
+  const fixture = setup(1);
+  const job = new DurationBackfill(fixture.dependencies);
+  for (const status of ["paused", "error", "quota", "retry", "running"]) {
+    const state = { status, nextAttemptAt: fixture.now + 600_000 };
+    await fixture.storage.saveState(state);
+    await job.requestVideos(fixture.videos);
+    assert.deepEqual(fixture.state, state);
+  }
+  await job.control({ command: "pause" });
+  await fixture.storage.saveState({ status: "complete" });
+  await job.requestVideos(fixture.videos);
+  assert.equal(fixture.scheduled, null);
+  assert.equal(fixture.calls.length, 0);
+});
+
+test("known player lengths and unavailable videos do not wake idle backfill", async () => {
+  const fixture = setup(2);
+  const job = new DurationBackfill(fixture.dependencies);
+  await fixture.storage.saveState({ status: "complete" });
+  await fixture.storage.writeCache([
+    { strIdent: fixture.videos[0].strIdent, unavailable: true },
+  ]);
+  await job.requestVideos([
+    fixture.videos[0],
+    { ...fixture.videos[1], durationSeconds: 600 },
+  ]);
+  assert.equal(fixture.state.status, "complete");
+  assert.equal(fixture.scheduled, undefined);
+});

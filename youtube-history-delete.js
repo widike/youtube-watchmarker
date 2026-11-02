@@ -1,63 +1,99 @@
-import { VIDEO_ID_LENGTH } from "./validation.js";
+import { isValidVideoId } from "./validation.js";
 import { YOUTUBE } from "./constants.js";
-import { logger } from "./logger.js";
+import { extractInnerTubeConfig } from "./youtube-page-data.js";
 import {
-  extractInnerTubeConfig,
-  extractHistoryFeedbackToken,
-} from "./youtube-parser.js";
+  parseHistoryPageResponse,
+  parseHistoryContinuationResponse,
+} from "./youtube-history-parser.js";
 import { requestYouTubeApi } from "./youtube-request.js";
+import { getSapisidCookie } from "./youtube-auth.js";
 
-export async function deleteFromHistoryFirstPage(videoId) {
-  if (
-    !videoId ||
-    typeof videoId !== "string" ||
-    videoId.length !== VIDEO_ID_LENGTH
-  ) {
-    throw new Error("Invalid video ID");
-  }
-
+// Checkpoint after each confirmed page, so old videos remain reachable across
+// worker restarts. Absence is success only after the complete feed was read.
+export async function deleteFromHistory(
+  videoId,
+  { state = {}, checkpoint = async () => {}, maxPages = 10, signal } = {},
+) {
+  if (!isValidVideoId(videoId)) throw new Error("Invalid video ID");
   const response = await fetch(YOUTUBE.URLS.HISTORY, {
     credentials: "include",
+    cache: "no-store",
+    signal,
   });
-
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(`Could not load YouTube history (HTTP ${response.status})`);
-  }
-
-  const responseText = await response.text();
-  const innerTube = extractInnerTubeConfig(responseText);
-  const feedbackToken = extractHistoryFeedbackToken(responseText, videoId);
-
-  if (!feedbackToken) {
-    throw new Error("Video was not found on the first YouTube history page");
-  }
-
-  if (!innerTube.apiKey || !innerTube.context) {
+  const html = await response.text();
+  let page = parseHistoryPageResponse(html);
+  if (!(await getSapisidCookie()))
+    throw new Error("YouTube sign-in cookie unavailable; sign in and retry.");
+  const config = extractInnerTubeConfig(html);
+  if (!config.apiKey || !config.context)
     throw new Error("Could not read YouTube request configuration");
-  }
-
-  const feedbackResponse = await requestYouTubeApi(
-    YOUTUBE.API.ENDPOINTS.FEEDBACK,
-    innerTube,
-    {
-      isFeedbackTokenUnencrypted: false,
-      shouldMerge: false,
-      feedbackTokens: [feedbackToken],
-    },
-  );
-
-  if (!feedbackResponse.ok) {
+  const account = `${config.authUser}:${config.delegatedSessionId || ""}`;
+  if (state.account && state.account !== account)
     throw new Error(
-      `YouTube history delete failed (HTTP ${feedbackResponse.status})`,
+      "Switch back to the YouTube account used for this deletion.",
     );
+  state = { ...state, account };
+  await checkpoint(state);
+  let nextToken = state.nextToken;
+  const seen = new Set(state.seen || []);
+  for (let count = 0; count < maxPages; count++) {
+    signal?.throwIfAborted();
+    if (nextToken) {
+      if (seen.has(nextToken))
+        throw new Error("YouTube repeated a history continuation token");
+      const continuation = await requestYouTubeApi(
+        YOUTUBE.API.ENDPOINTS.BROWSE,
+        config,
+        { continuation: nextToken },
+        { signal },
+      );
+      if (!continuation.ok) {
+        if ([400, 410].includes(continuation.status))
+          await checkpoint({ account });
+        throw new Error(
+          `YouTube history continuation HTTP ${continuation.status}`,
+        );
+      }
+      page = parseHistoryContinuationResponse(await continuation.json());
+      seen.add(nextToken);
+    }
+    const matches = page.deletionTargets.filter(
+      (item) => item.videoId === videoId,
+    );
+    if (matches.some((item) => !item.tokens.length))
+      throw new Error("YouTube did not provide a history deletion token");
+    const tokens = [...new Set(matches.flatMap((item) => item.tokens))];
+    if (tokens.length) {
+      const feedback = await requestYouTubeApi(
+        YOUTUBE.API.ENDPOINTS.FEEDBACK,
+        config,
+        {
+          isFeedbackTokenUnencrypted: false,
+          shouldMerge: false,
+          feedbackTokens: tokens,
+        },
+        { signal },
+      );
+      if (!feedback.ok)
+        throw new Error(
+          `YouTube history delete failed (HTTP ${feedback.status})`,
+        );
+      const json = await feedback.json();
+      if (
+        json.error ||
+        json.feedbackResponses?.length !== tokens.length ||
+        json.feedbackResponses.some((item) => item.isProcessed !== true)
+      )
+        throw new Error("YouTube did not confirm the history deletion");
+    }
+    nextToken = page.nextToken;
+    if (!nextToken) return { success: true };
+    await checkpoint({ account, nextToken, seen: [...seen] });
   }
-
-  const feedbackJson = await feedbackResponse.json();
-  const processed = feedbackJson?.feedbackResponses?.[0]?.isProcessed;
-  if (processed !== true) {
-    throw new Error("YouTube did not confirm the history deletion");
-  }
-
-  logger.info(`Deleted video ${videoId} from first YouTube history page`);
-  return { success: true };
+  return {
+    success: false,
+    error: "YouTube history deletion is still in progress.",
+  };
 }

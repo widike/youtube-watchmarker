@@ -10,7 +10,10 @@ import { Search } from "../bg-search.js";
 import { createHandler } from "../handler-wrapper.js";
 import { Database } from "../bg-database.js";
 import { readWatchTime } from "../watch-time-storage.js";
-import { durationStorage } from "../background/duration-runtime.js";
+import {
+  durationStorage,
+  durationBackfill,
+} from "../background/duration-runtime.js";
 import { enrichHistoryVideos } from "../history-video-statistics.js";
 
 /**
@@ -35,8 +38,14 @@ export const handleSearchVideos = createHandler(
       readWatchTime(Database.database),
       durationStorage.readCache(),
     ]);
+    const videos = enrichHistoryVideos(result.videos, time, durations);
+    await durationBackfill
+      .requestVideos(videos)
+      .catch((error) =>
+        logger.warn("Duration refresh deferred:", error.message),
+      );
     return {
-      objVideos: enrichHistoryVideos(result.videos, time, durations),
+      objVideos: videos,
       totalResults: result.totalResults,
     };
   },

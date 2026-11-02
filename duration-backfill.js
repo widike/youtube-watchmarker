@@ -133,6 +133,39 @@ export class DurationBackfill {
     return this.exclusive(() => this.runBatch());
   }
 
+  requestVideos(videos) {
+    return this.exclusive(async () => {
+      const config = await this.storage.getConfig();
+      if (!config.enabled || !config.apiKey) return;
+      const state = await this.storage.getState();
+      // Active batches and retry/quota deadlines already have an alarm. Only
+      // shorten the hourly idle check when displayed videos need metadata.
+      if (state.status !== "complete") return;
+      const now = this.clock();
+      const cached = new Set(
+        (await this.storage.readCache(now)).map((row) => row.strIdent),
+      );
+      if (
+        !videos.some(
+          (video) =>
+            /^[\w-]{11}$/.test(video.strIdent) &&
+            video.intTimestamp > 0 &&
+            video.intTimestamp <= now &&
+            !(video.durationSeconds > 0) &&
+            !cached.has(video.strIdent),
+        )
+      )
+        return;
+      const nextAttemptAt = now + BATCH_INTERVAL;
+      await this.storage.saveState({
+        ...state,
+        status: "queued",
+        nextAttemptAt,
+      });
+      await this.schedule(nextAttemptAt);
+    });
+  }
+
   async runBatch() {
     const now = this.clock();
     const config = await this.storage.getConfig();

@@ -109,6 +109,7 @@
         this.watchTime.reset();
         return;
       }
+      this.session.title = core.getCurrentVideoTitle() || this.session.title;
       if (event.type === "ended") {
         this.watchTime.observe(player, event.type, this.session);
         this.endedPlayer = player;
@@ -144,7 +145,8 @@
       session.reasons.add(reason);
       if (session.watchedMilliseconds < watchmarker.MINIMUM_WATCH_MILLISECONDS)
         return;
-      const title = core.getCurrentVideoTitle();
+      const title = core.getCurrentVideoTitle() || session.title;
+      session.title = title;
       await Promise.all(
         [...session.reasons].map((signal) =>
           this.reportReason(session, signal, title),

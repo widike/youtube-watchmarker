@@ -117,6 +117,8 @@
   function getCurrentVideoTitle() {
     const titleSelectors = [
       "ytd-reel-video-renderer[is-active] h2",
+      "ytd-watch-metadata h1",
+      "ytm-slim-video-metadata-renderer h1",
       "h1.ytd-video-primary-info-renderer",
       "h1.ytd-watch-metadata",
       ".ytd-video-primary-info-renderer h1",
@@ -132,7 +134,25 @@
       if (title) return title;
     }
 
-    return document.title.replace(/\s+-\s+YouTube\s*$/i, "").trim();
+    // Head metadata can lag behind SPA navigation. Only use it when it
+    // explicitly belongs to the video currently playing.
+    const metadataId = document
+      .querySelector('meta[itemprop="videoId"]')
+      ?.getAttribute("content");
+    if (metadataId && metadataId === getCurrentVideoId()) {
+      for (const selector of [
+        'meta[name="title"]',
+        'meta[property="og:title"]',
+      ]) {
+        const title = document
+          .querySelector(selector)
+          ?.getAttribute("content")
+          ?.trim();
+        if (title) return title;
+      }
+    }
+    const title = document.title.replace(/\s+-\s+YouTube\s*$/i, "").trim();
+    return /^(?:YouTube|Loading\.{0,3}|-\s*YouTube)$/i.test(title) ? "" : title;
   }
 
   watchmarker.core = {

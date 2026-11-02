@@ -27,6 +27,7 @@ export function isValidVideoTitle(title) {
     "youtube",
     "video",
     "untitled",
+    "untitled video",
     "loading...",
     "loading",
     "...",

@@ -174,9 +174,9 @@ export async function localPage(db, after = "", limit = 500) {
 }
 
 // Only an explicit user action creates a deletion marker. Sync never calls this.
-export async function deleteVideo(db, strIdent) {
+export async function deleteVideo(db, strIdent, { youtube = false } = {}) {
   const tx = db.transaction(
-    [DATABASE.STORE_NAME, OUTBOX_STORE, EVENT_STORE],
+    [DATABASE.STORE_NAME, OUTBOX_STORE, EVENT_STORE, META_STORE],
     "readwrite",
     {
       durability: "strict",
@@ -202,6 +202,11 @@ export async function deleteVideo(db, strIdent) {
         ) + 1,
     };
     history.put(video);
+    if (youtube)
+      tx.objectStore(META_STORE).put(
+        { videoId: strIdent, revision: crypto.randomUUID() },
+        `youtubeDeletion:${strIdent}`,
+      );
     videoEvents(tx, strIdent, (watchEvents) => {
       tx.objectStore(OUTBOX_STORE).put({
         strIdent,

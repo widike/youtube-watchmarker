@@ -1,6 +1,7 @@
 import { isDeleted } from "./history-records.js";
 import { deleteVideo, saveVideos } from "./history-storage.js";
 import { recordPlayback } from "./history-playback.js";
+import { repairVideoTitle } from "./history-title-storage.js";
 import { readVideos } from "./history-event-storage.js";
 // @ts-check
 
@@ -106,6 +107,12 @@ export class IndexedDBProvider {
     );
   }
 
+  async repairVideoTitle(videoId, title) {
+    this.updateConnectionStatus();
+    if (!this.isConnected) throw new Error("Database not connected");
+    return repairVideoTitle(this.databaseManager.database, videoId, title);
+  }
+
   async getAllVideos({ includeDeleted = false } = {}) {
     // Update connection status
     this.updateConnectionStatus();
@@ -132,8 +139,8 @@ export class IndexedDBProvider {
     );
   }
 
-  async deleteVideo(videoId) {
-    return deleteVideo(this.databaseManager.database, videoId);
+  async deleteVideo(videoId, options) {
+    return deleteVideo(this.databaseManager.database, videoId, options);
   }
 
   async importVideos(videos) {

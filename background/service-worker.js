@@ -158,10 +158,9 @@ function registerAlarmHandlers() {
 
   alarmManager.registerHandler(HISTORY_SYNC_ALARM, async () => {
     await ensureServiceWorkerReady();
-    if (await databaseProviderFactory.isConfigured())
-      await withWatchmarkerRefresh(() =>
-        SyncManagerInstance.syncNow({ forceDownload: false }),
-      );
+    await withWatchmarkerRefresh(() =>
+      SyncManagerInstance.syncNow({ forceDownload: false }),
+    );
   });
 
   alarmHandlersRegistered = true;
@@ -201,6 +200,7 @@ async function initializeServiceWorker() {
   await initializeDatabaseProviders();
 
   await alarmManager.initialize();
+  await SyncManagerInstance.init();
   await videoTracker.initialize(Youtube);
   await durationStorage.readCache();
   if (!(await chrome.alarms.get("youtube-duration-expiry")))
@@ -210,13 +210,9 @@ async function initializeServiceWorker() {
   await durationBackfill.initialize();
 
   // Network availability must never block recording a local watch.
-  void databaseProviderFactory
-    .isConfigured()
-    .then((configured) => {
-      if (configured)
-        return withWatchmarkerRefresh(() => SyncManagerInstance.syncNow());
-    })
-    .catch((error) => logger.warn("History sync deferred:", error.message));
+  void withWatchmarkerRefresh(() => SyncManagerInstance.syncNow()).catch(
+    (error) => logger.warn("History sync deferred:", error.message),
+  );
   logger.info("Service worker context initialized");
 }
 

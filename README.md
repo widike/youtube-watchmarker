@@ -99,6 +99,15 @@ Liked-video imports have no watch timestamp, so they skip already-known video
 IDs entirely, including deleted videos. New likes are imported once as undated
 records and do not contribute to period activity totals.
 
+The history trash action removes every stored watch of a video locally, syncs
+its deletion to Supabase, and removes it from the signed-in YouTube account's
+watch history, including older history pages. Local and cloud deletion markers
+prevent stale devices or imports from restoring the video. Records and watch
+events are retained behind those markers; this is not a permanent data purge.
+Cloud and YouTube failures are shown as pending, with durable retries every
+30 seconds and after extension restarts. Supabase must be connected and YouTube
+must be signed in to complete all three destinations.
+
 **Sync & data → Reconcile old imports → Preview reconciliation** inspects the
 database without changing history or the sync outbox. It shows redundant import
 records, affected videos, before/after stored watch counts, preserved playback

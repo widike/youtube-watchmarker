@@ -28,6 +28,22 @@ export class LibraryController extends HistorySearchController {
 
   async initialize() {
     super.initialize();
+    this.onMetadataRefresh = () => {
+      if (!document.hidden && !document.getElementById("panel-history").hidden)
+        void this.refreshMetadata();
+    };
+    this.onDurationChange = (changes, area) => {
+      const change = changes.youtube_duration_state;
+      if (
+        area === "local" &&
+        change?.newValue?.cacheRevision !== change?.oldValue?.cacheRevision
+      )
+        this.onMetadataRefresh();
+    };
+    chrome.storage.onChanged.addListener(this.onDurationChange);
+    window.addEventListener("focus", this.onMetadataRefresh);
+    window.addEventListener("hashchange", this.onMetadataRefresh);
+    document.addEventListener("visibilitychange", this.onMetadataRefresh);
     window.addEventListener(
       "pagehide",
       () => {
@@ -78,6 +94,14 @@ export class LibraryController extends HistorySearchController {
       .catch(() =>
         this.feedback.error("Could not save your display preference."),
       );
+  }
+
+  dispose() {
+    super.dispose();
+    chrome.storage.onChanged.removeListener(this.onDurationChange);
+    window.removeEventListener("focus", this.onMetadataRefresh);
+    window.removeEventListener("hashchange", this.onMetadataRefresh);
+    document.removeEventListener("visibilitychange", this.onMetadataRefresh);
   }
 
   updateViewButtons() {

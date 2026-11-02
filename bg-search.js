@@ -1,6 +1,8 @@
 import { logger } from "./logger.js";
 import { queryHistory } from "./history-query.js";
 import { historyEntries } from "./history-events.js";
+import { videoTitleRecovery } from "./video-title-recovery.js";
+import { isValidVideoId } from "./validation.js";
 
 /**
  * Search management class
@@ -64,6 +66,7 @@ export class SearchManager {
 
       // Get all videos from the current provider
       const allVideos = await currentProvider.getAllVideos();
+      await videoTitleRecovery.repair(currentProvider, allVideos);
 
       const filteredVideos = queryHistory(historyEntries(allVideos), {
         ...options,
@@ -90,15 +93,29 @@ export class SearchManager {
   // Only the trash action reaches this method. A missing remote record never
   // implies deletion. The durable tombstone is retried like every other write.
   async delete(videoId) {
-    await this.getProvider().deleteVideo(videoId);
-    if (this.providerFactory.performDeltaSync) {
-      void this.providerFactory
-        .performDeltaSync()
-        .catch((error) =>
-          logger.warn("Deletion queued for sync:", error.message),
-        );
-    }
-    return { deleted: true };
+    if (!isValidVideoId(videoId)) throw new Error("Invalid video ID");
+    await this.getProvider().deleteVideo(videoId, { youtube: true });
+    const operations = await Promise.allSettled([
+      this.providerFactory.syncVideoDeletion(videoId),
+      this.providerFactory.youtubeDeletions.process(videoId),
+    ]);
+    const pending = operations.flatMap((result, index) => {
+      const service = index === 0 ? "Supabase" : "YouTube";
+      if (result.status === "rejected")
+        return [`${service}: ${result.reason.message}`];
+      return result.value?.success
+        ? []
+        : [`${service}: ${result.value?.error || "Deletion pending"}`];
+    });
+    return {
+      deleted: true,
+      success: pending.length === 0,
+      ...(pending.length
+        ? {
+            error: `Deleted locally. Pending deletion will retry automatically. ${pending.join("; ")}`,
+          }
+        : {}),
+    };
   }
 }
 

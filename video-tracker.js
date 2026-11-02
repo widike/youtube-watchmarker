@@ -1,5 +1,8 @@
 import { broadcastWatchState } from "./watch-notifications.js";
 import "./shared/video-identity.js";
+import { isValidVideoTitle } from "./validation.js";
+import { cleanHistoryTitle } from "./browser-history-parser.js";
+import { videoTitleRecovery } from "./video-title-recovery.js";
 
 const { isVideoId, parseVideoId } = globalThis.YouTubeWatchmarkerVideo;
 const CONDITIONS = {
@@ -37,11 +40,26 @@ export class VideoTracker {
     if (settings[CONDITIONS[reason]] !== true) return null;
 
     const playbackId = `${tabId}:${sender.documentId || ""}:${sessionId}`;
+    const title = isValidVideoTitle(request.title)
+      ? request.title
+      : parseVideoId(sender.tab.url) === videoId
+        ? cleanHistoryTitle(sender.tab.title)
+        : "";
     const video = await this.youtubeModule.recordPlayback(
       videoId,
-      request.title,
+      title,
       playbackId,
     );
+    // Recording stays local and immediate even if metadata is unavailable.
+    if (video && !isValidVideoTitle(video.strTitle)) {
+      const recovered = await videoTitleRecovery.find(videoId);
+      if (recovered) {
+        const saved = await this.youtubeModule
+          .getProvider()
+          .repairVideoTitle(videoId, recovered);
+        if (saved) video.strTitle = saved;
+      }
+    }
     if (video) {
       await broadcastWatchState({
         action: "youtube-mark",

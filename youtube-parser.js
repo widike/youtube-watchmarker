@@ -3,7 +3,6 @@ export { extractInnerTubeConfig } from "./youtube-page-data.js";
 export { parseLikedVideosPage } from "./youtube-liked-parser.js";
 export {
   extractHistoryContinuationToken,
-  extractHistoryFeedbackToken,
   parseHistoryContinuationResponse,
   parseHistoryPage,
 } from "./youtube-history-parser.js";

@@ -2,7 +2,6 @@ import { VideoRecordStore } from "./video-record-store.js";
 import { logger } from "./logger.js";
 import { synchronizeLikedVideos } from "./youtube-liked-sync.js";
 import { synchronizeHistory } from "./youtube-history-sync.js";
-import { deleteFromHistoryFirstPage } from "./youtube-history-delete.js";
 
 /**
  * YouTube management class
@@ -83,10 +82,6 @@ export class YoutubeManager extends VideoRecordStore {
       );
     }
     return this.likedSyncPromise;
-  }
-
-  async deleteFromHistoryFirstPage(videoId) {
-    return deleteFromHistoryFirstPage(videoId);
   }
 }
 

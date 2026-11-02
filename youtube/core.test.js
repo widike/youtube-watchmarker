@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { contentRuntime } from "../test-support/content-runtime.js";
 
 globalThis.window = {
   location: {
@@ -63,4 +64,30 @@ test("reused notification images follow the current link rather than stale image
   assert.equal(core.extractVideoId(image), "bbbbbbbbbbb");
   link.href = "https://www.youtube.com/feed/subscriptions";
   assert.equal(core.extractVideoId(image), null);
+});
+
+test("watch titles use the metadata container even without heading style classes", () => {
+  const { document, watchmarker } = contentRuntime();
+  document.title = "YouTube";
+  document.querySelector = (selector) =>
+    selector === "ytd-watch-metadata h1"
+      ? { textContent: "Grüße 😀 &amp; 東京" }
+      : null;
+  assert.equal(watchmarker.core.getCurrentVideoTitle(), "Grüße 😀 &amp; 東京");
+});
+
+test("head metadata must match the current video, and branding is never a title", () => {
+  const { document, watchmarker } = contentRuntime();
+  document.title = "YouTube";
+  let metadataId = "bbbbbbbbbbb";
+  document.querySelector = (selector) => {
+    if (selector === 'meta[itemprop="videoId"]')
+      return { getAttribute: () => metadataId };
+    if (selector === 'meta[name="title"]')
+      return { getAttribute: () => "Metadata title" };
+    return null;
+  };
+  assert.equal(watchmarker.core.getCurrentVideoTitle(), "");
+  metadataId = "aaaaaaaaaaa";
+  assert.equal(watchmarker.core.getCurrentVideoTitle(), "Metadata title");
 });

@@ -17,8 +17,11 @@ persistent progress resume work after page closure or worker/browser restarts.
 Transient failures use exponential backoff with jitter and respect Retry-After;
 quota exhaustion waits for Pacific midnight. Invalid credentials and six
 consecutive failures require **Resume**. Completed jobs check for new history
-hourly. Durations expire after 29 days and are refreshed. Videos omitted from a
-successful API response, or individually reported as not found, are marked
+hourly. Loading history with missing video lengths wakes an idle job after
+30 seconds, without bypassing pause, retry or quota limits. The history grid
+updates fetched duration badges automatically while preserving loaded pages
+and scroll position. Durations expire after 29 days and are refreshed. Videos
+omitted from a successful API response, or individually reported as not found, are marked
 unavailable locally and skipped on subsequent runs, including after restarts.
 This includes deleted and private videos; YouTube does not identify the reason.
 Their history and measured playback remain intact, with no invented duration.

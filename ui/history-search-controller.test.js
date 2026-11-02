@@ -207,3 +207,91 @@ test("pagination preserves separate watch events for the same video", async () =
   assert.deepEqual(controller.results, [firstWatch, secondWatch, thirdWatch]);
   assert.equal(controller.state.totalResults, 3);
 });
+
+test("duration refresh updates loaded cards without resetting pagination or rendering", async () => {
+  const { controller, respond, pending, renders } = fixture();
+  const first = controller.search();
+  respond(0, [a, b], 6);
+  await first;
+  const next = controller.loadMore();
+  respond(1, [c], 6);
+  await next;
+  const state = structuredClone(controller.state);
+  const offset = controller.nextOffset;
+  const refresh = controller.refreshMetadata();
+  assert.equal(pending[2].message.limit, 3);
+  respond(
+    2,
+    [{ ...a, durationSeconds: 600 }, b, { ...c, durationSeconds: 900 }],
+    6,
+  );
+  await refresh;
+  assert.equal(controller.results[0].durationSeconds, 600);
+  assert.equal(controller.results[2].durationSeconds, 900);
+  assert.equal(controller.nextOffset, offset);
+  assert.deepEqual(controller.state, state);
+  assert.equal(renders.at(-1).reset, false);
+});
+
+test("metadata refresh cannot overwrite a new query and failures retain usable cards", async () => {
+  const { controller, queryInput, respond, pending } = fixture();
+  const first = controller.search();
+  respond(0, [a, b]);
+  await first;
+  const refresh = controller.refreshMetadata();
+  queryInput.value = "new";
+  const search = controller.search();
+  respond(2, [c], 1);
+  await search;
+  respond(1, [{ ...a, durationSeconds: 600 }, b]);
+  await refresh;
+  respond(3, [c], 1);
+  await new Promise(setImmediate);
+  assert.deepEqual(controller.results, [c]);
+  const failed = controller.refreshMetadata();
+  pending[4].reject(new Error("offline"));
+  await failed;
+  assert.deepEqual(controller.results, [c]);
+  assert.equal(controller.state.loadError, "");
+});
+
+test("duration changes during pagination refresh the earlier cards after loading finishes", async () => {
+  const { controller, respond, pending } = fixture();
+  const first = controller.search();
+  respond(0, [a, b]);
+  await first;
+  const next = controller.loadMore();
+  await controller.refreshMetadata();
+  assert.equal(pending.length, 2);
+  respond(1, [c]);
+  await next;
+  assert.equal(pending[2].message.limit, 3);
+  respond(2, [{ ...a, durationSeconds: 600 }, b, c]);
+  await new Promise(setImmediate);
+  assert.equal(controller.results[0].durationSeconds, 600);
+  assert.equal(controller.results.length, 3);
+});
+
+test("partial deletion removes local cards and displays the retry error", async (t) => {
+  const previousConfirm = globalThis.confirm;
+  globalThis.confirm = () => true;
+  t.after(() => {
+    globalThis.confirm = previousConfirm;
+  });
+  const { controller, respond, pending } = fixture();
+  const errors = [];
+  controller.feedback.error = (message) => errors.push(message);
+  const first = controller.search();
+  respond(0, [a, b]);
+  await first;
+  const deletion = controller.deleteVideo(a.strIdent, { disabled: false });
+  pending[1].resolve({
+    success: false,
+    deleted: true,
+    error: "YouTube: sign in to finish deletion",
+  });
+  await deletion;
+  assert.deepEqual(controller.results, [b]);
+  assert.equal(controller.nextOffset, 1);
+  assert.deepEqual(errors, ["YouTube: sign in to finish deletion"]);
+});

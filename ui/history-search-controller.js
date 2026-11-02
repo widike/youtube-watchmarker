@@ -102,6 +102,45 @@ export class HistorySearchController {
     await this.fetchBatch({ reset: this.results.length === 0 });
   }
 
+  async refreshMetadata() {
+    if (this.disposed) return;
+    if (this.deleting || this.state.isSearching || this.state.isLoadingMore) {
+      this.metadataRefreshPending = true;
+      return;
+    }
+    this.metadataRefreshPending = false;
+    const requestId = this.requestId;
+    const metadataId = (this.metadataId = (this.metadataId || 0) + 1);
+    const updated = new Map();
+    try {
+      for (let offset = 0; offset < this.nextOffset; offset += 100) {
+        const response = await this.client.sendMessage({
+          action: "search-videos",
+          query: this.state.currentQuery,
+          ...(this.state.wordGroup ? { wordGroup: this.state.wordGroup } : {}),
+          offset,
+          limit: Math.min(100, this.nextOffset - offset),
+          ...this.getSearchOptions(),
+        });
+        if (this.disposed || metadataId !== this.metadataId) return;
+        if (requestId !== this.requestId) {
+          void this.refreshMetadata();
+          return;
+        }
+        if (!response?.success) return;
+        for (const video of response.objVideos || [])
+          updated.set(video.entryId || video.strIdent, video);
+      }
+      this.results = this.results.map(
+        (video) => updated.get(video.entryId || video.strIdent) || video,
+      );
+      // Keep loaded pages, pagination and the virtual list's scroll position.
+      this.render();
+    } catch {
+      // Existing cards remain usable; the next metadata change/focus retries.
+    }
+  }
+
   async fetchBatch({ reset = false } = {}) {
     const requestId = ++this.requestId;
     const offset = this.nextOffset;
@@ -144,6 +183,7 @@ export class HistorySearchController {
         this.state.isLoadingMore = false;
         this.setSearchingState();
         this.render();
+        if (this.metadataRefreshPending) void this.refreshMetadata();
       }
     }
   }
@@ -165,7 +205,7 @@ export class HistorySearchController {
     if (this.disposed || this.deleting) return;
     if (
       !confirm(
-        "Delete all watches of this video from shared history on all devices?",
+        "Delete all watches of this video from local history, Supabase on all devices, and the signed-in YouTube account's history?",
       )
     )
       return;
@@ -179,7 +219,7 @@ export class HistorySearchController {
         action: "search-delete",
         videoId,
       });
-      if (!response?.success)
+      if (!response?.success && !response?.deleted)
         throw new Error(response?.error || "Deletion failed");
       const before = this.results.length;
       this.results = this.results.filter((video) => video.strIdent !== videoId);
@@ -188,6 +228,7 @@ export class HistorySearchController {
       this.state.totalResults = Math.max(0, this.state.totalResults - removed);
       this.state.hasMore = this.nextOffset < this.state.totalResults;
       await this.onDeleteSuccess();
+      if (!response.success) this.feedback.error(response.error);
     } catch (error) {
       button.disabled = false;
       this.feedback.error(`Could not delete video: ${error.message}`);
@@ -195,6 +236,7 @@ export class HistorySearchController {
       this.deleting = false;
       this.setSearchingState();
       this.render();
+      if (this.metadataRefreshPending) void this.refreshMetadata();
     }
   }
 

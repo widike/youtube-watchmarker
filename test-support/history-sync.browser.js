@@ -21,6 +21,8 @@ import { recordPlayback } from "../history-playback.js";
 import { testPlaybackDurability } from "./playback-durability.browser.js";
 import { testWatchEvents } from "./watch-events.browser.js";
 import { testHistoryReconciliation } from "./history-reconciliation.browser.js";
+import { testTitleRecovery } from "./title-recovery.browser.js";
+import { testVideoDeletion } from "./video-deletion.browser.js";
 
 const results = [];
 const assert = (condition, message) => {
@@ -365,5 +367,7 @@ await testPlaybackDurability({ test, database, open, assert });
 await testWatchEvents({ test, database, open, remote, assert });
 await testHistoryReconciliation({ test, database, open, remote, assert });
 await testWatchTimeSync({ test, database, remote, open, assert });
+await testTitleRecovery({ test, database, assert });
+await testVideoDeletion({ test, database, assert });
 await fetch("/results", { method: "POST", body: JSON.stringify(results) });
 document.body.textContent = JSON.stringify(results);
