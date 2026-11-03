@@ -24,6 +24,10 @@ package with local development configuration excluded.
   details. Duration badges refresh without losing loaded history or scroll position.
   Missing lengths wake idle backfill while preserving pause, retry and quota limits;
   unfinished live-video lengths are retried.
+- Cached video lengths and unavailable-video markers now sync across devices.
+  Existing valid caches upload automatically; receiving devices display durations
+  without a YouTube API key. Keys, backfill controls and quota budgets stay local.
+  Interrupted transfers retry, and newer fetches replace older cache entries.
 - Popup statistics have clearer periods, thumbnail duration overlays and playback
   progress, including in forced colors. Single views omit the redundant “×1” badge.
 - History starts loading before settings panels, sidebar counts and statistics.
@@ -37,13 +41,17 @@ package with local development configuration excluded.
   `.mcp.json`, `.codex/`, credentials and generated development output stay local.
 
 The 1.3.0 package was updated on 2026-11-03 with playback tracking, modern
-end-screen marking and initial history-loading fixes.
+end-screen marking, initial history-loading fixes and cross-device duration-cache
+sync.
 
 For a release ZIP, extract it into the existing extension installation folder,
 reload at `chrome://extensions`, and refresh YouTube tabs. For a source checkout,
 run `npm ci` and `npm run build`, then select `extension/` using **Load unpacked**.
-The extension's public identity key is unchanged. No additional database migration
-is required from 1.2.0.
+The extension's public identity key is unchanged. Existing Supabase projects must
+apply `supabase/migrations/20261103000000_video_duration_sync.sql` for duration-cache
+sync. **Copy setup SQL** includes this migration. Reload the updated extension on
+each device and use **Sync now** on the device holding the cache, then on receiving
+devices. Local history and measured playback are preserved.
 
 [Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.2.0...v1.3.0)
 

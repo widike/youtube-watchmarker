@@ -309,8 +309,8 @@ Normal restoration does not require an exported file.
    followed by [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
    followed by [short connection codes](supabase/migrations/20261101070000_short_connection_codes.sql)
    and [video duration sync](supabase/migrations/20261103000000_video_duration_sync.sql)
-   in the project's SQL Editor. All eight preserve existing history.
-   **Sync & data → First device setup → Copy setup SQL** copies all eight in order.
+   in the project's SQL Editor. All nine preserve existing history.
+   **Sync & data → First device setup → Copy setup SQL** copies all nine in order.
    Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)
    to register your public Turnstile site key and configure its secret in Supabase.
    For an existing project, apply the import-reconciliation migration so the
