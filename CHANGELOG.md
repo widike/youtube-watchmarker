@@ -26,12 +26,18 @@ package with local development configuration excluded.
   unfinished live-video lengths are retried.
 - Popup statistics have clearer periods, thumbnail duration overlays and playback
   progress, including in forced colors. Single views omit the redundant “×1” badge.
+- History starts loading before settings panels, sidebar counts and statistics.
+  Popup totals avoid dashboard-only analysis, and video counts read stored
+  summaries without loading every watch event.
+- Watched marking and appearance settings apply to YouTube's modern end-screen
+  recommendation cards, including in fullscreen.
 - Runtime code is grouped by responsibility under `extension/`; tests and fixtures
   live under `tests/`. Build checks validate manifest, module and asset paths.
 - Release ZIPs contain the installable extension and licenses. Machine-specific
   `.mcp.json`, `.codex/`, credentials and generated development output stay local.
 
-The 1.3.0 package was updated on 2026-11-03 with the playback-tracking fix.
+The 1.3.0 package was updated on 2026-11-03 with playback tracking, modern
+end-screen marking and initial history-loading fixes.
 
 For a release ZIP, extract it into the existing extension installation folder,
 reload at `chrome://extensions`, and refresh YouTube tabs. For a source checkout,
