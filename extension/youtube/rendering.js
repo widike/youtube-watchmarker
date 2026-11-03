@@ -142,7 +142,7 @@
       // End-card images can be siblings of the link. Mark the card itself so
       // both the thumbnail and badge remain inside the fullscreen player.
       const playerTile = videoElement.closest(
-        ".ytp-ce-video, a.ytp-videowall-still, a.ytp-autonav-endscreen-link-container",
+        ".ytp-ce-video, a.ytp-videowall-still, a.ytp-modern-videowall-still, a.ytp-autonav-endscreen-link-container",
       );
       if (playerTile) return playerTile;
 

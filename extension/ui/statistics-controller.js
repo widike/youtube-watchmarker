@@ -76,6 +76,7 @@ export class StatisticsController {
       const response = await this.client.sendMessage({
         action: "history-statistics",
         period,
+        ...(this.compact ? { compact: true } : {}),
       });
       if (generation !== this.generation) return;
       if (!response?.success || response.statistics?.period !== period)

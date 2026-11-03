@@ -39,7 +39,8 @@ export const handleSearchVideos = createHandler(
       durationStorage.readCache(),
     ]);
     const videos = enrichHistoryVideos(result.videos, time, durations);
-    await durationBackfill
+    // Scheduling metadata must not wait behind an in-flight network backfill.
+    void durationBackfill
       .requestVideos(videos)
       .catch((error) =>
         logger.warn("Duration refresh deferred:", error.message),

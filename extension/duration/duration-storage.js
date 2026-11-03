@@ -50,14 +50,12 @@ export class DurationStorage {
     const rows = [];
     const request = tx
       .objectStore(META_STORE)
-      .openCursor(IDBKeyRange.bound(PREFIX, `${PREFIX}\uffff`));
+      .getAll(IDBKeyRange.bound(PREFIX, `${PREFIX}\uffff`));
     request.onsuccess = () => {
-      const cursor = request.result;
-      if (!cursor) return;
-      if (cursor.value.unavailable === true || cursor.value.expiresAt > now)
-        rows.push(cursor.value);
-      else cursor.delete();
-      cursor.continue();
+      for (const row of request.result) {
+        if (row.unavailable === true || row.expiresAt > now) rows.push(row);
+        else tx.objectStore(META_STORE).delete(`${PREFIX}${row.strIdent}`);
+      }
     };
     await done;
     return rows;

@@ -16,6 +16,7 @@
     'ytd-compact-video-renderer a[href*="/watch?"]',
     "a.ytp-ce-covering-overlay[href]",
     "a.ytp-videowall-still[href]",
+    "a.ytp-modern-videowall-still[href]",
     "a.ytp-autonav-endscreen-link-container[href]",
     'a.ShortsLockupViewModelHostEndpoint[href*="/shorts/"]',
     'a.reel-item-endpoint[href*="/shorts/"]',

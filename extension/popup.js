@@ -34,14 +34,15 @@ class PopupPage {
       client: runtimeClient,
       compact: true,
     });
-    this.statistics.initialize();
     const theme = new ThemeController({
       toggleButton: document.getElementById("theme-toggle"),
       iconElement: document.getElementById("theme-icon"),
     });
-    await theme.initialize();
+    const themeReady = theme.initialize();
     this.search.initialize();
     await this.search.loadInitialResults();
+    this.statistics.initialize();
+    await themeReady;
   }
 
   render(args) {

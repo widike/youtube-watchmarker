@@ -27,7 +27,7 @@ export function readVideos(db, { id, after = "", limit } = {}) {
     const range = after ? IDBKeyRange.lowerBound(after, true) : undefined;
     const request =
       id === undefined ? store.getAll(range, limit) : store.get(id);
-    const videos = [];
+    let videos = [];
     request.onsuccess = () => {
       const rows =
         id === undefined
@@ -35,15 +35,23 @@ export function readVideos(db, { id, after = "", limit } = {}) {
           : request.result
             ? [request.result]
             : [];
-      for (const row of rows)
-        videoEvents(tx, row.strIdent, (watchEvents) =>
-          videos.push({ ...row, watchEvents }),
-        );
+      videos = rows.map((row) => ({ ...row, watchEvents: [] }));
+      if (!rows.length) return;
+      const byId = new Map(videos.map((video) => [video.strIdent, video]));
+      // Two bulk reads replace one request per video. Keep paged exports and
+      // single-video lookups bounded to the summaries read in this transaction.
+      const events = tx.objectStore(EVENT_STORE).getAll(
+        IDBKeyRange.bound(
+          [rows[0].strIdent],
+          [rows.at(-1).strIdent, []],
+        ),
+      );
+      events.onsuccess = () => {
+        for (const { strIdent, ...event } of events.result)
+          byId.get(strIdent)?.watchEvents.push(event);
+      };
     };
     tx.oncomplete = () => {
-      videos.sort((a, b) =>
-        a.strIdent < b.strIdent ? -1 : a.strIdent > b.strIdent ? 1 : 0,
-      );
       resolve(id === undefined ? videos : videos[0] || null);
     };
     tx.onabort = tx.onerror = () =>

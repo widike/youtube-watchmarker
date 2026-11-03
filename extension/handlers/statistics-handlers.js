@@ -1,6 +1,7 @@
 import { createHandler } from "../shared/handler-wrapper.js";
 import { databaseProviderFactory } from "../providers/database-provider-factory.js";
 import { summarizeHistory } from "../history/history-statistics.js";
+import { summarizePopupHistory } from "../history/history-popup-statistics.js";
 import { Database } from "../background/bg-database.js";
 import { readWatchTime, saveWatchTime } from "../history/watch-time-storage.js";
 import { durationStorage } from "../background/duration-runtime.js";
@@ -13,7 +14,8 @@ export const handleHistoryStatistics = createHandler(
       readWatchTime(Database.database),
       durationStorage.readCache(),
     ]);
-    const statistics = summarizeHistory(videos, {
+    const summarize = request.compact ? summarizePopupHistory : summarizeHistory;
+    const statistics = summarize(videos, {
       period: request.period,
       time,
       durations,

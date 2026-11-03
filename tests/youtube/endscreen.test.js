@@ -135,7 +135,7 @@ test(
         );
         assert.equal(result.result.value.fullscreen, fullscreen);
         t.diagnostic(
-          `${fullscreen ? "Fullscreen" : "Normal"}: four tile layouts, toggles, dynamic insertions and recycled links passed`,
+          `${fullscreen ? "Fullscreen" : "Normal"}: ${result.result.value.tiles} tile layouts, toggles, dynamic insertions and recycled links passed`,
         );
       }
     } finally {

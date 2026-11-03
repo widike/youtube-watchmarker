@@ -14,11 +14,14 @@ globalThis.verifyEndscreen = async (settings, fullscreen) => {
     #movie_player { position:relative; width:960px; height:600px; background:#111; }
     .tile { position:absolute; width:300px; height:160px; }
     .ytp-ce-covering-image, .ytp-ce-covering-overlay,
-    .ytp-videowall-still-image, .ytp-autonav-endscreen-upnext-thumbnail {
+    .ytp-videowall-still-image, .ytp-modern-videowall-still-image,
+    .ytp-autonav-endscreen-upnext-thumbnail {
       position:absolute; inset:0; background-image:linear-gradient(red, blue);
     }
     .ytp-ce-covering-overlay { background-image:none; z-index:12; }
     .ytp-autonav-endscreen-link-container { display:flex; position:static; }
+    .ytp-modern-videowall-still { position:static; display:block; width:300px; height:220px; }
+    .ytp-modern-videowall-still-image { position:relative; height:160px; }
     .ytp-videowall-still::after { content:""; position:absolute; inset:0; }
     ytd-thumbnail-overlay-resume-playback-renderer { display:block; height:4px; background:red; }
   </style>`;
@@ -49,6 +52,13 @@ globalThis.verifyEndscreen = async (settings, fullscreen) => {
     </div>
     <a id="channel" class="ytp-ce-covering-overlay"
        href="https://www.youtube.com/@channel"></a>
+    <div style="position:absolute;left:640px;top:0">
+      <a id="modern" class="ytp-modern-videowall-still"
+         href="https://www.youtube.com/watch?v=aaaaaaaaaaa">
+        <div class="ytp-modern-videowall-still-image"><span>47:30</span></div>
+        <span class="ytp-modern-videowall-still-info">Video title and channel</span>
+      </a>
+    </div>
   </div>`;
   const player = document.getElementById("movie_player");
   if (fullscreen) await player.requestFullscreen();
@@ -83,7 +93,7 @@ globalThis.verifyEndscreen = async (settings, fullscreen) => {
   const tile = (id) => document.getElementById(id);
   const image = (id) => tile(id).firstElementChild;
   const badge = (id) => getComputedStyle(tile(id), "::after");
-  const watched = ["creator", "wall", "upnext", "overlay-image"];
+  const watched = ["creator", "wall", "upnext", "overlay-image", "modern"];
   for (const id of watched) {
     assert(
       tile(id).classList.contains("youwatch-mark"),
@@ -110,12 +120,12 @@ globalThis.verifyEndscreen = async (settings, fullscreen) => {
       `${id} badge fills the tile`,
     );
     const bounds = tile(id).getBoundingClientRect();
-    if (id === "upnext") {
+    if (id === "upnext" || id === "modern") {
       assert(
         getComputedStyle(tile(id)).position === "relative",
-        "Up-next badge has no positioning context",
+        `${id} badge has no positioning context`,
       );
-      assert(badge(id).top === "8px", "Up-next badge escaped its tile");
+      assert(badge(id).top === "8px", `${id} badge escaped its tile`);
     }
     const hit = document.elementFromPoint(bounds.left + 12, bounds.top + 12);
     assert(
@@ -126,6 +136,11 @@ globalThis.verifyEndscreen = async (settings, fullscreen) => {
   assert(
     !image("creator").classList.contains("youwatch-mark"),
     "Creator image was marked instead of its card",
+  );
+  assert(
+    getComputedStyle(tile("modern").lastElementChild).opacity === "1" &&
+      getComputedStyle(tile("modern").lastElementChild).filter === "none",
+    "Modern recommendation metadata was faded or grayed out",
   );
   assert(
     !tile("channel").classList.contains("youwatch-mark"),
@@ -184,10 +199,19 @@ globalThis.verifyEndscreen = async (settings, fullscreen) => {
     () => void marker.processVideos(core.findVideos()),
   );
   observer.initialize();
-  const dynamic = tile("wall").cloneNode(true);
+  const dynamic = tile("modern").cloneNode(true);
   dynamic.id = "dynamic";
   dynamic.classList.remove("youwatch-mark");
   player.append(dynamic);
+  await waitFor(() => dynamic.classList.contains("youwatch-mark"));
+  dynamic.href = "https://www.youtube.com/watch?v=bbbbbbbbbbb";
+  await waitFor(() => !dynamic.classList.contains("youwatch-mark"));
+  assert(!dynamic.hasAttribute("watchdate"), "Modern recycled card kept date");
+  assert(
+    !dynamic.hasAttribute("watchcount"),
+    "Modern recycled card kept count",
+  );
+  dynamic.href = "https://www.youtube.com/watch?v=aaaaaaaaaaa";
   await waitFor(() => dynamic.classList.contains("youwatch-mark"));
   const creatorLink = tile("creator").querySelector("a");
   creatorLink.href = "https://www.youtube.com/watch?v=bbbbbbbbbbb";

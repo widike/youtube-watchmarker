@@ -1,12 +1,13 @@
 import { logger } from "../shared/logger.js";
 
 const VISUAL_TARGET =
-  '.youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .youwatch-mark .ytp-ce-covering-image, .youwatch-mark .ytp-ce-covering-overlay[style*="background-image"], .youwatch-mark .ytp-autonav-endscreen-upnext-thumbnail';
+  '.youwatch-mark img, img.youwatch-mark, .youwatch-mark .ytp-videowall-still-image, .youwatch-mark .ytp-modern-videowall-still-image, .youwatch-mark .ytp-ce-covering-image, .youwatch-mark .ytp-ce-covering-overlay[style*="background-image"], .youwatch-mark .ytp-autonav-endscreen-upnext-thumbnail';
 const stylesheets = {
   Fadeout: `${VISUAL_TARGET} { opacity: 0.34 !important; }`,
   Grayout: `${VISUAL_TARGET} { filter: grayscale(1) !important; }`,
   Showbadge: `
-    .ytp-autonav-endscreen-link-container.youwatch-mark { position:relative; }
+    .ytp-autonav-endscreen-link-container.youwatch-mark,
+    .ytp-modern-videowall-still.youwatch-mark { position:relative; }
     .youwatch-mark::after {
       align-items:center;
       backdrop-filter:blur(8px);

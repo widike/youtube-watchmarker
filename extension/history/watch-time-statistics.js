@@ -7,7 +7,7 @@ import {
 } from "../statistics/statistics-dates.js";
 import { budgetWatchTime } from "./watch-time-budgets.js";
 
-export function summarizeWatchTime(rows, videos, { period, now }) {
+export function summarizeWatchTime(rows, videos, { period, now, compact = false }) {
   const duration = PERIODS[period].days * DAY;
   const cutoff = period === "all" ? 0 : now - duration;
   const deleted = new Map(
@@ -36,11 +36,18 @@ export function summarizeWatchTime(rows, videos, { period, now }) {
   );
   const sum = (values) => values.reduce((total, { count }) => total + count, 0);
   const totals = Object.fromEntries(
-    Object.entries(PERIODS).map(([name, range]) => [
+    Object.entries(PERIODS)
+      .filter(([name]) => !compact || ["day", "week", "month"].includes(name))
+      .map(([name, range]) => [
       name,
       sum(budgetWatchTime(valid, range.days ? now - range.days * DAY : 0, now)),
     ]),
   );
+  if (compact)
+    return {
+      totals,
+      estimatedTotal: sum(all.filter(({ row }) => row.estimated)),
+    };
   const previous =
     period === "all"
       ? 0
