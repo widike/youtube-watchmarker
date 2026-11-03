@@ -17,6 +17,9 @@ package with local development configuration excluded.
 - Browser and YouTube imports respect the installation's saved tracking boundary,
   preventing newer visits from bypassing the one-minute playback requirement.
   Existing saved history is retained.
+- Hover previews, audio and other unrelated media events no longer interrupt
+  watch-time tracking for the main video or prevent its one-minute threshold
+  from being reached. Ad interruptions still pause measured playback correctly.
 - Repeated watches on the same day share a card while preserving individual play
   details. Duration badges refresh without losing loaded history or scroll position.
   Missing lengths wake idle backfill while preserving pause, retry and quota limits;
@@ -27,6 +30,8 @@ package with local development configuration excluded.
   live under `tests/`. Build checks validate manifest, module and asset paths.
 - Release ZIPs contain the installable extension and licenses. Machine-specific
   `.mcp.json`, `.codex/`, credentials and generated development output stay local.
+
+The 1.3.0 package was updated on 2026-11-03 with the playback-tracking fix.
 
 For a release ZIP, extract it into the existing extension installation folder,
 reload at `chrome://extensions`, and refresh YouTube tabs. For a source checkout,
