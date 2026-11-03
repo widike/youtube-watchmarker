@@ -58,7 +58,7 @@ temporarily prevents pairing; existing connections and history sync continue.
 
 Directory infrastructure lives separately in `supabase/directory/setup.sql` and
 `supabase/functions/pairing-directory/`. Ordinary installations need only the
-eight source migrations copied by **Copy setup SQL**, not the directory setup.
+source migrations copied by **Copy setup SQL**, not the directory setup.
 
 The directory currently targets Supabase project `coogjvcuzhgdngjcjmww`. This is
 infrastructure routing, not a default value for any installation's history

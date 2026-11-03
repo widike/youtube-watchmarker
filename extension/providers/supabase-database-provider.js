@@ -7,6 +7,7 @@ import {
 } from "./supabase-watch-events.js";
 
 import { uploadWatchTime, downloadWatchTime } from "./supabase-watch-time.js";
+import { uploadDurations, downloadDurations } from "./supabase-durations.js";
 
 const TABLE = "/youtube_watch_history";
 const COLUMNS =
@@ -82,6 +83,10 @@ export class SupabaseDatabaseProvider {
       );
       if ((await response.json()) !== 4)
         throw new Error("Unsupported sync schema");
+      await this.makeRequest(
+        "GET",
+        "/youtube_video_durations?select=str_ident&limit=0",
+      );
       return { exists: true };
     } catch (error) {
       return {
@@ -126,6 +131,12 @@ export class SupabaseDatabaseProvider {
 
   async importWatchTime(rows) {
     return uploadWatchTime(this, rows);
+  }
+  async importDurations(rows) {
+    return uploadDurations(this, rows);
+  }
+  async getDurationPage(after = "", limit = 500) {
+    return downloadDurations(this, after, limit);
   }
   async getWatchTimePage(after = "", limit = 500) {
     return downloadWatchTime(this, after, limit);

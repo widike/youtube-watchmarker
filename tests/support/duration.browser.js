@@ -93,6 +93,12 @@ export async function verifyDurationBackfill(assert) {
     );
     now += 30_000;
     await job.tick();
+    const stateBeforeNotification = JSON.stringify(await storage.getState());
+    await storage.notifyCacheChanged();
+    assert(
+      stateBeforeNotification === JSON.stringify(await storage.getState()),
+      "Synced cache notification changed backfill quota or retry state",
+    );
     await saveWatchTime(
       db,
       {
@@ -172,6 +178,7 @@ export async function verifyDurationBackfill(assert) {
 }
 
 export async function verifyDurationControls({ $, assert, waitFor }) {
+  const fixture = window.statisticsFixture;
   location.hash = "sync";
   await waitFor(() => !$("#panel-sync").hidden);
   const form = $("[data-duration-form]");
@@ -197,6 +204,20 @@ export async function verifyDurationControls({ $, assert, waitFor }) {
     form.querySelector('[data-duration-command="forget"]').disabled,
     "Removed key still appears configured",
   );
+  fixture.duration = { ...fixture.duration, available: 2, remaining: 1 };
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    $("[data-duration-status]").textContent.includes("Available"),
+  );
+  assert(
+    $("[data-duration-status]").textContent.includes("2 / 3 videos") &&
+      input.required &&
+      !form.querySelector('[data-duration-command="forget"]').disabled,
+    "A Mac without an API key cannot see or clear its restored cache",
+  );
+  fixture.duration = { ...fixture.duration, available: 0, remaining: 3 };
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => $("[data-duration-status]").textContent === "");
   assert(
     document.documentElement.scrollWidth <= innerWidth,
     "Duration controls overflow horizontally",
@@ -207,16 +228,15 @@ export async function verifyDurationControls({ $, assert, waitFor }) {
       !$("#panel-statistics").hidden &&
       $("#panel-statistics").getAttribute("aria-busy") === "false",
   );
-  const fixture = window.statisticsFixture;
   const before = fixture.calls.filter(
     ({ action }) => action === "history-statistics",
   ).length;
   for (const listener of fixture.storageListeners)
     listener(
       {
-        youtube_duration_state: {
-          oldValue: { cacheRevision: "before" },
-          newValue: { cacheRevision: "after" },
+        youtube_duration_cache_revision: {
+          oldValue: "before",
+          newValue: "after",
         },
       },
       "local",

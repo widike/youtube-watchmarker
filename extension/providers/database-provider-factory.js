@@ -4,6 +4,8 @@ import { IndexedDBProvider } from "./indexeddb-provider.js";
 import { HistorySync } from "./provider-sync.js";
 import { YouTubeDeletionQueue } from "../sources/youtube-deletion-queue.js";
 import { pendingWatchTimeCount } from "../history/watch-time-replication.js";
+import { pendingDurationCount } from "../duration/duration-replication.js";
+import { DurationStorage } from "../duration/duration-storage.js";
 import {
   OUTBOX_STORE,
   readMetadata,
@@ -17,7 +19,12 @@ export class DatabaseProviderFactory {
   setDatabaseManager(manager) {
     this.databaseManager = manager;
     this.indexedDBProvider = new IndexedDBProvider(manager);
-    this.sync = new HistorySync(manager.database, supabaseDatabaseProvider);
+    this.sync = new HistorySync(
+      manager.database,
+      supabaseDatabaseProvider,
+      Date.now,
+      () => new DurationStorage(() => manager.database).notifyCacheChanged(),
+    );
     this.youtubeDeletions = new YouTubeDeletionQueue(manager.database);
   }
 
@@ -143,7 +150,8 @@ export class DatabaseProviderFactory {
       pending:
         pending +
         youtubeJobs.length +
-        (await pendingWatchTimeCount(this.databaseManager.database)),
+        (await pendingWatchTimeCount(this.databaseManager.database)) +
+        (await pendingDurationCount(this.databaseManager.database)),
       ...((await readMetadata(this.databaseManager.database, "syncStatus")) ||
         {}),
     };

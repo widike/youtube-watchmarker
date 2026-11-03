@@ -229,6 +229,7 @@ export class ProviderController {
         "20261101050000_anonymous_access_hardening.sql",
         "20261101060000_captcha_configuration.sql",
         "20261101070000_short_connection_codes.sql",
+        "20261103000000_video_duration_sync.sql",
       ];
       const sql = await Promise.all(
         migrations.map(async (name) => {

@@ -7,53 +7,165 @@ export async function verifyReconciliationControls({
   location.hash = "sync";
   await waitFor(() => !$("#panel-sync").hidden);
   const root = $("[data-reconciliation]");
-  const button = (operation) =>
-    root.querySelector(`[data-reconcile="${operation}"]`);
+  const primary = root.querySelector("[data-reconcile-primary]");
+  const cancel = root.querySelector('[data-reconcile="decline"]');
   const fixture = window.statisticsFixture.reconciliation;
-  await waitFor(() => !button("preview").disabled);
+  const idle = () => root.getAttribute("aria-busy") === "false";
+  const waitForAction = (operation) =>
+    waitFor(() => idle() && primary.dataset.reconcile === operation);
+  const visibleButtons = () =>
+    [...root.querySelectorAll("button")].filter((button) => !button.hidden);
+  await waitForAction("preview");
   assert(fixture.approved === 0, "Opening settings applied a repair");
-  button("preview").click();
-  await waitFor(() => button("approve") && !button("approve").disabled);
+  assert(visibleButtons().length === 1, "Idle cleanup has extra actions");
+  assert(!root.querySelector("[data-reconcile-copy]"), "Cleanup exposes SQL");
+  primary.focus();
+  primary.click();
+  assert(primary.disabled, "Scan allows repeated requests");
+  assert(root.getAttribute("aria-busy") === "true", "Scan is not announced");
+  await waitForAction("approve");
+  assert(!primary.disabled, "Preview cannot be approved");
+  assert(document.activeElement === primary, "Scan lost keyboard focus");
   assert(
-    root.textContent.includes("1,000") || root.textContent.includes("1.000"),
-    "Missing aggregate batch count",
+    root.textContent.includes("1,000 duplicate watches") ||
+      root.textContent.includes("1.000 duplicate watches"),
+    "Missing clear cleanup impact",
   );
   assert(
-    root.querySelectorAll("input[type=checkbox]").length === 0,
-    "Videos require individual approval",
+    !root.querySelector(".summary-list, input[type=checkbox]"),
+    "Cleanup exposes unrelated statistics or individual approval",
   );
+  assert(visibleButtons().length === 2, "Preview has extra actions");
+  const examples = root.querySelector("details");
+  assert(examples && !examples.open, "Video details should start collapsed");
+  examples.open = true;
   assert(
-    root.querySelectorAll('[data-reconcile="approve"]').length === 1,
-    "Missing single batch approval",
+    examples.textContent.includes("Affected example") &&
+      examples.textContent.includes("2") &&
+      examples.textContent.includes("1"),
+    "Review does not show affected videos and count changes",
   );
-  assert(fixture.approved === 0, "Preview applied the repair");
-  button("decline").click();
-  await waitFor(() => root.textContent.includes("Batch declined"));
+  const frame = document.createElement("iframe");
+  frame.title = "Narrow import cleanup review";
+  frame.style.cssText =
+    "position:fixed;inset:0;width:320px;height:650px;border:0";
+  const loaded = new Promise((resolve) =>
+    frame.addEventListener("load", resolve, { once: true }),
+  );
+  frame.srcdoc = `<!doctype html><html><head>
+    <link rel="stylesheet" href="/extension/content/ui.css">
+    <link rel="stylesheet" href="/extension/content/options.css">
+    <style>body { padding: 16px; }</style>
+    </head><body>${root.outerHTML}</body></html>`;
+  document.body.append(frame);
+  try {
+    await loaded;
+    assert(
+      frame.contentDocument.documentElement.scrollWidth <= 320,
+      "Expanded cleanup review overflows at 320px",
+    );
+  } finally {
+    frame.remove();
+  }
+  assert(fixture.approved === 0, "Preview applied the cleanup");
+  cancel.click();
+  await waitForAction("preview");
+  assert(root.textContent.includes("No changes made"), "Cancel is unclear");
   assert(
     fixture.approved === 0 && fixture.declined === 1,
-    "Decline changed history",
+    "Cancel changed history",
   );
   fixture.ready = false;
-  button("preview").click();
+  primary.click();
   await waitFor(
-    () => button("approve") && root.textContent.includes("Supabase migration"),
+    () => idle() && root.textContent.includes("Supabase migration"),
   );
-  assert(button("approve").disabled, "Approval allowed without server support");
-  fixture.ready = true;
-  button("preview").click();
-  await waitFor(() => button("approve") && !button("approve").disabled);
-  button("approve").click();
-  await waitFor(
-    () => button("sync") && root.textContent.includes("verification pending"),
-  );
-  assert(fixture.approved === 1, "Batch required more than one approval");
-  button("sync").click();
-  await waitFor(() => root.textContent.includes("sync verified"));
-  assert(fixture.approved === 1, "Sync retry reapplied the batch approval");
   assert(
-    document.documentElement.scrollWidth <= innerWidth,
-    "Reconciliation preview overflows",
+    primary.dataset.reconcile === "preview" &&
+      primary.textContent === "Check again",
+    "Blocked cleanup allows approval or has no readiness retry",
   );
+  fixture.ready = true;
+  primary.click();
+  await waitForAction("approve");
+  primary.click();
+  primary.click();
+  await waitForAction("sync");
+  assert(
+    root.textContent.includes("Cloud sync is pending"),
+    "Missing sync state",
+  );
+  assert(fixture.approved === 1, "Cleanup required multiple approvals");
+  assert(visibleButtons().length === 1, "Completed cleanup has extra actions");
+  primary.click();
+  await waitForAction("preview");
+  assert(
+    root.textContent.includes("Cloud sync verified"),
+    "Missing sync result",
+  );
+  assert(fixture.approved === 1, "Sync retry reapplied the cleanup");
+
+  // Exercise persisted and failed states through the same controller and DOM.
+  const { ReconciliationController } = await import(
+    "../../extension/content/options/reconciliation-controller.js"
+  );
+  const copy = root.cloneNode(true);
+  copy
+    .querySelectorAll("[id]")
+    .forEach((element) => element.removeAttribute("id"));
+  root.after(copy);
+  let fail = true;
+  const controller = new ReconciliationController({
+    root: copy,
+    client: {
+      sendMessage: async () => {
+        if (fail) throw new Error("Connection interrupted. Try again.");
+        return {
+          success: true,
+          plan: { ...fixture.plan, status: "applying" },
+          cloud: { ready: true },
+        };
+      },
+    },
+    onDataChanged: async () => {},
+  });
+  try {
+    const action = copy.querySelector("[data-reconcile-primary]");
+    await controller.run("status");
+    assert(
+      action.dataset.reconcile === "status" &&
+        !action.disabled &&
+        copy.textContent.includes("Connection interrupted"),
+      "Failed load cannot be retried safely",
+    );
+    fail = false;
+    await controller.run("status");
+    assert(
+      action.textContent === "Resume cleanup" &&
+        !action.disabled &&
+        action.dataset.reconcile === "approve",
+      "Interrupted cleanup has no resume action",
+    );
+    controller.response = {
+      plan: { ...fixture.plan, status: "preview", removed: 0, videos: 0 },
+      cloud: { ready: false },
+    };
+    controller.render();
+    assert(
+      copy.textContent.includes("No duplicate imports found") &&
+        action.dataset.reconcile === "preview" &&
+        !action.disabled &&
+        !copy.querySelector("details") &&
+        copy.querySelector('[data-reconcile="decline"]').hidden,
+      "Empty scan exposes unnecessary cleanup or setup controls",
+    );
+    assert(
+      document.documentElement.scrollWidth <= innerWidth,
+      "Cleanup overflows",
+    );
+  } finally {
+    copy.remove();
+  }
   location.hash = "statistics";
   await waitFor(() => !$("#panel-statistics").hidden && ready());
 }

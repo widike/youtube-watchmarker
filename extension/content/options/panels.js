@@ -1,10 +1,10 @@
 // Keep settings markup separate from the history shell. Only bundled files load.
-export async function loadSettingsPanels() {
+async function loadFragments(attribute, allowed) {
   await Promise.all(
-    [...document.querySelectorAll("[data-settings-panel]")].map(
+    [...document.querySelectorAll(`[${attribute}]`)].map(
       async (placeholder) => {
-        const name = placeholder.dataset.settingsPanel;
-        if (!["sync", "preferences", "statistics"].includes(name)) return;
+        const name = placeholder.getAttribute(attribute);
+        if (!allowed.includes(name)) return;
         const response = await fetch(
           new URL(`./${name}.html`, import.meta.url),
         );
@@ -13,4 +13,13 @@ export async function loadSettingsPanels() {
       },
     ),
   );
+}
+
+export async function loadSettingsPanels() {
+  await loadFragments("data-settings-panel", [
+    "sync",
+    "preferences",
+    "statistics",
+  ]);
+  await loadFragments("data-settings-fragment", ["reconciliation"]);
 }

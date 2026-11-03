@@ -114,7 +114,4 @@
   .settings-card > [role="status"]:not(:empty) {
     margin-block-start: var(--space-3);
   }
-  [data-reconcile-preview]:not(:empty) {
-    margin-block-start: var(--space-5);
-  }
 }

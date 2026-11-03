@@ -33,11 +33,8 @@ export class LibraryController extends HistorySearchController {
         void this.refreshMetadata();
     };
     this.onDurationChange = (changes, area) => {
-      const change = changes.youtube_duration_state;
-      if (
-        area === "local" &&
-        change?.newValue?.cacheRevision !== change?.oldValue?.cacheRevision
-      )
+      const change = changes.youtube_duration_cache_revision;
+      if (area === "local" && change?.newValue !== change?.oldValue)
         this.onMetadataRefresh();
     };
     chrome.storage.onChanged.addListener(this.onDurationChange);

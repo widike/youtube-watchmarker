@@ -67,6 +67,7 @@ test("API requests persist missing-video skip markers and retry returned live du
     strIdent: ids[1],
     seconds: null,
     unavailable: true,
+    fetchedAt: now,
   });
   assert.equal(rows[2].expiresAt, now + PENDING_DURATION_TTL);
   assert.equal(rows[2].unavailable, undefined);
@@ -111,8 +112,8 @@ test("unfinished streams never supply estimated viewing time, even with a nonzer
 test("videoNotFound skips a single video and requires isolation for a failed batch", async () => {
   const fetcher = async () =>
     response(404, { error: { errors: [{ reason: "videoNotFound" }] } });
-  assert.deepEqual(await fetchDurations([id], "key", { fetcher }), [
-    { strIdent: id, seconds: null, unavailable: true },
+  assert.deepEqual(await fetchDurations([id], "key", { fetcher, now }), [
+    { strIdent: id, seconds: null, unavailable: true, fetchedAt: now },
   ]);
   await assert.rejects(
     fetchDurations([id, "missing____"], "key", { fetcher }),

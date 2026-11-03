@@ -61,7 +61,6 @@ export class DurationBackfill {
           ...state,
           status: "paused",
           error: "",
-          cacheRevision: crypto.randomUUID(),
         });
       } else if (command === "pause") {
         await this.storage.saveConfig({ ...config, enabled: false });
@@ -236,7 +235,6 @@ export class DurationBackfill {
           ...state,
           failures: 0,
           pendingBatches: pendingBatches.slice(1),
-          cacheRevision: crypto.randomUUID(),
         },
         "running",
         Math.max(now + BATCH_INTERVAL, this.clock() + BATCH_INTERVAL),

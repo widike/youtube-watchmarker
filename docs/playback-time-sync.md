@@ -50,7 +50,9 @@ connection and its existing recipients. Video-array JSON exports remain video
 exports; cloud restoration, rather than those exports, recovers duration data.
 
 Historical video-length estimates remain explicitly marked as estimates; they
-are not recovered measurements. Their optional API cache is a separate feature.
+are not recovered measurements. Their optional API cache also syncs across Macs
+after applying `20261103000000_video_duration_sync.sql`; see
+[historical duration estimates](historical-duration-estimates.md).
 Past actual playback that no client measured cannot be reconstructed.
 
 ## Validation

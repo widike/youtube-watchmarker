@@ -307,7 +307,8 @@ Normal restoration does not require an exported file.
    followed by [playback-time sync](supabase/migrations/20261101040000_playback_time_sync.sql)
    followed by [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
    followed by [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
-   and [short connection codes](supabase/migrations/20261101070000_short_connection_codes.sql)
+   followed by [short connection codes](supabase/migrations/20261101070000_short_connection_codes.sql)
+   and [video duration sync](supabase/migrations/20261103000000_video_duration_sync.sql)
    in the project's SQL Editor. All eight preserve existing history.
    **Sync & data → First device setup → Copy setup SQL** copies all eight in order.
    Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)

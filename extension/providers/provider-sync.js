@@ -9,6 +9,7 @@ import {
 export { mergeVideoData } from "../history/history-records.js";
 
 import { syncWatchTime } from "../history/watch-time-sync.js";
+import { syncDurations } from "../duration/duration-sync.js";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -22,10 +23,11 @@ export async function importVideosInBatches(provider, videos, batchSize = 100) {
 // No watch-date watermark: imports can contain arbitrarily old watches.
 // The outbox tracks local changes; stable ID pages reconcile the remote union.
 export class HistorySync {
-  constructor(db, remote, now = Date.now) {
+  constructor(db, remote, now = Date.now, durationsChanged = async () => {}) {
     this.db = db;
     this.remote = remote;
     this.now = now;
+    this.durationsChanged = durationsChanged;
     this.running = null;
   }
 
@@ -83,6 +85,12 @@ export class HistorySync {
         deadline: Math.min(deadline, this.now() + 6000),
         forceDownload,
       });
+      const durations = await syncDurations(this.db, this.remote, {
+        now: this.now,
+        deadline: Math.min(deadline, this.now() + 4000),
+        forceDownload,
+        onDownloaded: this.durationsChanged,
+      });
       let after = (await readMetadata(this.db, "downloadAfter")) || "";
       const lastDownload = (await readMetadata(this.db, "lastDownload")) || 0;
       const shouldDownload =
@@ -113,10 +121,17 @@ export class HistorySync {
         downloaded,
         timeUploaded: time.uploaded,
         timeDownloaded: time.downloaded,
-        inProgress: !complete || pending || !time.complete,
+        durationsUploaded: durations.uploaded,
+        durationsDownloaded: durations.downloaded,
+        inProgress:
+          !complete || pending || !time.complete || !durations.complete,
         lastAttempt: this.now(),
         lastSuccess:
-          shouldDownload && complete && !pending && time.complete
+          shouldDownload &&
+          complete &&
+          !pending &&
+          time.complete &&
+          durations.complete
             ? this.now()
             : previous.lastSuccess || 0,
       };

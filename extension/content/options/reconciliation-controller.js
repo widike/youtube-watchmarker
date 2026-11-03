@@ -1,108 +1,148 @@
 import { escape, number } from "../../ui/statistics-format.js";
 
+const count = (value, singular, plural = `${singular}s`) =>
+  `${number(value)} ${value === 1 ? singular : plural}`;
+
 export class ReconciliationController {
   constructor({ root, client, onDataChanged }) {
     Object.assign(this, { root, client, onDataChanged });
+    this.response = {};
   }
 
   initialize() {
     this.root.addEventListener("click", (event) => {
-      if (event.target.closest("[data-reconcile-copy]"))
-        void this.copyMigration();
       const button = event.target.closest("[data-reconcile]");
-      if (button) void this.run(button.dataset.reconcile);
+      if (button && !button.disabled) void this.run(button.dataset.reconcile);
     });
     void this.run("status");
-  }
-
-  async copyMigration() {
-    const status = this.root.querySelector("[data-reconcile-status]");
-    try {
-      const response = await fetch(
-        chrome.runtime.getURL(
-          "supabase/migrations/20261101030000_import_reconciliation.sql",
-        ),
-      );
-      if (!response.ok) throw new Error("Repair SQL could not be loaded.");
-      await navigator.clipboard.writeText(await response.text());
-      status.textContent = "SQL copied. Run in Supabase SQL Editor.";
-    } catch (error) {
-      status.textContent = error.message;
-    }
   }
 
   async run(operation) {
     if (this.busy) return;
     this.busy = true;
+    const primary = this.root.querySelector("[data-reconcile-primary]");
+    const restoreFocus = this.root.contains(document.activeElement);
+    this.root.setAttribute("aria-busy", "true");
     this.root
       .querySelectorAll("button")
       .forEach((button) => (button.disabled = true));
     const status = this.root.querySelector("[data-reconcile-status]");
-    if (operation !== "status")
-      status.textContent =
-        operation === "preview"
-          ? "Checking…"
-          : operation === "decline"
-            ? "Declining…"
-            : "Applying…";
+    const progress = {
+      status: "Loading…",
+      preview: "Checking imports…",
+      decline: "Cancelling…",
+      approve: "Cleaning up and syncing…",
+      sync: "Retrying sync…",
+    }[operation];
+    primary.innerHTML = `<span class="busy-spinner" aria-hidden="true"></span>${escape(primary.textContent.trim())}`;
+    status.textContent = progress;
     try {
       const response = await this.client.sendMessage({
         action: "history-reconcile",
         operation,
-        planId: this.plan?.id,
+        planId: this.response.plan?.id,
       });
       if (!response?.success)
-        throw new Error(response?.error || "Reconciliation failed.");
-      this.plan = response.plan;
-      this.render(response);
+        throw new Error(response?.error || "Cleanup could not be completed.");
+      this.response = response;
+      this.render();
       if (["approve", "sync"].includes(operation)) await this.onDataChanged();
     } catch (error) {
+      this.render();
+      if (operation === "status") {
+        primary.dataset.reconcile = "status";
+        primary.textContent = "Try again";
+      }
       status.textContent = error.message;
-      this.root
-        .querySelectorAll("button")
-        .forEach((button) => (button.disabled = false));
+      status.dataset.error = "true";
     } finally {
       this.busy = false;
+      this.root.setAttribute("aria-busy", "false");
+      if (restoreFocus) primary.focus();
     }
   }
 
-  render({ plan, cloud, report, sync }) {
+  render() {
+    const { plan, cloud, report, sync } = this.response;
     const content = this.root.querySelector("[data-reconcile-preview]");
     const status = this.root.querySelector("[data-reconcile-status]");
-    this.root.querySelector("[data-reconcile-copy]").disabled = false;
-    this.root.querySelector('[data-reconcile="preview"]').disabled =
-      plan?.status === "applying";
-    if (!plan) {
+    const primary = this.root.querySelector("[data-reconcile-primary]");
+    const cancel = this.root.querySelector('[data-reconcile="decline"]');
+    const applied = plan?.status === "applied";
+    const applying = plan?.status === "applying";
+    const preview = plan?.status === "preview";
+    const verified = Boolean(sync ? sync.verified : report?.cloudVerifiedAt);
+    const needsSync = applied && !verified;
+    const hasChanges = preview && plan.removed > 0;
+    const blocked = (hasChanges || applying || needsSync) && !cloud?.ready;
+
+    primary.dataset.reconcile =
+      hasChanges || applying ? "approve" : needsSync ? "sync" : "preview";
+    primary.textContent = applying
+      ? "Resume cleanup"
+      : hasChanges
+        ? "Clean up imports"
+        : needsSync
+          ? "Retry sync"
+          : plan && plan.status !== "declined"
+            ? "Check again"
+            : "Check imports";
+    primary.disabled = false;
+    cancel.hidden = !hasChanges;
+    cancel.disabled = false;
+    status.dataset.error = "false";
+    status.textContent = blocked
+      ? cloud?.error || "Finish setting up Cloud sync above, then check again."
+      : plan?.status === "declined"
+        ? "Cancelled. No changes made."
+        : "";
+    // A blocked preview still needs a way to recheck readiness after setup.
+    if (blocked) {
+      primary.dataset.reconcile = applying || needsSync ? "status" : "preview";
+      primary.textContent = "Check again";
+    }
+
+    if (!plan || plan.status === "declined") {
       content.innerHTML = "";
-      status.textContent = "";
       return;
     }
-    if (plan.status === "declined") {
-      content.innerHTML = "";
-      status.textContent = "Batch declined";
-      return;
+    const title = applied
+      ? "Cleanup complete"
+      : applying
+        ? "Cleanup paused"
+        : hasChanges
+          ? `${count(plan.removed, "duplicate watch", "duplicate watches")} found`
+          : "No duplicate imports found";
+    const description = applied
+      ? `${count(report?.removed ?? plan.removed, "duplicate watch", "duplicate watches")} removed. ${verified ? "Cloud sync verified." : "Saved on this device. Cloud sync is pending."}`
+      : applying
+        ? "Continue the cleanup you already approved."
+        : hasChanges
+          ? `Watch counts will be corrected for ${count(plan.videos, "video")}.`
+          : "Your imported watch counts are up to date.";
+    const showExamples = hasChanges || applying;
+    const detailsOpen = content.querySelector("details")?.open;
+    content.innerHTML = `
+      <div class="reconciliation-result" data-complete="${applied || (preview && !hasChanges)}">
+        <span class="reconciliation-icon" aria-hidden="true"><i class="fas ${applied || (preview && !hasChanges) ? "fa-check" : "fa-layer-group"}"></i></span>
+        <div><h3>${title}</h3><p>${description}</p></div>
+      </div>
+      ${showExamples && plan.examples?.length ? this.examples(plan, detailsOpen) : ""}`;
+    if (needsSync && sync?.error) {
+      status.textContent = sync.error;
+      status.dataset.error = "true";
     }
-    const approved = ["applying", "applied"].includes(plan.status);
-    content.innerHTML = `<dl class="summary-list"><dt>Exclude imports</dt><dd>${number(plan.removed)}</dd>
-      <dt>Videos</dt><dd>${number(plan.videos)} of ${number(plan.scanned)}</dd>
-      <dt>Watch counts</dt><dd>${number(plan.before)} → ${number(plan.after)}</dd>
-      <dt>Playback sessions</dt><dd>${number(plan.playbacks)}</dd>
-      <dt>Undated counts</dt><dd>${number(plan.undated)}</dd></dl>
-      ${plan.examples.length ? `<details><summary>Examples (${plan.examples.length} of ${number(plan.videos)})</summary><ul>${plan.examples.map((row) => `<li>${escape(row.strTitle || row.strIdent)} · ${number(row.before)} → ${number(row.after)}</li>`).join("")}</ul></details>` : ""}
-      <div class="toolbar-actions">${
-        plan.status === "applied"
-          ? '<button class="quiet-button" data-reconcile="sync">Verify sync</button>'
-          : `<button class="quiet-button" data-reconcile="approve" title="Exclude redundant imports; original events retained" ${!cloud?.ready || !plan.removed ? "disabled" : ""}>${approved ? "Resume batch" : "Approve batch"}</button>${!approved ? '<button class="quiet-button" data-reconcile="decline">Decline batch</button>' : ""}`
-      }</div>`;
-    if (plan.status === "applied")
-      status.textContent = (sync ? sync.verified : report?.cloudVerifiedAt)
-        ? `${number(report.removed)} reconciled · sync verified`
-        : `Saved · sync verification pending${sync?.error ? ` · ${sync.error}` : ""}`;
-    else if (plan.status === "applying")
-      status.textContent = "Batch incomplete · resume to continue";
-    else
-      status.textContent = cloud?.ready
-        ? ""
-        : cloud?.error || "Supabase is not ready.";
+  }
+
+  examples(plan, open) {
+    return `<details class="reconciliation-examples" ${open ? "open" : ""}>
+      <summary>Review affected videos${plan.videos > plan.examples.length ? ` · first ${number(plan.examples.length)}` : ""}</summary>
+      <ul>${plan.examples
+        .map(
+          (row) => `<li><span>${escape(row.strTitle || row.strIdent)}</span>
+          <span class="reconciliation-count" aria-label="${number(row.before)} watches before, ${number(row.after)} after">${number(row.before)} <span aria-hidden="true">→</span> ${number(row.after)}</span></li>`,
+        )
+        .join("")}</ul>
+    </details>`;
   }
 }

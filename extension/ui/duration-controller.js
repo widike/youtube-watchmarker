@@ -51,9 +51,10 @@ export class DurationController {
       enabled && ["quota", "retry"].includes(status) && nextAttemptAt
         ? ` · Next attempt ${new Date(nextAttemptAt).toLocaleString()}`
         : "";
-    this.status.textContent = configured
-      ? `${messages[status] || "Ready"} · ${available.toLocaleString()} / ${total.toLocaleString()} videos${unavailable ? ` · ${unavailable.toLocaleString()} unavailable` : ""}${retry}`
-      : "";
+    this.status.textContent =
+      configured || available || unavailable
+        ? `${configured ? messages[status] || "Ready" : "Available"} · ${available.toLocaleString()} / ${total.toLocaleString()} videos${unavailable ? ` · ${unavailable.toLocaleString()} unavailable` : ""}${retry}`
+        : "";
     this.root.querySelector(".duration-api-link").hidden = configured;
     const input = this.form.querySelector("input");
     input.placeholder = configured ? "Replace saved key" : "";
@@ -62,7 +63,7 @@ export class DurationController {
     this.form.querySelector('[data-duration-command="pause"]').disabled =
       !enabled;
     this.form.querySelector('[data-duration-command="forget"]').disabled =
-      !configured;
+      !configured && !available && !unavailable;
   }
 
   updateSubmitLabel() {
@@ -143,7 +144,9 @@ export class DurationController {
         this.form.querySelector('[data-duration-command="pause"]').disabled =
           !this.backfill.enabled;
         this.form.querySelector('[data-duration-command="forget"]').disabled =
-          !this.backfill.configured;
+          !this.backfill.configured &&
+          !this.backfill.available &&
+          !this.backfill.unavailable;
       }
       if (!this.disposed)
         this.timer = setTimeout(() => void this.refresh(), 5000);

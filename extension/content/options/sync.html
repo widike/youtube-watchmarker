@@ -342,7 +342,7 @@
             data-duration-command="forget"
             disabled
           >
-            Remove key &amp; cache
+            Remove key &amp; local cache
           </button>
         </div>
         <div class="duration-api-link">
@@ -379,22 +379,6 @@
         /></label>
       </div>
     </section>
-    <section
-      class="surface-card settings-card"
-      aria-labelledby="reconciliation-heading"
-      data-reconciliation
-    >
-      <div class="section-heading">
-        <div>
-          <h2 id="reconciliation-heading">Import cleanup</h2>
-        </div>
-      </div>
-      <div class="toolbar-actions">
-        <button class="quiet-button" data-reconcile="preview">Preview</button>
-        <button class="quiet-button" data-reconcile-copy>Copy SQL</button>
-      </div>
-      <div data-reconcile-preview></div>
-      <p data-reconcile-status role="status"></p>
-    </section>
+    <div data-settings-fragment="reconciliation"></div>
   </div>
 </section>

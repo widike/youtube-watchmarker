@@ -293,9 +293,9 @@ try {
     for (const listener of fixture.storageListeners)
       listener(
         {
-          youtube_duration_state: {
-            oldValue: { cacheRevision: "before" },
-            newValue: { cacheRevision: "after" },
+          youtube_duration_cache_revision: {
+            oldValue: "before",
+            newValue: "after",
           },
         },
         "local",

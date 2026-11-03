@@ -3,9 +3,8 @@ const ENDPOINT = "https://www.googleapis.com/youtube/v3/videos";
 export const DURATION_TTL = 29 * 24 * 60 * 60 * 1000;
 export const PENDING_DURATION_TTL = 24 * 60 * 60 * 1000;
 
-function unavailableVideo(strIdent) {
-  // A local skip marker, separate from expiring YouTube duration metadata.
-  return { strIdent, seconds: null, unavailable: true };
+function unavailableVideo(strIdent, now) {
+  return { strIdent, seconds: null, unavailable: true, fetchedAt: now };
 }
 
 export function parseDuration(value) {
@@ -113,7 +112,7 @@ export async function fetchDurations(
         retryAfter,
       );
     if (response.status === 404 && reasons.has("videoNotFound")) {
-      if (ids.length === 1) return ids.map(unavailableVideo);
+      if (ids.length === 1) return ids.map((id) => unavailableVideo(id, now));
       // A batch error does not identify which video is missing.
       throw new DurationRequestError("not-found", "A video is unavailable.");
     }
@@ -140,7 +139,7 @@ export async function fetchDurations(
     ]),
   );
   return ids.map((strIdent) => {
-    if (!durations.has(strIdent)) return unavailableVideo(strIdent);
+    if (!durations.has(strIdent)) return unavailableVideo(strIdent, now);
     const seconds = durations.get(strIdent) || null;
     return {
       strIdent,

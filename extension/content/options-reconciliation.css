@@ -1,0 +1,92 @@
+@layer pages {
+  [data-reconciliation] .section-heading {
+    margin-block-end: var(--space-4);
+  }
+  .reconciliation-result {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--soft);
+    border-radius: var(--radius-control);
+  }
+  .reconciliation-result[data-complete="true"] {
+    background: var(--accent-soft);
+  }
+  .reconciliation-icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    inline-size: 32px;
+    block-size: 32px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .reconciliation-result h3 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .reconciliation-result > div {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+  .settings-card .reconciliation-examples {
+    border-top: 0;
+    padding-block: var(--space-3) 0;
+  }
+  .reconciliation-examples summary {
+    color: var(--muted);
+  }
+  .reconciliation-examples ul {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-2) 0 0;
+  }
+  .reconciliation-examples li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding-block: var(--space-2);
+    border-top: 1px solid var(--line);
+    font-size: var(--font-small);
+  }
+  .reconciliation-examples li > :first-child {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+  .reconciliation-count {
+    flex-shrink: 0;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .reconciliation-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-4);
+    margin-block-start: var(--space-4);
+  }
+  .reconciliation-footer [role="status"] {
+    flex: 1 1 220px;
+    line-height: 1.5;
+  }
+  .reconciliation-footer [data-error="true"] {
+    color: var(--danger);
+  }
+  .reconciliation-cancel {
+    padding: var(--space-2) var(--space-3);
+    min-block-size: var(--control-height);
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--font-control);
+  }
+  .reconciliation-cancel:hover {
+    background: var(--soft);
+    color: var(--ink);
+  }
+}

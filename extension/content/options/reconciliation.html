@@ -1,0 +1,38 @@
+<section
+  class="surface-card settings-card"
+  aria-labelledby="reconciliation-heading"
+  data-reconciliation
+>
+  <div class="section-heading">
+    <div>
+      <h2 id="reconciliation-heading">Import cleanup</h2>
+      <p>
+        Remove duplicate watches from imports. Your videos and recorded playback
+        stay untouched.
+      </p>
+    </div>
+  </div>
+  <div data-reconcile-preview aria-live="polite" aria-atomic="true"></div>
+  <div class="reconciliation-footer">
+    <div class="toolbar-actions">
+      <button
+        type="button"
+        class="primary-button"
+        data-reconcile-primary
+        data-reconcile="preview"
+        disabled
+      >
+        Check imports
+      </button>
+      <button
+        type="button"
+        class="reconciliation-cancel"
+        data-reconcile="decline"
+        hidden
+      >
+        Cancel
+      </button>
+    </div>
+    <p data-reconcile-status role="status" aria-atomic="true">Loading…</p>
+  </div>
+</section>

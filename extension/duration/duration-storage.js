@@ -4,8 +4,13 @@ import {
   transactionDone,
 } from "../history/history-storage.js";
 import { WebEncryption } from "../providers/web-encryption.js";
+import {
+  DURATION_PREFIX as PREFIX,
+  DURATION_OUTBOX,
+  durationRange,
+} from "./duration-records.js";
+import { mergeDurations } from "./duration-replication.js";
 
-const PREFIX = "video-duration:";
 const CONFIG_KEY = "youtube_duration_config";
 const STATE_KEY = "youtube_duration_state";
 
@@ -44,6 +49,13 @@ export class DurationStorage {
     await this.local.set({ [STATE_KEY]: state });
   }
 
+  async notifyCacheChanged() {
+    // Keep metadata notifications separate from backfill quota/retry state.
+    await this.local.set({
+      youtube_duration_cache_revision: crypto.randomUUID(),
+    });
+  }
+
   async readCache(now = Date.now()) {
     const tx = this.database().transaction(META_STORE, "readwrite");
     const done = transactionDone(tx);
@@ -54,7 +66,12 @@ export class DurationStorage {
     request.onsuccess = () => {
       for (const row of request.result) {
         if (row.unavailable === true || row.expiresAt > now) rows.push(row);
-        else tx.objectStore(META_STORE).delete(`${PREFIX}${row.strIdent}`);
+        else {
+          tx.objectStore(META_STORE).delete(`${PREFIX}${row.strIdent}`);
+          tx.objectStore(META_STORE).delete(
+            `${DURATION_OUTBOX}${row.strIdent}`,
+          );
+        }
       }
     };
     await done;
@@ -62,23 +79,19 @@ export class DurationStorage {
   }
 
   async writeCache(rows) {
-    const tx = this.database().transaction(META_STORE, "readwrite", {
-      durability: "strict",
-    });
-    const done = transactionDone(tx);
-    for (const row of rows)
-      tx.objectStore(META_STORE).put(row, `${PREFIX}${row.strIdent}`);
-    await done;
+    if (await mergeDurations(this.database(), rows, { pending: true }))
+      await this.notifyCacheChanged();
   }
 
   async clearCache() {
     const tx = this.database().transaction(META_STORE, "readwrite");
     const done = transactionDone(tx);
     const store = tx.objectStore(META_STORE);
-    const keys = await readRequest(
-      store.getAllKeys(IDBKeyRange.bound(PREFIX, `${PREFIX}\uffff`)),
-    );
-    for (const key of keys) store.delete(key);
+    for (const prefix of [PREFIX, DURATION_OUTBOX]) {
+      const keys = await readRequest(store.getAllKeys(durationRange(prefix)));
+      for (const key of keys) store.delete(key);
+    }
     await done;
+    await this.notifyCacheChanged();
   }
 }

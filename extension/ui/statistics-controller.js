@@ -19,10 +19,10 @@ export class StatisticsController {
       return;
     }
     this.onDurationChange = (changes, area) => {
-      const change = changes.youtube_duration_state;
+      const change = changes.youtube_duration_cache_revision;
       if (
         area === "local" &&
-        change?.newValue?.cacheRevision !== change?.oldValue?.cacheRevision &&
+        change?.newValue !== change?.oldValue &&
         !this.root.hidden &&
         !document.hidden
       )

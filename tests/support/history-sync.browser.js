@@ -1,4 +1,6 @@
 import { testWatchTimeSync } from "./watch-time-sync.browser.js";
+import { testDurationSync } from "./duration-sync.browser.js";
+import { remote } from "./memory-cloud.js";
 import { DATABASE } from "../../extension/shared/constants.js";
 import {
   acknowledgeVideos,
@@ -15,10 +17,7 @@ import {
 import { IndexedDBProvider } from "../../extension/providers/indexeddb-provider.js";
 import { deleteVideo } from "../../extension/history/history-storage.js";
 import { HistorySync } from "../../extension/providers/provider-sync.js";
-import {
-  mergeVideoData,
-  isDeleted,
-} from "../../extension/history/history-records.js";
+import { isDeleted } from "../../extension/history/history-records.js";
 import { DatabaseProviderFactory } from "../../extension/providers/database-provider-factory.js";
 import { recordPlayback } from "../../extension/history/history-playback.js";
 import { testPlaybackDurability } from "./playback-durability.browser.js";
@@ -60,39 +59,6 @@ const test = async (name, run) => {
     results.push({ name, passed: false, error: error.stack });
   }
 };
-function remote() {
-  const records = new Map();
-  const times = new Map();
-  return {
-    times,
-    importWatchTime: async (rows) => {
-      for (const row of rows)
-        if ((times.get(row.snapshotId)?.milliseconds || 0) < row.milliseconds)
-          times.set(row.snapshotId, row);
-      return true;
-    },
-    getWatchTimePage: async (after) =>
-      [...times.values()]
-        .filter((row) => row.snapshotId > after)
-        .sort((a, b) => (a.snapshotId < b.snapshotId ? -1 : 1))
-        .slice(0, 2),
-    isConnected: true,
-    records,
-    importVideos: async (rows) => {
-      for (const row of rows)
-        records.set(
-          row.strIdent,
-          mergeVideoData([records.get(row.strIdent)].filter(Boolean), [row])[0],
-        );
-      return true;
-    },
-    getVideoPage: async (after) =>
-      [...records.values()]
-        .filter((row) => row.strIdent > after)
-        .sort((a, b) => a.strIdent.localeCompare(b.strIdent))
-        .slice(0, 2),
-  };
-}
 
 await test("upgrade preserves records and seeds pending uploads atomically", async () => {
   const name = crypto.randomUUID();
@@ -371,6 +337,7 @@ await testPlaybackDurability({ test, database, open, assert });
 await testWatchEvents({ test, database, open, remote, assert });
 await testHistoryReconciliation({ test, database, open, remote, assert });
 await testWatchTimeSync({ test, database, remote, open, assert });
+await testDurationSync({ test, database, remote, open, assert });
 await testTitleRecovery({ test, database, assert });
 await testVideoDeletion({ test, database, assert });
 await testHistoryReads({ test, database, assert });

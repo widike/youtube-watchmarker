@@ -7,8 +7,27 @@ In **Sync & data → Backfill video durations**, enter an API key with YouTube
 Data API v3 enabled and select **Save & start**. To replace a saved key, paste
 the new key and select **Save & resume**. The key is encrypted in local storage;
 it is sent only to the official API and is never synced or returned in status
-responses. **Pause** stops background requests; **Remove key & cache** also
-removes cached lengths, preserving timestamp-based estimates and measured playback.
+responses. **Pause** stops background requests; **Remove key & local cache** also
+removes cached lengths on this Mac, preserving timestamp-based estimates and
+measured playback.
+
+Video lengths and unavailable-video markers sync through Supabase alongside
+history and measured playback. Apply
+`supabase/migrations/20261103000000_video_duration_sync.sql` to existing projects;
+**Copy setup SQL** includes it for new or existing projects. Reload the updated
+extension on both Macs, then select **Sync now** on the Mac holding the cached
+lengths and on the new Mac. Existing valid local cache entries are uploaded
+automatically. A receiving Mac needs no YouTube API key to display synced lengths
+and calculate historical viewing estimates. Its duration panel shows the available
+count even without a key. API keys, backfill controls and quota budgets stay local.
+
+Cache writes and upload obligations commit together. Interrupted transfers retry
+after restart, downloads resume from committed pages, and newer fetches replace
+older observations on every device. Daily reconciliation repairs missing cloud
+entries. Sync preserves the original fetch and expiry dates; expired lengths are
+removed locally and from the shared table. **Remove key & local cache** clears
+this installation's key, lengths and pending cache uploads; valid shared lengths
+can return on the next cloud download. It does not delete shared playback time.
 
 Backfill processes the newest dated videos first, deduplicating IDs into batches
 of 50. It sends at most one batch every 30 seconds and reserves a local budget
@@ -25,8 +44,8 @@ omitted from a successful API response, or individually reported as not found, a
 unavailable locally and skipped on subsequent runs, including after restarts.
 This includes deleted and private videos; YouTube does not identify the reason.
 Their history and measured playback remain intact, with no invented duration.
-**Remove key & cache** clears these skip markers too, allowing a fresh attempt
-if a private video becomes public again. A batch-level not-found error is split
+**Remove key & local cache** clears local skip markers too, allowing a fresh attempt
+if a private video becomes public again, unless sync restores the shared marker first. A batch-level not-found error is split
 into smaller requests to isolate missing videos without skipping accessible
 ones; the usual pacing and quota limits still apply. Returned videos without
 a usable duration, including unfinished live videos even when they report a
@@ -57,7 +76,8 @@ The same import-overlap rules as the activity totals apply.
 Undated counts get no invented dates or hours;
 day-only imports contribute daily time without inventing an hour. Matching synced
 playback measurements take priority. Estimates update Insights automatically and
-are labeled as Watchmarker calculations, not YouTube watch-time data. The optional video-length cache and its estimates remain separate from synced
-measurements and are excluded from history exports.
+are labeled as Watchmarker calculations, not YouTube watch-time data. The synced
+video-length cache and its estimates remain separate from measured playback
+and are excluded from history exports.
 Without a length or a known next start, a watch contributes no estimated hours;
 partial annual totals identify these gaps while backfill is still in progress.
