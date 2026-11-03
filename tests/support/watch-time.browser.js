@@ -49,6 +49,9 @@ export async function verifyRealPlayback(assert) {
     "width:16px;height:16px;position:fixed;bottom:0;right:0";
   container.append(player);
   document.body.append(container);
+  const preview = document.createElement("video");
+  const audio = document.createElement("audio");
+  document.body.append(preview, audio);
   const { core, PlaybackTracker } = globalThis.YouTubeWatchmarkerContent;
   const currentVideo = core.getCurrentVideoId;
   core.getCurrentVideoId = () => "abcdefghijk";
@@ -74,7 +77,14 @@ export async function verifyRealPlayback(assert) {
   );
   tracker.initialize();
   let timer;
+  let unrelatedEvents;
   try {
+    // Real document-capture listeners must ignore other media while the main
+    // player advances. Previously these events repeatedly cleared its sample.
+    unrelatedEvents = setInterval(() => {
+      preview.dispatchEvent(new Event("timeupdate"));
+      audio.dispatchEvent(new Event("pause"));
+    }, 50);
     const ended = new Promise((resolve, reject) => {
       player.addEventListener("ended", resolve, { once: true });
       player.addEventListener(
@@ -104,10 +114,13 @@ export async function verifyRealPlayback(assert) {
     );
   } finally {
     clearTimeout(timer);
+    clearInterval(unrelatedEvents);
     player.pause();
     tracker.watchTime.reset();
     core.getCurrentVideoId = currentVideo;
     container.remove();
+    preview.remove();
+    audio.remove();
     URL.revokeObjectURL(url);
     db.close();
     indexedDB.deleteDatabase(name);

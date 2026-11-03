@@ -138,6 +138,31 @@ test("an ad interruption preserves actual viewing without counting ad time", asy
   assert.equal(tracker.session.watchedMilliseconds, 60_000);
 });
 
+test("preview and unrelated media events cannot interrupt the main video's minute", async () => {
+  const { tracker, emit, watch, reports, messages } = setup();
+  await emit("playing");
+  const sessionId = tracker.session.sessionId;
+  for (let second = 0; second < 60; second++) {
+    for (const target of [
+      { tagName: "AUDIO" },
+      { tagName: "VIDEO", closest: () => ({}) },
+      { tagName: "VIDEO", closest: () => null },
+    ]) {
+      for (const type of ["timeupdate", "pause", "ended", "emptied"])
+        tracker.handlePlayerEvent({ type, target });
+    }
+    await watch(1000);
+  }
+  assert.equal(tracker.session.sessionId, sessionId);
+  assert.equal(tracker.session.watchedMilliseconds, 60_000);
+  assert.equal(reports().length, 1);
+  assert.equal(reports()[0].watchedMilliseconds, 60_000);
+  assert.equal(
+    messages.filter(({ action }) => action === "youtube-watch-time").length,
+    1,
+  );
+});
+
 test("seeking past a minute and double-speed media progress cannot bypass wall time", async () => {
   const { player, tracker, emit, watch, messages, reports } = setup();
   await emit("playing");

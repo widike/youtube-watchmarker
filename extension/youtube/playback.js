@@ -105,7 +105,14 @@
 
     handlePlayerEvent(event) {
       const player = event.target;
-      if (!this.isMainPlayer(player) || !this.currentSession()) {
+      if (!this.isMainPlayer(player)) {
+        // Document capture also receives preview/audio/retired-player events.
+        // Only an interruption of the measured player (such as an ad) can
+        // invalidate its previous sample.
+        if (this.watchTime.previous?.player === player) this.watchTime.reset();
+        return;
+      }
+      if (!this.currentSession()) {
         this.watchTime.reset();
         return;
       }
