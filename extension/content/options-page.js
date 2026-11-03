@@ -6,7 +6,10 @@ import { initializeNavigation } from "./options/navigation.js";
 import { runtimeClient } from "../ui/runtime-client.js";
 import { ThemeController } from "../ui/theme-controller.js";
 import { ToastService } from "../ui/toast-service.js";
-import { createOptionsElements } from "./options/elements.js";
+import {
+  createHistoryElements,
+  createOptionsElements,
+} from "./options/elements.js";
 import { DatabaseController } from "./options/database-controller.js";
 import { ProviderController } from "./options/provider-controller.js";
 import { SettingsController } from "./options/settings-controller.js";
@@ -26,15 +29,13 @@ export class OptionsPage {
       return;
     }
 
-    await loadSettingsPanels();
-    this.elements = createOptionsElements();
-    this.feedback = new ToastService({
-      errorToastElement: this.elements.errorToast,
-      errorMessageElement: this.elements.errorToastMessage,
-      statusElement: document.getElementById("operation-status"),
-    });
+    const showSection = initializeNavigation();
+    this.initializeHistory();
+    const historyReady = this.searchController.loadInitialResults();
 
-    initializeNavigation();
+    await loadSettingsPanels();
+    Object.assign(this.elements, createOptionsElements());
+    showSection();
     this.statisticsController = new StatisticsController({
       root: document.getElementById("panel-statistics"),
       client: runtimeClient,
@@ -43,22 +44,6 @@ export class OptionsPage {
         location.hash = "history";
         void this.searchController.search({ wordGroup: word });
       },
-    });
-
-    this.themeController = new ThemeController({
-      toggleButton: this.elements.themeToggle,
-      iconElement: this.elements.themeIcon,
-    });
-
-    this.searchController = new LibraryController({
-      client: runtimeClient,
-      feedback: this.feedback,
-      onDeleteSuccess: async () => this.databaseController.updateDatabaseSize(),
-      queryInput: this.elements.searchInput,
-      searchButton: this.elements.searchButton,
-      searchIcon: this.elements.searchIcon,
-      searchSpinner: this.elements.searchSpinner,
-      resultsContainer: this.elements.searchResults,
     });
 
     this.databaseController = new DatabaseController({
@@ -85,7 +70,6 @@ export class OptionsPage {
         await this.searchController.search();
       },
     });
-    this.reconciliationController.initialize();
 
     this.sourcePreviewController = new SourcePreviewController({
       client: runtimeClient,
@@ -108,7 +92,6 @@ export class OptionsPage {
       client: runtimeClient,
     });
 
-    this.bindKeyboardShortcuts();
     this.statisticsController.initialize();
     this.durationController.initialize();
     window.addEventListener(
@@ -120,21 +103,51 @@ export class OptionsPage {
       { once: true },
     );
 
-    await this.themeController.initialize();
-    await this.searchController.initialize();
     this.databaseController.bindEvents();
     this.providerController.bindEvents();
     this.syncController.bindEvents();
     this.sourcePreviewController.initialize();
-    await this.settingsController.initialize();
+    const settingsReady = this.settingsController.initialize();
 
+    // The first history batch has priority over sidebar counts and cloud status.
+    await historyReady;
+    this.reconciliationController.initialize();
     await Promise.all([
+      this.themeReady,
+      this.displayReady,
+      settingsReady,
       this.databaseController.updateDatabaseSize(),
       this.providerController.updateProviderStatus(),
-      this.searchController.loadInitialResults(),
     ]);
 
     this.initialized = true;
+  }
+
+  initializeHistory() {
+    this.elements = createHistoryElements();
+    this.feedback = new ToastService({
+      errorToastElement: this.elements.errorToast,
+      errorMessageElement: this.elements.errorToastMessage,
+      statusElement: document.getElementById("operation-status"),
+    });
+    this.themeController = new ThemeController({
+      toggleButton: this.elements.themeToggle,
+      iconElement: this.elements.themeIcon,
+    });
+    this.searchController = new LibraryController({
+      client: runtimeClient,
+      feedback: this.feedback,
+      onDeleteSuccess: async () =>
+        this.databaseController?.updateDatabaseSize(),
+      queryInput: this.elements.searchInput,
+      searchButton: this.elements.searchButton,
+      searchIcon: this.elements.searchIcon,
+      searchSpinner: this.elements.searchSpinner,
+      resultsContainer: this.elements.searchResults,
+    });
+    this.bindKeyboardShortcuts();
+    this.themeReady = this.themeController.initialize();
+    this.displayReady = this.searchController.initialize();
   }
 
   bindKeyboardShortcuts() {
@@ -155,7 +168,7 @@ export class OptionsPage {
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "e") {
         event.preventDefault();
-        void this.databaseController.exportDatabase();
+        void this.databaseController?.exportDatabase();
       }
     });
   }

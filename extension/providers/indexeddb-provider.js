@@ -1,5 +1,10 @@
 import { isDeleted } from "../history/history-records.js";
-import { deleteVideo, saveVideos } from "../history/history-storage.js";
+import {
+  deleteVideo,
+  readRequest,
+  saveVideos,
+} from "../history/history-storage.js";
+import { DATABASE } from "../shared/constants.js";
 import { recordPlayback } from "../history/history-playback.js";
 import { repairVideoTitle } from "../history/history-title-storage.js";
 import { readVideos } from "../history/history-event-storage.js";
@@ -126,11 +131,19 @@ export class IndexedDBProvider {
   }
 
   async getVideoCount() {
+    this.updateConnectionStatus();
     if (!this.isConnected) {
       throw new Error("Database not connected");
     }
 
-    return (await this.getAllVideos()).length;
+    const tx = this.databaseManager.database.transaction(
+      DATABASE.STORE_NAME,
+      "readonly",
+    );
+    const summaries = await readRequest(
+      tx.objectStore(DATABASE.STORE_NAME).getAll(),
+    );
+    return summaries.filter((video) => !isDeleted(video)).length;
   }
 
   async clearAllVideos() {

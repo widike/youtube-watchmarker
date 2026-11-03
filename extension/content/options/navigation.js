@@ -27,4 +27,5 @@ export function initializeNavigation() {
     document.querySelector(".app-panel:not([hidden]) h1")?.focus();
     window.scrollTo({ top: 0 });
   });
+  return showSection;
 }

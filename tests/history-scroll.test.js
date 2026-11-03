@@ -8,15 +8,20 @@ import { spawn } from "node:child_process";
 
 const mockRuntime = `
 window.fixture = { calls: [], total: 420, failOffset: null, deleted: new Set(), errors: [], now: Date.now(), storageListeners: new Set() };
+fixture.themeReady = new Promise(resolve => { fixture.releaseTheme = resolve; });
 window.addEventListener('error', (event) => fixture.errors.push(event.message));
 window.addEventListener('unhandledrejection', (event) => fixture.errors.push(String(event.reason?.stack || event.reason)));
-chrome.storage = { local: { get: async () => ({}), set: async () => {} }, onChanged: {
+chrome.storage = { local: { get: async () => { await fixture.themeReady; return {}; }, set: async () => {} }, onChanged: {
   addListener: listener => fixture.storageListeners.add(listener),
   removeListener: listener => fixture.storageListeners.delete(listener)
 } };
 chrome.runtime = { sendMessage: async (request) => {
-  if (request.action === 'history-statistics') return { success: true,
-    statistics: (await import('/history-statistics.js')).summarizeHistory([]) };
+  if (request.action === 'history-statistics') {
+    fixture.historyShownBeforeStatistics = !!document.querySelector('.video-item');
+    fixture.compactStatistics = request.compact;
+    return { success: true, statistics: (await import('/history-statistics.js')).summarizeHistory([]) };
+  }
+  fixture.releaseTheme();
   fixture.calls.push(request);
   if (request.action === 'search-delete') { fixture.deleted.add(request.videoId); return { success: true }; }
   if (request.offset === fixture.failOffset) return { success: false, error: 'offline' };

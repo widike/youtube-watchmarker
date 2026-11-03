@@ -40,12 +40,11 @@ export function readVideos(db, { id, after = "", limit } = {}) {
       const byId = new Map(videos.map((video) => [video.strIdent, video]));
       // Two bulk reads replace one request per video. Keep paged exports and
       // single-video lookups bounded to the summaries read in this transaction.
-      const events = tx.objectStore(EVENT_STORE).getAll(
-        IDBKeyRange.bound(
-          [rows[0].strIdent],
-          [rows.at(-1).strIdent, []],
-        ),
-      );
+      const events = tx
+        .objectStore(EVENT_STORE)
+        .getAll(
+          IDBKeyRange.bound([rows[0].strIdent], [rows.at(-1).strIdent, []]),
+        );
       events.onsuccess = () => {
         for (const { strIdent, ...event } of events.result)
           byId.get(strIdent)?.watchEvents.push(event);

@@ -14,7 +14,9 @@ export const handleHistoryStatistics = createHandler(
       readWatchTime(Database.database),
       durationStorage.readCache(),
     ]);
-    const summarize = request.compact ? summarizePopupHistory : summarizeHistory;
+    const summarize = request.compact
+      ? summarizePopupHistory
+      : summarizeHistory;
     const statistics = summarize(videos, {
       period: request.period,
       time,

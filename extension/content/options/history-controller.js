@@ -52,14 +52,6 @@ export class LibraryController extends HistorySearchController {
       },
       { once: true },
     );
-    try {
-      const saved = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY];
-      this.display = {
-        view: saved?.view === "list" ? "list" : "grid",
-      };
-    } catch {
-      /* Use the defaults when storage is unavailable. */
-    }
     const period = document.getElementById("history-period");
     period.addEventListener("change", () => {
       this.state.period = period.value;
@@ -73,7 +65,7 @@ export class LibraryController extends HistorySearchController {
       });
     document.querySelectorAll("[data-history-view]").forEach((button) =>
       button.addEventListener("click", () => {
-        this.display.view = button.dataset.historyView;
+        this.display = { view: button.dataset.historyView };
         this.updateViewButtons();
         this.saveDisplay();
         if (this.lastRender)
@@ -86,6 +78,18 @@ export class LibraryController extends HistorySearchController {
       void this.search();
     });
     this.updateViewButtons();
+    const initialDisplay = this.display;
+    try {
+      const saved = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY];
+      // A late storage response must not replace a layout chosen meanwhile.
+      if (this.disposed || this.display !== initialDisplay) return;
+      this.display = { view: saved?.view === "list" ? "list" : "grid" };
+      this.updateViewButtons();
+      if (this.lastRender)
+        this.renderResults({ ...this.lastRender, reset: false });
+    } catch {
+      /* Use the defaults when storage is unavailable. */
+    }
   }
 
   saveDisplay() {

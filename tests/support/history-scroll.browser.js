@@ -43,6 +43,14 @@ try {
     await waitFor(() => ready(popup) && cardCount(popup) > 0);
     assert(fixture.calls.length === 1, "Popup fetched ahead before scrolling");
     assert(
+      fixture.historyShownBeforeStatistics,
+      "Statistics delayed initial history",
+    );
+    assert(
+      fixture.compactStatistics === true,
+      "Popup requested full dashboard statistics",
+    );
+    assert(
       !document.getElementById("next-page") &&
         !document.querySelector("[data-page]"),
       "Pagination remains",
