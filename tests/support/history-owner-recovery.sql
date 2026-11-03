@@ -15,6 +15,7 @@ select set_config('watchmarker.recovery_source','00000000-0000-0000-0000-0000000
 select set_config('watchmarker.recovery_target','00000000-0000-0000-0000-000000000001',false);
 \ir ../../supabase/admin/reconnect-history.sql
 \ir ../../supabase/admin/reconnect-history.sql
+select public.assert_link_test((select relrowsecurity from pg_class where oid='private.watchmarker_history_recoveries'::regclass));
 select public.assert_link_test((select count(*)=2 from public.youtube_watch_events where user_id='00000000-0000-0000-0000-000000000004'));
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);

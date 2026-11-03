@@ -14,6 +14,7 @@ create table if not exists private.watchmarker_history_recoveries (
   source_events bigint not null,
   primary key (source_owner,target_owner)
 );
+alter table private.watchmarker_history_recoveries enable row level security;
 revoke all on private.watchmarker_history_recoveries from public,anon,authenticated;
 
 do $$
