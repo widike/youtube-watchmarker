@@ -34,7 +34,7 @@ test("uploads append immutable events after summaries and retry stable IDs", asy
   };
   await assert.rejects(provider.importVideos([video]), /offline/);
   assert.match(calls[0][1], /^\/youtube_watch_history/);
-  assert.match(calls[1][3], /ignore-duplicates/);
+  assert.match(calls[1][3], /merge-duplicates/);
   offline = false;
   await provider.importVideos([video]);
   assert.deepEqual(calls[1][2], calls[3][2]);
@@ -92,7 +92,8 @@ test("schema 4 is required before cloud synchronization can run", async () => {
   const provider = new SupabaseDatabaseProvider();
   provider.makeRequest = async () => new Response("2");
   await assert.rejects(provider.init(), /Unsupported sync schema/);
-  provider.makeRequest = async () => new Response("4");
+  provider.makeRequest = async (_method, path) =>
+    new Response(path.endsWith("watchmarker_event_merge_version") ? "1" : "4");
   await provider.init();
   assert.equal(provider.isConnected, true);
 });

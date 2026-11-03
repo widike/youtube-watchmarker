@@ -116,11 +116,25 @@ export async function verifySyncStates(fixture, assert) {
       label() === "Cloud connected" && detail().includes("Up to date"),
       "Manual sync removed the connection status structure",
     );
-    sync.client.sendMessage = async () => ({ success: true, inProgress: true });
+    const calls = [];
+    sync.client.sendMessage = async (request) => {
+      calls.push(request);
+      if (calls.length === 2) {
+        assert(
+          elements.syncSummary.dataset.state === "syncing",
+          "Sync progress is hidden",
+        );
+        assert(
+          request.forceDownload === false,
+          "Continuation restarted completed downloads",
+        );
+      }
+      return { success: true, inProgress: calls.length === 1 };
+    };
     await sync.syncProviders();
     assert(
-      elements.syncSummary.dataset.state === "syncing",
-      "Sync progress is hidden",
+      calls.length === 2 && elements.syncSummary.dataset.state === "connected",
+      "Manual sync stopped before the restore completed",
     );
     sync.client.sendMessage = async () => ({
       success: false,

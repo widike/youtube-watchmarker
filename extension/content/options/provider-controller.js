@@ -230,6 +230,7 @@ export class ProviderController {
         "20261101060000_captcha_configuration.sql",
         "20261101070000_short_connection_codes.sql",
         "20261103000000_video_duration_sync.sql",
+        "20261103010000_watch_event_precision.sql",
       ];
       const sql = await Promise.all(
         migrations.map(async (name) => {

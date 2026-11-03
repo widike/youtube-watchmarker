@@ -18,7 +18,7 @@ export async function uploadWatchEvents(provider, videos) {
       "POST",
       `${TABLE}?on_conflict=user_id,str_ident,event_id`,
       events.slice(i, i + 100),
-      "resolution=ignore-duplicates,return=minimal",
+      "resolution=merge-duplicates,return=minimal",
     );
   }
 }

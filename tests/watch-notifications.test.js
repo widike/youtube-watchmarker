@@ -8,7 +8,9 @@ test("imports refresh thumbnails even when only partially successful", async (t)
     globalThis.chrome = oldChrome;
   });
   const messages = [];
+  const revisions = [];
   globalThis.chrome = {
+    storage: { local: { set: async (value) => revisions.push(value) } },
     tabs: {
       query: async () => [{ id: 1 }],
       sendMessage: async (_id, message) => messages.push(message),
@@ -25,6 +27,13 @@ test("imports refresh thumbnails even when only partially successful", async (t)
   assert.equal(messages.length, 1);
   await withWatchmarkerRefresh(async () => ({ downloaded: 4 }));
   assert.equal(messages.length, 2);
+  await withWatchmarkerRefresh(async () => ({
+    downloaded: 0,
+    timeDownloaded: 1,
+  }));
+  assert.equal(messages.length, 3);
+  assert.equal(revisions.length, 3);
+  assert(revisions.every((value) => value.watchmarker_history_revision));
 });
 
 test("missing content scripts do not turn a saved watch into a failure", async (t) => {

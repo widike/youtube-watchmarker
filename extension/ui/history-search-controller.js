@@ -102,42 +102,73 @@ export class HistorySearchController {
     await this.fetchBatch({ reset: this.results.length === 0 });
   }
 
-  async refreshMetadata() {
+  async refreshMetadata({ replace = false } = {}) {
     if (this.disposed) return;
-    if (this.deleting || this.state.isSearching || this.state.isLoadingMore) {
+    if (
+      this.deleting ||
+      this.state.isSearching ||
+      this.state.isLoadingMore ||
+      this.metadataRefreshing
+    ) {
       this.metadataRefreshPending = true;
+      this.historyRefreshPending ||= replace;
       return;
     }
     this.metadataRefreshPending = false;
+    this.metadataRefreshing = true;
+    replace ||= this.historyRefreshPending;
+    this.historyRefreshPending = false;
     const requestId = this.requestId;
     const metadataId = (this.metadataId = (this.metadataId || 0) + 1);
     const updated = new Map();
+    let totalResults = this.state.totalResults;
+    const limit = replace
+      ? Math.max(this.nextOffset, this.batchSize)
+      : this.nextOffset;
     try {
-      for (let offset = 0; offset < this.nextOffset; offset += 100) {
+      for (let offset = 0; offset < limit; offset += 100) {
         const response = await this.client.sendMessage({
           action: "search-videos",
           query: this.state.currentQuery,
           ...(this.state.wordGroup ? { wordGroup: this.state.wordGroup } : {}),
           offset,
-          limit: Math.min(100, this.nextOffset - offset),
+          limit: Math.min(100, limit - offset),
           ...this.getSearchOptions(),
         });
         if (this.disposed || metadataId !== this.metadataId) return;
         if (requestId !== this.requestId) {
-          void this.refreshMetadata();
+          void this.refreshMetadata({ replace });
           return;
         }
         if (!response?.success) return;
+        totalResults = response.totalResults || 0;
         for (const video of response.objVideos || [])
           updated.set(video.entryId || video.strIdent, video);
+        if (offset + (response.objVideos || []).length >= totalResults) break;
       }
-      this.results = this.results.map(
-        (video) => updated.get(video.entryId || video.strIdent) || video,
-      );
+      if (replace) {
+        this.results = [...updated.values()];
+        this.nextOffset = this.results.length;
+        this.state.totalResults = totalResults;
+        this.state.hasMore = this.nextOffset < totalResults;
+      } else
+        this.results = this.results.map(
+          (video) => updated.get(video.entryId || video.strIdent) || video,
+        );
       // Keep loaded pages, pagination and the virtual list's scroll position.
       this.render();
     } catch {
       // Existing cards remain usable; the next metadata change/focus retries.
+    } finally {
+      this.metadataRefreshing = false;
+      if (
+        this.metadataRefreshPending &&
+        !this.disposed &&
+        !this.deleting &&
+        !this.state.isSearching &&
+        !this.state.isLoadingMore
+      )
+        void this.refreshMetadata();
     }
   }
 

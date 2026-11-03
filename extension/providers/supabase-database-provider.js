@@ -87,6 +87,16 @@ export class SupabaseDatabaseProvider {
         "GET",
         "/youtube_video_durations?select=str_ident&limit=0",
       );
+      if (
+        (await (
+          await this.makeRequest(
+            "POST",
+            "/rpc/watchmarker_event_merge_version",
+            {},
+          )
+        ).json()) !== 1
+      )
+        throw new Error("Watch-event precision setup is missing");
       return { exists: true };
     } catch (error) {
       return {

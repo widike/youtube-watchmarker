@@ -126,8 +126,10 @@ function registerMessageHandlers() {
     "supabase-check-table": withInitialization(handleSupabaseCheckTable),
     "get-setting": withInitialization(handleGetSetting),
     "set-setting": withInitialization(handleSetSetting),
-    "sync-manager-sync-now": withInitialization(async () =>
-      SyncManagerInstance.syncNow(),
+    "sync-manager-sync-now": withInitialization(async (request) =>
+      SyncManagerInstance.syncNow({
+        forceDownload: request.forceDownload !== false,
+      }),
     ),
     "sync-manager-status": withInitialization(async () =>
       SyncManagerInstance.getStatus(),

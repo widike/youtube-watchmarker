@@ -50,8 +50,20 @@ export function mergeEvents(...sources) {
       observedDeletion: positiveTime(event.observedDeletion),
     };
     const previous = events.get(next.eventId);
-    if (previous && JSON.stringify(next) !== JSON.stringify(previous))
-      throw new Error("Conflicting payload for an immutable watch event");
+    if (previous && JSON.stringify(next) !== JSON.stringify(previous)) {
+      const { precision: oldPrecision, ...oldIdentity } = previous;
+      const { precision: newPrecision, ...newIdentity } = next;
+      if (
+        source !== "saved" ||
+        JSON.stringify(oldIdentity) !== JSON.stringify(newIdentity)
+      )
+        throw new Error("Conflicting payload for an immutable watch event");
+      // A migrated timestamp and a date-only import can identify the same watch.
+      // Keep the honest precision: no inferred clock time replaces a known day.
+      next.precision = ["day", "inferred", "exact"].find((value) =>
+        [oldPrecision, newPrecision].includes(value),
+      );
+    }
     events.set(next.eventId, next);
   }
   return [...events.values()].sort((a, b) =>

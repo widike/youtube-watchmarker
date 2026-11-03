@@ -35,6 +35,7 @@ const loaded = () =>
     .at(-1)?.offset || 0;
 import { verifyPopupHistory } from "./popup-history.browser.js";
 import { verifyGroupedHistory } from "./history-day-groups.browser.js";
+import * as syncView from "./history-sync-view.browser.js";
 let popupMetadata;
 
 try {
@@ -204,6 +205,7 @@ try {
       "Separate open control remains",
     );
     const link = library.querySelector(".video-link");
+    syncView.verifyGridClockContrast(link, assert);
     assert(
       link.querySelector(".video-meta").innerHTML === popupMetadata,
       "Popup and options history show different per-video statistics",
@@ -312,6 +314,15 @@ try {
       "Metadata update moved the viewport",
     );
   });
+  await test("cloud arrivals refresh history membership and totals without losing the visible video", async () => {
+    await syncView.verifyHistorySyncRefresh({
+      fixture,
+      controller,
+      library,
+      assert,
+      waitFor,
+    });
+  });
   await test("library deletion preserves loaded history and corrects the next batch offset", async () => {
     window.confirm = () => true;
     const before = controller.results.length;
@@ -365,7 +376,8 @@ try {
     }
     await waitFor(() => !controller.state.hasMore);
     assert(
-      controller.results.length === 599,
+      controller.results.length ===
+        fixture.total + (fixture.prepended?.length || 0) - fixture.deleted.size,
       "The library lost records while scrolling",
     );
     assert(cardCount(library) < 40, "Completed library retained every DOM row");

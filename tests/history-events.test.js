@@ -139,6 +139,24 @@ test("conflicting retry payloads cannot overwrite an event timestamp", () => {
   assert.equal(first.watchEvents[0].watchedAt, 100);
 });
 
+test("the same imported watch merges date-only and inferred precision without inventing a time", () => {
+  const first = normalizeVideo({
+    strIdent: id,
+    intTimestamp: 100,
+    intCount: 1,
+  });
+  const day = {
+    ...first,
+    watchEvents: first.watchEvents.map((event) => ({
+      ...event,
+      precision: "day",
+    })),
+  };
+  assert.deepEqual(mergeVideo(first, day), mergeVideo(day, first));
+  assert.equal(mergeVideo(first, day).watchEvents[0].precision, "day");
+  assert.equal(mergeVideo(first, day).intCount, 1);
+});
+
 test("fractional browser timestamps become valid millisecond event times", () => {
   const imported = normalizeVideo({
     strIdent: id,

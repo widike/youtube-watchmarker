@@ -6,11 +6,11 @@ import { YouTubeDeletionQueue } from "../sources/youtube-deletion-queue.js";
 import { pendingWatchTimeCount } from "../history/watch-time-replication.js";
 import { pendingDurationCount } from "../duration/duration-replication.js";
 import { DurationStorage } from "../duration/duration-storage.js";
+import { resolveCloudIdentity } from "./cloud-identity.js";
 import {
   OUTBOX_STORE,
   readMetadata,
   readRequest,
-  writeMetadata,
   acknowledgeVideos,
 } from "../history/history-storage.js";
 
@@ -99,11 +99,11 @@ export class DatabaseProviderFactory {
         success: false,
         error: "Connect to sync your history across devices.",
       };
-    const identity = await this.assertIdentity(configuration, session);
-    await writeMetadata(
+    await resolveCloudIdentity(
       this.databaseManager.database,
-      "cloudIdentity",
-      identity,
+      configuration,
+      session,
+      supabaseDatabaseProvider,
     );
     return this.sync.sync(options);
   }
@@ -118,11 +118,11 @@ export class DatabaseProviderFactory {
         success: false,
         error: "Connect to Supabase to finish the deletion.",
       };
-    const identity = await this.assertIdentity(configuration, session);
-    await writeMetadata(
+    await resolveCloudIdentity(
       this.databaseManager.database,
-      "cloudIdentity",
-      identity,
+      configuration,
+      session,
+      supabaseDatabaseProvider,
     );
     const tx = this.databaseManager.database.transaction(
       OUTBOX_STORE,

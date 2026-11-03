@@ -78,6 +78,14 @@ export class HistoryVirtualList {
     if (this.args && !args.reset && this.args.view !== args.view) {
       this.pendingAnchor = this.visibleAnchor();
     }
+    if (
+      this.args &&
+      !args.reset &&
+      (this.root?.scrollTop ?? window.scrollY) > 0 &&
+      (this.args.results[0]?.entryId || this.args.results[0]?.strIdent) !==
+        (args.results[0]?.entryId || args.results[0]?.strIdent)
+    )
+      this.pendingAnchor ||= this.visibleAnchor();
     this.args = args;
     this.container.dataset.view = args.view;
     if (args.reset) {

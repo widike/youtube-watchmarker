@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.3.1 — 2026-11-03
+
+- Cloud sync resolves the authenticated device's actual shared-history membership.
+  A repaired device that previously created its own history adopts its linked
+  history, resets old download cursors and republishes retained local records.
+  Other owners and projects remain isolated; refreshed credentials are preserved.
+- Date-only and inferred imports of the same watch merge without aborting a
+  restore or inventing a clock time. Event identities and timestamps remain immutable.
+- **Sync now** continues through partial restore batches; **Sync all** also
+  synchronizes Supabase. History cards and totals refresh as cloud records arrive,
+  preserving loaded pages and the visible video. Grid watch times remain readable.
+- **Create new history** identifies first-device setup explicitly. Other devices
+  must use a connection code to join the same history.
+
+Apply `20261103010000_watch_event_precision.sql` to an existing Supabase project
+and update both Macs. **Copy setup SQL** includes the migration. An administrator
+can repair an accidentally separate history with
+`supabase/admin/reconnect-history.sql` after reviewing both owner identities;
+the script retains the original rows and a private recovery audit.
+
 ## 1.3.0 — 2026-11-02
 
 History and viewing-time fixes, clearer popup layouts, and an organized extension

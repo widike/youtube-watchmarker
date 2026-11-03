@@ -8,6 +8,28 @@ const a = video("aaaaaaaaaaa");
 const b = video("bbbbbbbbbbb");
 const c = video("ccccccccccc");
 
+test("a cloud history refresh replaces stale membership and totals without resetting loaded pages", async () => {
+  const { controller, pending, respond, renders } = fixture();
+  const first = controller.search();
+  respond(0, [a, b], 3);
+  await first;
+  const refresh = controller.refreshMetadata({ replace: true });
+  assert.equal(pending[1].message.offset, 0);
+  assert.equal(pending[1].message.limit, 2);
+  respond(1, [c, a], 4);
+  await refresh;
+  assert.deepEqual(controller.results, [c, a]);
+  assert.equal(controller.state.totalResults, 4);
+  assert.equal(controller.nextOffset, 2);
+  assert.equal(controller.state.hasMore, true);
+  assert.equal(renders.at(-1).reset, false);
+  const next = controller.loadMore();
+  assert.equal(pending[2].message.offset, 2);
+  respond(2, [b], 3);
+  await next;
+  assert.deepEqual(controller.results, [c, a, b]);
+});
+
 function fixture() {
   const pending = [];
   const renders = [];

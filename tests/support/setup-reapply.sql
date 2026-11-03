@@ -10,6 +10,7 @@
 \ir ../../supabase/migrations/20261101060000_captcha_configuration.sql
 \ir ../../supabase/migrations/20261101070000_short_connection_codes.sql
 \ir ../../supabase/migrations/20261103000000_video_duration_sync.sql
+\ir ../../supabase/migrations/20261103010000_watch_event_precision.sql
 select public.assert_link_test(to_regprocedure('public.watchmarker_create_link()') is null);
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000005',false);

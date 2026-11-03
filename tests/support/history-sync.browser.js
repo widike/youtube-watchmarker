@@ -1,5 +1,6 @@
 import { testWatchTimeSync } from "./watch-time-sync.browser.js";
 import { testDurationSync } from "./duration-sync.browser.js";
+import { testCloudIdentity } from "./cloud-identity.browser.js";
 import { remote } from "./memory-cloud.js";
 import { DATABASE } from "../../extension/shared/constants.js";
 import {
@@ -338,6 +339,7 @@ await testWatchEvents({ test, database, open, remote, assert });
 await testHistoryReconciliation({ test, database, open, remote, assert });
 await testWatchTimeSync({ test, database, remote, open, assert });
 await testDurationSync({ test, database, remote, open, assert });
+await testCloudIdentity({ test, database, remote, assert });
 await testTitleRecovery({ test, database, assert });
 await testVideoDeletion({ test, database, assert });
 await testHistoryReads({ test, database, assert });

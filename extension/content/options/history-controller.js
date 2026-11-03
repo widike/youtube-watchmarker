@@ -30,11 +30,19 @@ export class LibraryController extends HistorySearchController {
     super.initialize();
     this.onMetadataRefresh = () => {
       if (!document.hidden && !document.getElementById("panel-history").hidden)
-        void this.refreshMetadata();
+        void this.refreshMetadata({
+          replace: Boolean(this.historyRefreshPending),
+        });
     };
     this.onDurationChange = (changes, area) => {
+      const history = changes.watchmarker_history_revision;
+      if (area === "local" && history?.newValue !== history?.oldValue)
+        this.historyRefreshPending = true;
       const change = changes.youtube_duration_cache_revision;
-      if (area === "local" && change?.newValue !== change?.oldValue)
+      if (
+        area === "local" &&
+        (this.historyRefreshPending || change?.newValue !== change?.oldValue)
+      )
         this.onMetadataRefresh();
     };
     chrome.storage.onChanged.addListener(this.onDurationChange);

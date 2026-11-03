@@ -2,6 +2,13 @@ import { logger } from "../shared/logger.js";
 
 export async function broadcastWatchState(message) {
   try {
+    await chrome.storage.local.set({
+      watchmarker_history_revision: crypto.randomUUID(),
+    });
+  } catch (error) {
+    logger.debug("History view notification unavailable:", error.message);
+  }
+  try {
     const tabs = await chrome.tabs.query({ url: "*://*.youtube.com/*" });
     await Promise.all(
       tabs.map(async (tab) => {
@@ -25,7 +32,7 @@ export async function withWatchmarkerRefresh(operation) {
     result = await operation();
     return result;
   } finally {
-    if (result?.downloaded !== 0)
+    if (result?.downloaded !== 0 || result?.timeDownloaded > 0)
       await broadcastWatchState({ action: "youtube-refresh" });
   }
 }

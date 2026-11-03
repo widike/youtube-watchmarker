@@ -6,7 +6,7 @@ YouTube keeps track of your watch history and automatically marks videos that yo
 
 ## Installation
 
-Download `youtube-watchmarker-1.3.0.zip` from the
+Download `youtube-watchmarker-1.3.1.zip` from the
 [latest GitHub release](https://github.com/widike/youtube-watchmarker/releases/latest),
 extract it, and select the extracted folder using **Load unpacked** at
 `chrome://extensions` in Chrome 126 or newer. You can also load the repository
@@ -196,7 +196,7 @@ No new service, permissions, or chart library is required.
 Run `npm ci` to install development dependencies and `npm run build` to
 regenerate the bundled dependencies, copy the SQL migrations needed by the
 settings UI, and validate extension imports and assets. Load `extension/` in
-Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.3.0.zip`;
+Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.3.1.zip`;
 the archive contains only the installable extension and its licenses.
 
 Use `npm test`, `npm run lint`, and `npm run format:check` for local checks.
@@ -308,9 +308,10 @@ Normal restoration does not require an exported file.
    followed by [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
    followed by [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
    followed by [short connection codes](supabase/migrations/20261101070000_short_connection_codes.sql)
-   and [video duration sync](supabase/migrations/20261103000000_video_duration_sync.sql)
-   in the project's SQL Editor. All nine preserve existing history.
-   **Sync & data → First device setup → Copy setup SQL** copies all nine in order.
+   followed by [video duration sync](supabase/migrations/20261103000000_video_duration_sync.sql)
+   and [watch-event precision](supabase/migrations/20261103010000_watch_event_precision.sql)
+   in the project's SQL Editor. All ten preserve existing history.
+   **Sync & data → First device setup → Copy setup SQL** copies all ten in order.
    Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)
    to register your public Turnstile site key and configure its secret in Supabase.
    For an existing project, apply the import-reconciliation migration so the
@@ -318,7 +319,9 @@ Normal restoration does not require an exported file.
    extension clients already reconcile downloaded events even before that SQL
    migration; older server triggers retain inflated summary counters until it runs.
 3. Under **First device setup**, enter the project ID and publishable
-   key, then choose **Start syncing**.
+   key, then choose **Create new history**. Do this only for the first device:
+   entering the same project settings on another Mac creates an isolated history.
+   To restore existing history, use the connection code in the next step.
    If this device is already connected, keep its session and skip this step.
 4. Choose **Create connection code** under **Sync & data** on a connected computer.
    Enter the six letters (for example **KMT-PXR**) on the new device and choose

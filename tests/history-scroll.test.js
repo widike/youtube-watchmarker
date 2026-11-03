@@ -25,14 +25,14 @@ chrome.runtime = { sendMessage: async (request) => {
   fixture.calls.push(request);
   if (request.action === 'search-delete') { fixture.deleted.add(request.videoId); return { success: true }; }
   if (request.offset === fixture.failOffset) return { success: false, error: 'offline' };
-  const records = Array.from({ length: fixture.total }, (_, i) => ({
+  const records = (fixture.prepended || []).concat(Array.from({ length: fixture.total }, (_, i) => ({
     strIdent: String(i).padStart(11, 'a'), strTitle: 'Video ' + i,
     intTimestamp: fixture.now - Math.floor(i / 40) * 86400000, intCount: i % 5 + 1,
     watchPrecision: 'exact',
     ...(fixture.durationsReady ? { durationSeconds: 600 } : {}),
     ...(i < 2 ? { durationSeconds: i ? 14459 : 600,
       watchedMilliseconds: i ? 7565000 : 120000, watchedPercent: i ? 98 : 50 } : {})
-  })).filter(video => !fixture.deleted.has(video.strIdent));
+  }))).filter(video => !fixture.deleted.has(video.strIdent));
   return { success: true, totalResults: request.query ? 0 : records.length,
     objVideos: request.query ? [] : records.slice(request.offset, request.offset + request.limit) };
 } };
@@ -143,7 +143,7 @@ test(
         t.diagnostic(result.name);
         assert.equal(result.passed, true, result.error || result.name);
       }
-      assert.equal(results.length, 9);
+      assert.equal(results.length, 10);
     } finally {
       clearTimeout(timer);
       child.kill();

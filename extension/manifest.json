@@ -3,7 +3,7 @@
   "name": "Watchmarker for Youtube",
   "description": "Automatically mark videos on Youtube that you have already watched.",
   "homepage_url": "https://github.com/widike/youtube-watchmarker",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsS1HxwtZvwfhVxoOBcI+POpVn6+ooD5nQimC2eGVXcTYQW1VaHpCjj63abAAp7WaocT1qffRbW0LrFvSH2F651JPaKD6uskUMiL0PFNT7tY2Qh9dxxyaW/phRkRPDlLBCNIpLhp5gMRX39XAIZJBu2Auv3IuUBSjdgHzqnX95JbFhRpHSJIJG0iHZWHgl8C0F14olBwIUhg+ulit631fTFgdyiPDvaT2Dmy/rtXUHv7A6IIMPdMOjQ93Lo7ZjhEr13RMEgh1FnBk8kQhCQpYOIVBaZklR240RvQNnfgJAUBXl5Ab5oyIHzWs/25d4PuYF3B2yKku4o9WxTtk3JniZQIDAQAB",
   "permissions": [
     "storage",

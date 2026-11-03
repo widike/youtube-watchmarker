@@ -84,6 +84,8 @@ export class SyncController {
   }
 
   async syncProviders() {
+    if (this.syncingCloud) return;
+    this.syncingCloud = true;
     try {
       setButtonBusy(this.elements.syncDatabaseButton, "Syncing…");
       renderSyncStatus(this.elements.syncSummary, {
@@ -91,9 +93,17 @@ export class SyncController {
         inProgress: true,
       });
 
-      const response = await this.client.sendMessage({
+      let response = await this.client.sendMessage({
         action: "sync-manager-sync-now",
       });
+
+      while (response?.success && response.inProgress) {
+        await this.refreshSearch();
+        response = await this.client.sendMessage({
+          action: "sync-manager-sync-now",
+          forceDownload: false,
+        });
+      }
 
       if (!response?.success) {
         throw new Error(response?.error || "Sync failed");
@@ -109,6 +119,7 @@ export class SyncController {
     } catch (error) {
       renderSyncStatus(this.elements.syncSummary, { error: error.message });
     } finally {
+      this.syncingCloud = false;
       clearButtonBusy(this.elements.syncDatabaseButton);
       this.invalidateSources();
     }
@@ -174,6 +185,7 @@ export class SyncController {
       if (total > 0) {
         await this.refreshSearch();
       }
+      await this.syncProviders();
     } catch (error) {
       this.feedback.error(`Sync all failed: ${error.message}`);
     } finally {

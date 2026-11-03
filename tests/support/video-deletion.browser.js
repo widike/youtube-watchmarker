@@ -89,9 +89,15 @@ export async function testVideoDeletion({ test, database, assert }) {
       session: credentialStorage.getSession,
       connected: supabaseDatabaseProvider.isConnected,
       upload: supabaseDatabaseProvider.importVideos,
+      request: supabaseDatabaseProvider.makeRequest,
     };
     credentialStorage.getConfiguration = async () => ({ projectId: "fixture" });
-    credentialStorage.getSession = async () => ({ userId: "owner" });
+    const owner = "00000000-0000-4000-8000-000000000001";
+    credentialStorage.getSession = async () => ({
+      userId: owner,
+      historyOwnerId: owner,
+    });
+    supabaseDatabaseProvider.makeRequest = async () => Response.json(owner);
     supabaseDatabaseProvider.isConnected = true;
     try {
       supabaseDatabaseProvider.importVideos = async () => {
@@ -132,6 +138,7 @@ export async function testVideoDeletion({ test, database, assert }) {
       credentialStorage.getSession = saved.session;
       supabaseDatabaseProvider.isConnected = saved.connected;
       supabaseDatabaseProvider.importVideos = saved.upload;
+      supabaseDatabaseProvider.makeRequest = saved.request;
       db.close();
     }
   });
