@@ -17,14 +17,15 @@ export function memoryHistory(initial = []) {
         mergeVideo(records.get(video.strIdent), video),
       );
     },
-    recordPlayback: async (id, title, playbackId) => {
+    recordPlayback: async (id, title, playbackId, recoveredAt) => {
       const previous = await provider.getVideo(id);
       const eventId = `playback:${playbackId}`;
       const events = previous?.watchEvents || [];
       const seen = events.some((event) => event.eventId === eventId);
+      if (recoveredAt && seen) return null;
       const timestamp = seen
         ? previous.intTimestamp
-        : Math.max(previous?.intTimestamp || 0, Date.now());
+        : Math.max(previous?.intTimestamp || 0, recoveredAt || Date.now());
       const video = normalizeVideo({
         ...previous,
         strIdent: id,

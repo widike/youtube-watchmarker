@@ -1,6 +1,8 @@
 // Source history contains visits, not measured viewing. Keep it as a backfill
 // for days before this installation began enforcing the playback threshold.
+// After that, only a resume position beyond a minute can establish a watch.
 const KEY = "measuredHistoryStart";
+const MINIMUM_WATCH_SECONDS = 60;
 const pending = new WeakMap();
 
 export function historyImportCutoff(
@@ -27,6 +29,10 @@ export function historyImportCutoff(
   pending.set(storage, request);
   void request.finally(() => pending.delete(storage)).catch(() => {});
   return request;
+}
+
+export function isMeasuredWatch(video) {
+  return video.intTimestamp > 0 && video.resumeSeconds >= MINIMUM_WATCH_SECONDS;
 }
 
 export function isHistoricalWatch(video, cutoff) {

@@ -27,7 +27,8 @@ export class VideoTracker {
       !Number.isInteger(tabId) ||
       tabId < 0 ||
       (sender.frameId !== undefined && sender.frameId !== 0) ||
-      parseVideoId(sender.url || sender.tab.url) !== videoId
+      // sender.url stays at the document's first URL; YouTube navigates in place.
+      parseVideoId(sender.tab.url) !== videoId
     ) {
       throw new Error("Invalid watch event");
     }
@@ -42,9 +43,7 @@ export class VideoTracker {
     const playbackId = `${tabId}:${sender.documentId || ""}:${sessionId}`;
     const title = isValidVideoTitle(request.title)
       ? request.title
-      : parseVideoId(sender.tab.url) === videoId
-        ? cleanHistoryTitle(sender.tab.title)
-        : "";
+      : cleanHistoryTitle(sender.tab.title);
     const video = await this.youtubeModule.recordPlayback(
       videoId,
       title,

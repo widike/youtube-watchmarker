@@ -13,9 +13,11 @@ const event = (reason, sessionId = first) => ({
   sessionId,
   watchedMilliseconds: 60_000,
 });
-const sender = (id = 1) => ({
-  tab: { id },
-  url: "https://www.youtube.com/watch?list=test&v=aaaaaaaaaaa",
+const watchUrl = "https://www.youtube.com/watch?list=test&v=aaaaaaaaaaa";
+// Chrome freezes sender.url at the URL the document loaded with.
+const sender = (id = 1, url = watchUrl) => ({
+  tab: { id, url },
+  url: "https://www.youtube.com/",
   frameId: 0,
   documentId: "doc",
 });
@@ -161,7 +163,7 @@ test("a missing content title falls back to the sender tab without adding a view
   const { tracker, manager } = await setup(t);
   const tabSender = {
     ...sender(),
-    tab: { id: 1, url: sender().url, title: "Recovered Grüße 😀 - YouTube" },
+    tab: { id: 1, url: watchUrl, title: "Recovered Grüße 😀 - YouTube" },
   };
   for (const title of ["", "YouTube", "Untitled video"]) {
     await tracker.recordWatch({ ...event("progress"), title }, tabSender);
@@ -188,29 +190,30 @@ test("missing live titles are recovered from history after recording a qualified
     return title;
   };
   const report = { ...event("progress"), videoId: "bbbbbbbbbbb", title: "" };
-  const source = {
-    ...sender(),
-    url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
-  };
+  const source = sender(1, "https://www.youtube.com/watch?v=bbbbbbbbbbb");
   const video = await tracker.recordWatch(report, source);
   assert.equal(video.strTitle, "Recovered from history");
   await tracker.recordWatch(report, source);
   assert.equal((await manager.lookup("bbbbbbbbbbb")).intCount, 1);
 });
 
-test("a tab that navigated ahead cannot supply another video's title", async (t) => {
+test("a video reached by in-page navigation records despite a stale sender URL", async (t) => {
+  const { tracker, manager } = await setup(t);
+  const next = "https://www.youtube.com/watch?v=bbbbbbbbbbb";
+  const report = { ...event("progress"), videoId: "bbbbbbbbbbb" };
+  await tracker.recordWatch(report, { ...sender(1, next), url: watchUrl });
+  assert.equal((await manager.lookup("bbbbbbbbbbb")).intCount, 1);
+});
+
+test("a report for a video the tab already left is rejected", async (t) => {
   const { tracker, manager } = await setup(t);
   await tracker.recordWatch(event("progress"), sender());
-  await tracker.recordWatch(
-    { ...event("progress"), title: "" },
-    {
-      ...sender(),
-      tab: {
-        id: 1,
-        url: "https://www.youtube.com/watch?v=bbbbbbbbbbb",
-        title: "Another video - YouTube",
-      },
-    },
+  await assert.rejects(
+    tracker.recordWatch(
+      { ...event("progress"), title: "" },
+      sender(1, "https://www.youtube.com/watch?v=bbbbbbbbbbb"),
+    ),
+    /Invalid watch event/,
   );
   const saved = await manager.lookup("aaaaaaaaaaa");
   assert.equal(saved.strTitle, event("progress").title);

@@ -158,3 +158,101 @@ test("YouTube history cannot import current, later, or undated unmeasured watche
   await youtube.synchronize();
   assert.deepEqual([...records.keys()], ["bbbbbbbbbbb"]);
 });
+
+function resumePage(cards) {
+  const card = ([videoId, length, percent]) => ({
+    lockupViewModel: {
+      contentId: videoId,
+      contentImage: {
+        thumbnailViewModel: {
+          overlays: [
+            {
+              thumbnailBottomOverlayViewModel: {
+                progressBar: {
+                  thumbnailOverlayProgressBarViewModel: {
+                    startPercent: percent,
+                  },
+                },
+                badges: [{ thumbnailBadgeViewModel: { text: length } }],
+              },
+            },
+          ],
+        },
+      },
+    },
+  });
+  return `<script>var ytInitialData = ${JSON.stringify({
+    contents: {
+      twoColumnBrowseResultsRenderer: {
+        tabs: [
+          {
+            tabRenderer: {
+              selected: true,
+              content: {
+                sectionListRenderer: {
+                  contents: [
+                    {
+                      itemSectionRenderer: {
+                        header: {
+                          itemSectionHeaderRenderer: {
+                            title: { simpleText: "Today" },
+                          },
+                        },
+                        contents: cards.map(card),
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  })};</script>`;
+}
+
+test("YouTube's resume position adds missing videos, never brief views or known ones", async (t) => {
+  const { youtube, records } = setup(t);
+  const provider = youtube.getProvider();
+  await provider.putVideo({
+    strIdent: "kkkkkkkkkkk",
+    strTitle: "Known",
+    intTimestamp: cutoff - 86_400_000,
+    intCount: 1,
+  });
+  await provider.putVideo({
+    strIdent: "ddddddddddd",
+    strTitle: "Deleted",
+    intTimestamp: cutoff - 86_400_000,
+    intDeletedAt: cutoff - 3_600_000,
+    intCount: 1,
+  });
+  const known = structuredClone(records.get("kkkkkkkkkkk"));
+  const deleted = structuredClone(records.get("ddddddddddd"));
+  t.mock.method(globalThis, "fetch", async () => ({
+    ok: true,
+    text: async () =>
+      resumePage([
+        ["mmmmmmmmmmm", "8:58", 59],
+        ["fffffffffff", "1:22", 100],
+        ["sssssssssss", "0:38", 100],
+        ["lllllllllll", "27:28", 3],
+        ["ppppppppppp", "18:57", 10],
+        ["kkkkkkkkkkk", "10:00", 100],
+        ["ddddddddddd", "10:00", 100],
+      ]),
+  }));
+  assert.equal((await youtube.previewHistory()).newCount, 2);
+  await youtube.synchronize();
+  await youtube.synchronize();
+  assert.deepEqual(
+    [...records.keys()].sort(),
+    ["ddddddddddd", "fffffffffff", "kkkkkkkkkkk", "mmmmmmmmmmm"],
+    "a short video, a brief view and YouTube's 10% floor prove no minute",
+  );
+  assert.equal(records.get("mmmmmmmmmmm").intCount, 1);
+  assert.equal(records.get("mmmmmmmmmmm").watchEvents[0].precision, "day");
+  assert.deepEqual(records.get("kkkkkkkkkkk"), known);
+  assert.deepEqual(records.get("ddddddddddd"), deleted);
+});

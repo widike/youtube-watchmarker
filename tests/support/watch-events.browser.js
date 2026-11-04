@@ -25,6 +25,46 @@ export async function testWatchEvents({
   remote,
   assert,
 }) {
+  await test("recovered plays keep their measured time without recounting, reviving or doubling imports", async () => {
+    const db = await database();
+    try {
+      const watchedAt = new Date(2026, 10, 3, 22, 15).getTime();
+      const video = await recordPlayback(db, id, "Title", "missed", watchedAt);
+      assert(
+        video.intTimestamp === watchedAt &&
+          video.intCount === 1 &&
+          video.watchEvents[0].watchedAt === watchedAt &&
+          video.watchEvents[0].precision === "exact",
+        "a recovered play lost its measured time",
+      );
+      assert(
+        (await recordPlayback(db, id, "Title", "missed", watchedAt)) === null,
+        "a recovered play was counted again",
+      );
+      await deleteVideo(db, id);
+      assert(
+        (await recordPlayback(db, id, "Title", "late", watchedAt + 1)) === null,
+        "recovery revived a deleted video",
+      );
+      const other = "bbbbbbbbbbb";
+      await saveVideos(db, [
+        {
+          strIdent: other,
+          strTitle: "Imported",
+          intTimestamp: new Date(2026, 10, 3).getTime(),
+          intCount: 1,
+        },
+      ]);
+      assert(
+        (await recordPlayback(db, other, "Title", "same-day", watchedAt)) ===
+          null,
+        "a recovered play doubled that day's import",
+      );
+    } finally {
+      db.close();
+    }
+  });
+
   await test("a clock rollback retains actual watch times separately from the latest summary", async () => {
     const db = await database();
     const now = Date.now;

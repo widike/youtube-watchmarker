@@ -11,10 +11,9 @@ import {
 
 const id = "abcdefghijk";
 const sender = {
-  tab: { id: 1 },
+  tab: { id: 1, url: `https://www.youtube.com/watch?v=${id}` },
   documentId: "document",
   frameId: 0,
-  url: `https://www.youtube.com/watch?v=${id}`,
 };
 const event = (sessionId = "00000000-0000-4000-8000-000000000001") => ({
   videoId: id,

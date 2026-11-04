@@ -10,6 +10,30 @@ const text = (value) =>
   value?.runs?.map((run) => run.text || "").join("") ||
   "";
 
+const clockSeconds = (value) =>
+  /^\d+(:\d{1,2})+$/.test(value || "")
+    ? value.split(":").reduce((total, part) => total * 60 + Number(part), 0)
+    : 0;
+
+// How far into the video YouTube measured this account, on any device. Its bar
+// never shows less than 10%, so that value says nothing about viewing.
+function resumeSeconds(node) {
+  const bar = node.lockupViewModel?.contentImage?.thumbnailViewModel?.overlays
+    ?.map((overlay) => overlay.thumbnailBottomOverlayViewModel)
+    .find((overlay) => overlay?.progressBar);
+  const percent =
+    bar?.progressBar.thumbnailOverlayProgressBarViewModel?.startPercent ??
+    node.videoRenderer?.thumbnailOverlays?.find(
+      (overlay) => overlay.thumbnailOverlayResumePlaybackRenderer,
+    )?.thumbnailOverlayResumePlaybackRenderer.percentDurationWatched;
+  const length = clockSeconds(
+    bar?.badges
+      ?.map((badge) => badge.thumbnailBadgeViewModel?.text)
+      .find(clockSeconds) || text(node.videoRenderer?.lengthText),
+  );
+  return percent > 10 ? (length * percent) / 100 : 0;
+}
+
 function historyContents(html) {
   const data = extractYtInitialData(html);
   if (
@@ -74,6 +98,7 @@ function sourceVideo(node, timestamp) {
       ...event,
       precision: "day",
     })),
+    resumeSeconds: resumeSeconds(node),
   };
 }
 

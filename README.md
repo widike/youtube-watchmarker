@@ -83,14 +83,19 @@ exports are retained unchanged. Lifetime counters and undated counts never enter
 period totals. Activity is not proof of completed viewing. New live playbacks
 require at least 60 seconds of measured viewing before navigation, progress or
 rating signals can mark a video. Each replay needs its own minute; shorter videos
-and short loops do not qualify. Browser and YouTube history imports only backfill
+and short loops do not qualify. Browser and YouTube history imports backfill
 dates before this installation first ran with the import boundary. That boundary
-is stored locally at the start of that day and persists across restarts. Source
-history cannot prove a minute of viewing, so dates on or after the boundary and
-undated YouTube history cards are excluded, including in manual imports and
-previews. This also excludes newer unmeasured activity from other devices;
-qualified plays can still arrive through Watchmarker cloud sync. Existing saved
-history is retained; use the reconciliation preview below for old overlaps.
+is stored locally at the start of that day and persists across restarts. A visit
+cannot prove a minute of viewing, so newer browser history and undated YouTube
+cards are excluded, including in manual imports and previews. Newer YouTube
+history adds a video only when it is missing entirely and YouTube's own resume
+position is at least a minute in, which also covers other devices. YouTube never
+shows less than 10%, so that value proves nothing, and such a video stays out
+until a client measured it. These additions are day-only and never add a replay
+to a known video. Every sync also restores plays whose measured time was saved
+without a watch, using the first measured moment; it skips deleted videos and
+days already covered by an import. Existing saved history is retained; use the
+reconciliation preview below for old overlaps.
 Subtracting distinct videos from mixed-source
 records cannot establish repeat watches, so Insights does not show that claim.
 Browser and YouTube source imports also skip timestamps already recorded for

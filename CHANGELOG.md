@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Videos reached without a page load (clicks inside YouTube, autoplay) are recorded
+  again. The check compared them to `sender.url`, which Chrome freezes at the
+  document's first URL, so each one was rejected as an invalid watch event.
+- YouTube history reads weekday section headers, so the past week is no longer
+  treated as undated until YouTube shows a full date.
+- Periodic sync restores plays whose measured time was saved without a watch, with
+  their real time, after downloading from other devices.
+- YouTube history adds missing videos after the import boundary when YouTube's own
+  resume position proves at least a minute. **Check sources** counts them as new.
+
 ## 1.3.1 — 2026-11-03
 
 - Cloud sync resolves the authenticated device's actual shared-history membership.

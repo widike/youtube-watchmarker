@@ -6,10 +6,31 @@ import {
   putEventVideo,
 } from "./history-event-storage.js";
 import { OUTBOX_STORE, transactionDone } from "./history-storage.js";
+import { dayKey } from "../statistics/statistics-dates.js";
+
+// Recovery only fills a gap: it never revives deleted history, recounts a known
+// play, or adds to a date-only import that already stands for that day's watch.
+function canRecover(previous, watchEvents, eventId, recoveredAt) {
+  return (
+    recoveredAt > (previous?.intDeletedAt || 0) &&
+    !watchEvents.some(
+      (event) =>
+        event.eventId === eventId ||
+        (event.source === "saved" &&
+          dayKey(event.watchedAt) === dayKey(recoveredAt)),
+    )
+  );
+}
 
 // An immutable event, materialized summary and upload obligation commit together.
 // Event identities never expire, so arbitrarily late retries remain safe.
-export async function recordPlayback(db, videoId, title, playbackId) {
+export async function recordPlayback(
+  db,
+  videoId,
+  title,
+  playbackId,
+  recoveredAt = 0,
+) {
   if (typeof playbackId !== "string" || !playbackId || playbackId.length > 1000)
     throw new Error("A playback ID is required");
   const tx = db.transaction(
@@ -31,7 +52,12 @@ export async function recordPlayback(db, videoId, title, playbackId) {
           (event) => event.eventId === eventId,
         );
         if (alreadyCounted && (!previous || isDeleted(previous))) return;
-        const watchedAt = Date.now();
+        if (
+          recoveredAt &&
+          !canRecover(previous, watchEvents, eventId, recoveredAt)
+        )
+          return;
+        const watchedAt = recoveredAt || Date.now();
         const latestTimestamp = alreadyCounted
           ? previous.intTimestamp
           : Math.max(

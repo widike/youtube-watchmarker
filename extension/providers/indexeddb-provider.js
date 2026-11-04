@@ -101,7 +101,7 @@ export class IndexedDBProvider {
     });
   }
 
-  async recordPlayback(videoId, title, playbackId) {
+  async recordPlayback(videoId, title, playbackId, recoveredAt) {
     this.updateConnectionStatus();
     if (!this.isConnected) throw new Error("Database not connected");
     return recordPlayback(
@@ -109,6 +109,7 @@ export class IndexedDBProvider {
       videoId,
       title,
       playbackId,
+      recoveredAt,
     );
   }
 

@@ -16,6 +16,8 @@ import {
 } from "../handlers/duration-handlers.js";
 import { logger } from "../shared/logger.js";
 import { historyImportCutoff } from "../history/history-import-policy.js";
+import { recoverMissedPlaybacks } from "../history/playback-recovery.js";
+import { readWatchTime } from "../history/watch-time-storage.js";
 import { withWatchmarkerRefresh } from "./watch-notifications.js";
 import { messageRouter } from "./message-router.js";
 import { settingsManager } from "./settings-manager.js";
@@ -235,6 +237,14 @@ const historySynchronization = createHistorySynchronization({
   storage: chrome.storage.sync,
   youtube: Youtube,
   history: History,
+  // Download first so another device's own events win over a recovered copy.
+  recoverPlaybacks: async () => {
+    await SyncManagerInstance.syncNow({ forceDownload: false });
+    return recoverMissedPlaybacks(
+      Youtube,
+      await readWatchTime(Database.database),
+    );
+  },
   logger,
 });
 

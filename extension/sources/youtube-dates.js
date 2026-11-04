@@ -3,6 +3,15 @@ import { decodeHtmlEntitiesAndFixEncoding } from "../shared/text-utils.js";
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const MONTH_NAMES =
   "jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december";
+const WEEKDAYS = [
+  ["sunday", "sonntag"],
+  ["monday", "montag"],
+  ["tuesday", "dienstag"],
+  ["wednesday", "mittwoch"],
+  ["thursday", "donnerstag"],
+  ["friday", "freitag"],
+  ["saturday", "samstag"],
+];
 
 function startOfLocalDay(date) {
   return new Date(
@@ -40,6 +49,17 @@ export function parseYouTubeDateText(dateText, now = new Date()) {
 
   if (lowerText.includes("yesterday") || lowerText.includes("gestern")) {
     return startOfLocalDay(new Date(now.getTime() - DAY_IN_MS));
+  }
+
+  // History headers name the past week's days, which always lie in the past.
+  const weekday = WEEKDAYS.findIndex((names) => names.includes(lowerText));
+  if (weekday >= 0) {
+    const daysAgo = (now.getDay() - weekday + 7) % 7 || 7;
+    return new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - daysAgo,
+    ).getTime();
   }
 
   let relativeMatch = lowerText.match(

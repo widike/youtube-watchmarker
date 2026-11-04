@@ -63,7 +63,19 @@ export class VideoRecordStore {
     );
   }
 
-  upsertSourceVideo(provider, source) {
+  recoverPlayback({ videoId, title, playbackId, watchedAt }) {
+    const provider = this.getProvider();
+    return this.serialize(provider, videoId, () =>
+      provider.recordPlayback(
+        videoId,
+        this.selectTitle("", title),
+        playbackId,
+        watchedAt,
+      ),
+    );
+  }
+
+  upsertSourceVideo(provider, source, { createOnly = false } = {}) {
     return this.serialize(provider, source.strIdent, async () => {
       const existing = await provider.getVideo(source.strIdent, {
         includeDeleted: true,
@@ -71,7 +83,8 @@ export class VideoRecordStore {
       const sourceTimestamp = this.getSourceTimestamp(source);
       // Likes supply membership, not a watch date. An existing video is
       // already covered, including tombstones and separately tracked plays.
-      if (existing && !sourceTimestamp) return { status: "skipped" };
+      if (existing && (createOnly || !sourceTimestamp))
+        return { status: "skipped" };
       const strTitle = this.selectTitle(existing?.strTitle, source.strTitle);
       const video = mergeSourceVideo(
         existing ? { ...existing, strTitle } : null,

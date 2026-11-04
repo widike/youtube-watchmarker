@@ -6,6 +6,7 @@ import { requestYouTubeApi } from "./youtube-request.js";
 import {
   historyImportCutoff,
   isHistoricalWatch,
+  isMeasuredWatch,
 } from "../history/history-import-policy.js";
 
 export async function synchronizeYouTubeSource(
@@ -47,7 +48,8 @@ export async function synchronizeYouTubeSource(
       if (seenVideos.has(occurrence)) continue;
       seenVideos.add(occurrence);
       result.totalSeen++;
-      if (historicalOnly && !isHistoricalWatch(video, cutoff)) {
+      const historical = !historicalOnly || isHistoricalWatch(video, cutoff);
+      if (!historical && !isMeasuredWatch(video)) {
         result.skippedCount++;
         continue;
       }
@@ -56,7 +58,10 @@ export async function synchronizeYouTubeSource(
         continue;
       }
       try {
-        const { status } = await manager.upsertSourceVideo(provider, video);
+        // A resume position cannot date a replay, so it only fills gaps.
+        const { status } = await manager.upsertSourceVideo(provider, video, {
+          createOnly: !historical,
+        });
         if (status === "created") result.newCount++;
         else if (status === "updated") result.updatedCount++;
         else result.skippedCount++;

@@ -106,3 +106,42 @@ test("browser history failure at startup does not block YouTube history", async 
   await sync.startup();
   assert.deepEqual(calls, ["ready", "error", "youtube"]);
 });
+
+test("measured playbacks are recovered before imports look for gaps", async () => {
+  const { sync, calls } = setup({
+    storage: {
+      get: async () => ({
+        idCondition_Youprog: true,
+        idCondition_Youhist: true,
+      }),
+    },
+    recoverPlaybacks: async () => {
+      calls.push("recover");
+    },
+  });
+  await sync.periodic();
+  assert.deepEqual(calls, ["ready", "recover", "youtube"]);
+});
+
+test("disabled progress tracking recovers nothing and failures keep imports running", async () => {
+  const disabled = setup({
+    recoverPlaybacks: async () => {
+      disabled.calls.push("recover");
+    },
+  });
+  await disabled.sync.periodic();
+  assert.ok(!disabled.calls.includes("recover"));
+  const failing = setup({
+    storage: {
+      get: async () => ({
+        idCondition_Youprog: true,
+        idCondition_Youhist: true,
+      }),
+    },
+    recoverPlaybacks: async () => {
+      throw new Error("Recovery unavailable");
+    },
+  });
+  await failing.sync.periodic();
+  assert.deepEqual(failing.calls, ["ready", "error", "youtube"]);
+});

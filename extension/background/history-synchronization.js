@@ -5,6 +5,7 @@ export function createHistorySynchronization({
   storage,
   youtube,
   history,
+  recoverPlaybacks,
   logger,
 }) {
   const run = async (trigger) => {
@@ -13,8 +14,15 @@ export function createHistorySynchronization({
       const settings = await storage.get([
         "idCondition_Browhist",
         "idCondition_Youhist",
+        "idCondition_Youprog",
       ]);
       const sources = [
+        // Exact measured times must land before day-only imports look for gaps.
+        {
+          enabled: settings.idCondition_Youprog,
+          label: "Measured playback",
+          synchronize: recoverPlaybacks,
+        },
         {
           enabled: settings.idCondition_Browhist,
           label: "Browser history",
