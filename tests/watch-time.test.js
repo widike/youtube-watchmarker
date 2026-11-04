@@ -203,9 +203,15 @@ test("duration reports reject invalid intervals, subframes, and forged cumulativ
       () => validateWatchTime(bad, sender, now),
       /Invalid playback time/,
     );
-  assert.throws(() =>
-    validateWatchTime(request, { ...sender, frameId: 2 }, now),
-  );
+  for (const badSender of [
+    { ...sender, frameId: 2, documentLifecycle: "active" },
+    { ...sender, frameId: 2, documentLifecycle: "prerender" },
+    { ...sender, frameId: 2, documentLifecycle: "cached", documentId: "" },
+  ])
+    assert.throws(
+      () => validateWatchTime(request, badSender, now),
+      /Invalid playback time report/,
+    );
 });
 
 test("duration aggregates periods, local day/hour buckets, deleted videos, and counts independently", () => {

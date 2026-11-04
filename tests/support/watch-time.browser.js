@@ -165,13 +165,28 @@ export async function verifyDurationPersistence(assert) {
     (await readWatchTime(db))[0].milliseconds === 2000,
     "Duplicate duration delivery added time",
   );
+  // Chrome can give the departing top-level document a nonzero frame ID
+  // before delivering a final flush during cross-site navigation.
+  await saveWatchTime(db, packet(2500), {
+    ...sender,
+    frameId: 5,
+    documentLifecycle: "cached",
+  });
   db.close();
   db = await open();
-  await saveWatchTime(db, packet(3000), sender);
+  assert(
+    (await readWatchTime(db))[0].milliseconds === 2500,
+    "The cached document's final flush did not update the existing snapshot",
+  );
+  await saveWatchTime(db, packet(3000), {
+    ...sender,
+    frameId: 5,
+    documentLifecycle: "pending_deletion",
+  });
   assert(
     (await readWatchTime(db)).length === 1 &&
       (await readWatchTime(db))[0].milliseconds === 3000,
-    "Duration did not survive a database restart",
+    "The departing document's final flush split or lost the playback snapshot",
   );
   const time = await readWatchTime(db);
   const [entry] = enrichHistoryVideos(

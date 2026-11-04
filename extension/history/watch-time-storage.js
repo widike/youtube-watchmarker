@@ -4,12 +4,21 @@ import "../shared/video-identity.js";
 const MINUTE = 60_000;
 
 export function validateWatchTime(request, sender, now = Date.now()) {
+  // The manifest injects the tracker only into top-level documents. During
+  // pagehide Chrome can assign the departing document a nonzero frame ID
+  // while retaining its document ID and tab ID.
+  const departingDocument =
+    Number.isInteger(sender?.frameId) &&
+    sender.frameId > 0 &&
+    typeof sender.documentId === "string" &&
+    sender.documentId.length > 0 &&
+    ["cached", "pending_deletion"].includes(sender.documentLifecycle);
   if (
     !globalThis.YouTubeWatchmarkerVideo.isVideoId(request.videoId) ||
     !/^[a-f0-9-]{36}$/i.test(request.sessionId || "") ||
     !Number.isInteger(sender?.tab?.id) ||
     sender.tab.id < 0 ||
-    (sender.frameId !== undefined && sender.frameId !== 0) ||
+    (sender.frameId !== 0 && !departingDocument) ||
     !Number.isFinite(request.watchedMilliseconds) ||
     request.watchedMilliseconds < MINUTE ||
     !Array.isArray(request.buckets) ||
