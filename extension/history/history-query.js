@@ -12,7 +12,7 @@ export function queryHistory(
     now = Date.now(),
   } = {},
 ) {
-  const term = searchText(query).trim();
+  const terms = searchText(query).match(/\S+/g) || [];
   const group = wordGroup ? titleWords(wordGroup)[0] : null;
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -29,12 +29,9 @@ export function queryHistory(
     if (cutoff && (!video.intTimestamp || video.intTimestamp < cutoff))
       return false;
     if (group) return titleWords(video.strTitle).includes(group);
-    return (
-      !term ||
-      searchText(`${video.strTitle || ""}\n${video.strIdent || ""}`).includes(
-        term,
-      )
-    );
+    if (!terms.length) return true;
+    const title = searchText(video.strTitle);
+    return terms.every((term) => title.includes(term));
   });
   const recent = (a, b) =>
     (b.intTimestamp || 0) - (a.intTimestamp || 0) ||

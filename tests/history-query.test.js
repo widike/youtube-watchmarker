@@ -47,10 +47,6 @@ test("search and sort apply across the library without mutating records", () => 
     queryHistory(videos, { query: "  CALM ", now })[0].strIdent,
     "bbbbbbbbbbb",
   );
-  assert.equal(
-    queryHistory(videos, { query: "cccc", now })[0].strTitle,
-    "An older video",
-  );
   assert.equal(queryHistory(videos, { sort: "most", now })[0].intCount, 8);
   assert.equal(
     queryHistory(videos, { sort: "title", now })[0].strTitle,
@@ -61,6 +57,29 @@ test("search and sort apply across the library without mutating records", () => 
     "No date",
   );
   assert.equal(videos[0].strTitle, "Zebra & friends");
+});
+
+test("title search requires every term in any order and ignores video IDs", () => {
+  const matches = [
+    { strTitle: "UE4 - Top down RPG Voxel updated project" },
+    { strTitle: "Top tips for UE4" },
+  ];
+  const singleTermMatches = [
+    { strTitle: "An introduction to UE4" },
+    { strTitle: "UE4 lighting guide", strIdent: "abctopdefgh" },
+  ];
+  const history = [
+    ...matches,
+    ...singleTermMatches,
+    { strTitle: "Top Gemini tips", strIdent: "abcUE4defgh" },
+    { strIdent: "abcUE4topfg" },
+  ];
+
+  assert.deepEqual(
+    new Set(queryHistory(history, { query: "ue4" })),
+    new Set([...matches, ...singleTermMatches]),
+  );
+  assert.deepEqual(queryHistory(history, { query: "  ue4\t TOP  " }), matches);
 });
 
 test("missing dates do not become January 1970 and imported titles are escaped", () => {

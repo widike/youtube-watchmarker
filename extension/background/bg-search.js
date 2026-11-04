@@ -55,7 +55,7 @@ export class SearchManager {
 
   /**
    * Search for videos in the database
-   * @param {string} [query=''] - Search query (searches in ID and title)
+   * @param {string} [query=''] - Terms to match in the video title
    * @param {number} [skip=0] - Number of results to skip
    * @param {number} [length=0] - Number of results to return (0 = all)
    * @returns {Promise<Object>} Object with videos array and totalResults count
