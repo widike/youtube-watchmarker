@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.3.1 — 2026-11-03
+
+The existing 1.3.1 package was updated on 2026-11-04 with playback tracking and
+YouTube history-import fixes.
 
 - Videos reached without a page load (clicks inside YouTube, autoplay) are recorded
   again. The check compared them to `sender.url`, which Chrome freezes at the
@@ -11,8 +14,6 @@
   their real time, after downloading from other devices.
 - YouTube history adds missing videos after the import boundary when YouTube's own
   resume position proves at least a minute. **Check sources** counts them as new.
-
-## 1.3.1 — 2026-11-03
 
 - Cloud sync resolves the authenticated device's actual shared-history membership.
   A repaired device that previously created its own history adopts its linked
