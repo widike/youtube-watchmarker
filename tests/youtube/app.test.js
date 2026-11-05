@@ -9,6 +9,7 @@ function appRuntime() {
   );
   app.isProcessing = false;
   app.playbackTracker = { refresh() {} };
+  app.blockedVideoManager = { async processVideos() {} };
   return { ...runtime, app };
 }
 
@@ -66,4 +67,26 @@ test("a refresh arriving during a pending lookup runs after that lookup", async 
   await initial;
   assert.equal(calls, 2);
   assert.equal(app.isProcessing, false);
+});
+
+test("block-list notifications reload saved blocks and refresh existing cards", async () => {
+  const { app, context } = appRuntime();
+  let receive;
+  context.chrome.runtime.onMessage = {
+    addListener: (callback) => {
+      receive = callback;
+    },
+  };
+  let loads = 0;
+  const refreshed = deferred();
+  app.blockedVideoManager = {
+    async load() {
+      loads++;
+    },
+  };
+  app.refresh = () => refreshed.resolve();
+  app.registerMessageListener();
+  receive({ action: "youtube-blocklist-changed" }, {}, () => {});
+  await refreshed.promise;
+  assert.equal(loads, 1);
 });

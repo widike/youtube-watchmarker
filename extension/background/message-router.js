@@ -6,8 +6,17 @@ const CONTENT_ACTIONS = new Set([
   "youtube-lookup",
   "youtube-watch",
   "youtube-watch-time",
+  "blocked-videos-list",
+  "blocked-videos-block",
 ]);
-const VIDEO_ACTIONS = new Set([...CONTENT_ACTIONS, "search-delete"]);
+const VIDEO_ACTIONS = new Set([
+  "youtube-lookup",
+  "youtube-watch",
+  "youtube-watch-time",
+  "blocked-videos-block",
+  "blocked-videos-unblock",
+  "search-delete",
+]);
 const CONTENT_ORIGINS = new Set([
   "https://www.youtube.com",
   "https://m.youtube.com",

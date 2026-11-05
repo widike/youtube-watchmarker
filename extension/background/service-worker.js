@@ -7,6 +7,15 @@
  */
 
 import { createHistorySynchronization } from "./history-synchronization.js";
+import {
+  BLOCKED_VIDEOS_KEY,
+  notifyBlockedVideosChanged,
+} from "./blocked-videos.js";
+import {
+  handleBlockedVideosList,
+  handleBlockVideo,
+  handleUnblockVideo,
+} from "../handlers/blocked-video-handlers.js";
 import { handleHistoryReconciliation } from "../handlers/reconciliation-handlers.js";
 import { durationBackfill, durationStorage } from "./duration-runtime.js";
 import { DURATION_ALARM } from "../duration/duration-backfill.js";
@@ -97,6 +106,9 @@ function registerMessageHandlers() {
   }
 
   messageRouter.registerMultiple({
+    "blocked-videos-list": handleBlockedVideosList,
+    "blocked-videos-block": handleBlockVideo,
+    "blocked-videos-unblock": handleUnblockVideo,
     "database-export": withInitialization(handleDatabaseExport),
     "history-reconcile": withInitialization(handleHistoryReconciliation),
     "database-import": withInitialization(handleDatabaseImport),
@@ -249,6 +261,28 @@ const historySynchronization = createHistorySynchronization({
 });
 
 registerMessageHandlers();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[BLOCKED_VIDEOS_KEY]) {
+    void notifyBlockedVideosChanged().catch((error) =>
+      logger.debug("Blocked video notification unavailable:", error.message),
+    );
+    const previous = new Set(
+      (changes[BLOCKED_VIDEOS_KEY].oldValue || []).map((row) => row.changeId),
+    );
+    if (
+      (changes[BLOCKED_VIDEOS_KEY].newValue || []).some(
+        (row) => row.pending && !previous.has(row.changeId),
+      )
+    )
+      void ensureServiceWorkerReady()
+        .then(() =>
+          databaseProviderFactory.performDeltaSync({ forceDownload: false }),
+        )
+        .catch((error) =>
+          logger.debug("Blocked video sync deferred:", error.message),
+        );
+  }
+});
 registerAlarmHandlers();
 alarmManager.bindListener();
 

@@ -28,6 +28,9 @@ function routerWithHandlers() {
   router.registerMultiple({
     "youtube-lookup": async (request) => ({ strIdent: request.videoId }),
     "youtube-watch": async () => ({ data: { strIdent: videoId } }),
+    "blocked-videos-list": async () => ({ videos: [] }),
+    "blocked-videos-block": async () => ({}),
+    "blocked-videos-unblock": async () => ({}),
     "search-delete": async () => ({}),
     "supabase-get-credentials": async () => ({ credentials: "private" }),
     "supabase-captcha-config": async () => ({ captcha: {} }),
@@ -72,6 +75,57 @@ test("credential and settings actions are restricted to extension pages", async 
     assert.equal((await router.handle({ action }, content)).success, false);
     assert.equal((await router.handle({ action }, extension)).success, true);
   }
+});
+
+test("content can list and block videos while only options can unblock", async () => {
+  const router = routerWithHandlers();
+  assert.equal(
+    (await router.handle({ action: "blocked-videos-list" }, content)).success,
+    true,
+  );
+  for (const sender of [content, extension]) {
+    assert.equal(
+      (
+        await router.handle(
+          { action: "blocked-videos-block", videoId, title: "Title" },
+          sender,
+        )
+      ).success,
+      true,
+    );
+    assert.equal(
+      (
+        await router.handle(
+          { action: "blocked-videos-block", videoId: "invalid" },
+          sender,
+        )
+      ).success,
+      false,
+    );
+  }
+  assert.equal(
+    (
+      await router.handle(
+        { action: "blocked-videos-unblock", videoId },
+        content,
+      )
+    ).success,
+    false,
+  );
+  assert.equal(
+    (
+      await router.handle(
+        { action: "blocked-videos-unblock", videoId },
+        extension,
+      )
+    ).success,
+    true,
+  );
+  assert.equal(
+    (await router.handle({ action: "blocked-videos-unblock" }, extension))
+      .success,
+    false,
+  );
 });
 
 test("sender IDs and exact origins are checked before privileged work", async () => {

@@ -1,5 +1,7 @@
 // @ts-check
 
+import { BlockedVideosController } from "./blocked-videos-controller.js";
+
 const SETTING_LABELS = {
   idCondition_Brownav: "Browser Navigation",
   idCondition_Browhist: "Browser History",
@@ -12,6 +14,7 @@ const SETTING_LABELS = {
   idVisualization_Showdate: "Last Watch Date",
   idVisualization_Showcount: "Watch Count",
   idVisualization_Hideprogress: "Hide Progress Bar",
+  idVisualization_Hidepaidpromotion: "Hide Paid-Promotion Overlays",
 };
 
 const TOGGLE_IDS = Object.keys(SETTING_LABELS);
@@ -22,7 +25,13 @@ export class SettingsController {
   }
 
   async initialize() {
-    await Promise.all(TOGGLE_IDS.map((id) => this.bindToggle(id)));
+    this.blockedVideos = new BlockedVideosController({
+      feedback: this.feedback,
+    });
+    await Promise.all([
+      ...TOGGLE_IDS.map((id) => this.bindToggle(id)),
+      this.blockedVideos.initialize(),
+    ]);
   }
 
   async bindToggle(id) {

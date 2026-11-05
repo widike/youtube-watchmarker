@@ -1,4 +1,30 @@
 @layer pages {
+  #blocked-videos-panel {
+    margin-block-start: var(--space-4);
+  }
+  .blocked-videos-list {
+    list-style: none;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 0;
+    margin: 0;
+  }
+  .blocked-videos-list li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding-block: var(--space-3);
+    border-top: 1px solid var(--line);
+  }
+  .blocked-videos-list li > span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+  }
+  .blocked-videos-list button {
+    flex-shrink: 0;
+  }
   .settings-card h2 > i {
     color: var(--accent);
     font-size: 15px;

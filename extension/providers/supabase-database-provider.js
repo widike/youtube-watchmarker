@@ -8,6 +8,10 @@ import {
 
 import { uploadWatchTime, downloadWatchTime } from "./supabase-watch-time.js";
 import { uploadDurations, downloadDurations } from "./supabase-durations.js";
+import {
+  uploadBlockedVideos,
+  downloadBlockedVideos,
+} from "./supabase-blocked-videos.js";
 
 const TABLE = "/youtube_watch_history";
 const COLUMNS =
@@ -87,6 +91,10 @@ export class SupabaseDatabaseProvider {
         "GET",
         "/youtube_video_durations?select=str_ident&limit=0",
       );
+      await this.makeRequest(
+        "GET",
+        "/youtube_blocked_videos?select=str_ident&limit=0",
+      );
       if (
         (await (
           await this.makeRequest(
@@ -141,6 +149,12 @@ export class SupabaseDatabaseProvider {
 
   async importWatchTime(rows) {
     return uploadWatchTime(this, rows);
+  }
+  async importBlockedVideos(rows) {
+    return uploadBlockedVideos(this, rows);
+  }
+  async getBlockedVideoPage(after = "", limit = 500) {
+    return downloadBlockedVideos(this, after, limit);
   }
   async importDurations(rows) {
     return uploadDurations(this, rows);

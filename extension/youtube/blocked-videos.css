@@ -1,0 +1,67 @@
+.youwatch-blocked {
+  display: none !important;
+}
+
+.youwatch-block-host {
+  position: relative;
+}
+
+.youwatch-block-button {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 1500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(30 30 30 / 0.94);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* AI Summary owns the adjacent purple button. Both can arrive in any order. */
+.youwatch-block-host:has(> .ytsum-btn) > .youwatch-block-button {
+  right: 48px;
+}
+
+.youwatch-block-host:hover > .youwatch-block-button,
+.youwatch-block-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.youwatch-block-button:hover {
+  background: #484848;
+}
+
+.youwatch-block-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.youwatch-block-button:disabled {
+  cursor: wait;
+}
+
+.youwatch-block-button svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+@media (hover: none) {
+  .youwatch-block-button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

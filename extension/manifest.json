@@ -28,10 +28,12 @@
   "content_scripts": [
     {
       "matches": ["*://www.youtube.com/*", "*://m.youtube.com/*"],
+      "css": ["youtube/blocked-videos.css"],
       "js": [
         "shared/video-identity.js",
         "youtube/core.js",
         "youtube/settings-runtime.js",
+        "youtube/blocked-videos.js",
         "youtube/rendering.js",
         "youtube/watch-time.js",
         "youtube/playback.js",

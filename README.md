@@ -35,6 +35,7 @@ upgrade requirements.
 - **Watch Badge**: Display "WATCHED" badge on marked videos
 - **Watch Date**: Show the date when video was watched in the badge
 - **Hide Progress Bar**: Hide YouTube's default progress bars on watched videos
+- **Video Blocking**: Enable **Preferences → Local video blocking → Hide unwanted videos** to add an X beside AI Summary on YouTube cards. Videos disappear without sending YouTube feedback or marking them watched. Blocks and unblocks sync through your existing Supabase device connection, with offline retries. Manage the list in Preferences; turning the setting off preserves it. Apply the current **Connection → Copy setup SQL** on existing projects to add block-list sync support.
 
 ### Watch Detection Methods
 

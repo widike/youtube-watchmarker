@@ -36,8 +36,10 @@ const stylesheets = {
   Showcount: ".youwatch-mark::after { --youwatch-count:attr(watchcount); }",
   Hideprogress:
     ".youwatch-mark :is(ytd-thumbnail-overlay-resume-playback-renderer, ytm-thumbnail-overlay-resume-playback-renderer) { display:none !important; }",
+  Hidepaidpromotion: ".ytp-paid-content-overlay { display:none !important; }",
 };
 const defaults = {
+  idBlocking_Enabled: false,
   idCondition_Brownav: true,
   idCondition_Browhist: true,
   idCondition_Youprog: true,

@@ -7,9 +7,12 @@ import { pendingWatchTimeCount } from "../history/watch-time-replication.js";
 import { pendingDurationCount } from "../duration/duration-replication.js";
 import { DurationStorage } from "../duration/duration-storage.js";
 import { resolveCloudIdentity } from "./cloud-identity.js";
+import { getBlockedVideoStore } from "../background/blocked-videos.js";
+import { BlockedVideoSync } from "../background/blocked-video-sync.js";
 import {
   OUTBOX_STORE,
   readMetadata,
+  writeMetadata,
   readRequest,
   acknowledgeVideos,
 } from "../history/history-storage.js";
@@ -26,6 +29,10 @@ export class DatabaseProviderFactory {
       () => new DurationStorage(() => manager.database).notifyCacheChanged(),
     );
     this.youtubeDeletions = new YouTubeDeletionQueue(manager.database);
+    this.blockedVideoSync = new BlockedVideoSync(
+      getBlockedVideoStore(),
+      supabaseDatabaseProvider,
+    );
   }
 
   getCurrentProvider() {
@@ -105,7 +112,40 @@ export class DatabaseProviderFactory {
       session,
       supabaseDatabaseProvider,
     );
-    return this.sync.sync(options);
+    const previous =
+      (await readMetadata(this.databaseManager.database, "syncStatus")) || {};
+    const [history, blocks] = await Promise.allSettled([
+      this.sync.sync(options),
+      this.blockedVideoSync.sync(),
+    ]);
+    const result =
+      history.status === "fulfilled"
+        ? history.value
+        : { success: false, error: history.reason.message };
+    const error =
+      [
+        result.error,
+        blocks.status === "rejected"
+          ? `Blocked videos: ${blocks.reason.message}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("; ") || null;
+    const status = {
+      ...((await readMetadata(this.databaseManager.database, "syncStatus")) ||
+        {}),
+      error,
+      inProgress: Boolean(
+        result.inProgress ||
+          (blocks.status === "fulfilled" && !blocks.value.complete),
+      ),
+      lastSuccess:
+        !error && blocks.status === "fulfilled" && blocks.value.complete
+          ? result.lastSuccess
+          : previous.lastSuccess || 0,
+    };
+    await writeMetadata(this.databaseManager.database, "syncStatus", status);
+    return { ...result, ...status, success: result.success === true && !error };
   }
 
   async syncVideoDeletion(videoId) {
@@ -151,7 +191,8 @@ export class DatabaseProviderFactory {
         pending +
         youtubeJobs.length +
         (await pendingWatchTimeCount(this.databaseManager.database)) +
-        (await pendingDurationCount(this.databaseManager.database)),
+        (await pendingDurationCount(this.databaseManager.database)) +
+        (await getBlockedVideoStore().pendingRecords()).length,
       ...((await readMetadata(this.databaseManager.database, "syncStatus")) ||
         {}),
     };

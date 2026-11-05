@@ -14,6 +14,7 @@
         "Showdate",
         "Showcount",
         "Hideprogress",
+        "Hidepaidpromotion",
       ];
       this.settingKeys = this.features.flatMap((name) => [
         `stylesheet_${name}`,
@@ -29,7 +30,10 @@
         return;
       }
 
-      const result = await chrome.storage.sync.get(this.settingKeys);
+      const result = await chrome.storage.sync.get([
+        ...this.settingKeys,
+        "idBlocking_Enabled",
+      ]);
       this.cache = { ...result };
     }
 
