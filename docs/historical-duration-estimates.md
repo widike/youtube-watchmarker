@@ -23,9 +23,11 @@ count even without a key. API keys, backfill controls and quota budgets stay loc
 
 Cache writes and upload obligations commit together. Interrupted transfers retry
 after restart, downloads resume from committed pages, and newer fetches replace
-older observations on every device. Daily reconciliation repairs missing cloud
-entries. Sync preserves the original fetch and expiry dates; expired lengths are
-removed locally and from the shared table. **Remove key & local cache** clears
+older observations on every device. Only the initial migration queues the entire
+local cache; later syncs transfer pending changes and server-revision deltas.
+Sync preserves the original fetch and expiry dates; expired lengths are
+removed locally and from the shared table (cloud maintenance runs at most hourly
+across linked devices). **Remove key & local cache** clears
 this installation's key, lengths and pending cache uploads; valid shared lengths
 can return on the next cloud download. It does not delete shared playback time.
 

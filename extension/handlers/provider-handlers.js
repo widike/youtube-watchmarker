@@ -90,7 +90,9 @@ export const handleSupabaseConnect = createHandler(
       );
       await supabaseDatabaseProvider.close();
       // Local recording stays available while the initial cloud restore runs.
-      void databaseProviderFactory.performDeltaSync().catch(() => {});
+      void databaseProviderFactory
+        .performDeltaSync({ forceDownload: true })
+        .catch(() => {});
       return { auth: { authenticated: true } };
     } finally {
       connecting = false;

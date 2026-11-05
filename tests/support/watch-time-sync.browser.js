@@ -105,7 +105,7 @@ export async function testWatchTimeSync({
       "Retry inflated playback time",
     );
   });
-  await test("existing local durations migrate to the shared union and daily repair restores lost cloud rows", async () => {
+  await test("existing local durations migrate to the shared union and explicit repair restores lost cloud rows", async () => {
     const db = await database();
     const cloud = remote();
     const old = packet(30000).buckets[0];

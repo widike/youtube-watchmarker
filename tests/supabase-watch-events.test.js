@@ -44,48 +44,35 @@ test("uploads append immutable events after summaries and retry stable IDs", asy
   );
 });
 
-test("downloads paginate event histories without truncating a repeated ID at a boundary", async () => {
+test("incremental pages include complete event histories in one response", async () => {
   const provider = new SupabaseDatabaseProvider();
   const calls = [];
-  let page = 0;
-  provider.makeRequest = async (_method, path) => {
-    calls.push(path);
-    if (path.startsWith("/youtube_watch_history"))
-      return new Response(
-        JSON.stringify([row("aaaaaaaaaaa"), row("bbbbbbbbbbb")]),
-      );
-    const batches = [
-      [
-        {
-          str_ident: "aaaaaaaaaaa",
-          event_id: "same-id",
-          watched_at: 100,
-          source: "playback",
-          precision: "exact",
-        },
-      ],
-      [
-        {
-          str_ident: "bbbbbbbbbbb",
-          event_id: "same-id",
-          watched_at: 200,
-          source: "playback",
-          precision: "exact",
-        },
-      ],
-      [],
-    ];
-    return new Response(JSON.stringify(batches[page++]));
+  provider.makeRequest = async (...args) => {
+    calls.push(args);
+    return Response.json([
+      { ...row("aaaaaaaaaaa"), watch_events: [event("same-id", 100)] },
+      { ...row("bbbbbbbbbbb"), watch_events: [event("same-id", 200)] },
+    ]);
   };
-  const videos = await provider.getVideoPage();
+  const videos = await provider.getVideoPage("", 500, {
+    since: "2",
+    until: "9",
+  });
   assert.equal(videos.length, 2);
   assert.equal(videos[0].watchEvents[0].watchedAt, 100);
   assert.equal(videos[1].watchEvents[0].watchedAt, 200);
-  const cursor = new URL(`https://example.test${calls[2]}`).searchParams.get(
-    "or",
-  );
-  assert.match(cursor, /event_id\.eq\."same-id"/);
-  assert.match(cursor, /str_ident\.gt\."aaaaaaaaaaa"/);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    "POST",
+    "/rpc/watchmarker_sync_page",
+    {
+      p_collection: "history",
+      p_since: "2",
+      p_until: "9",
+      p_after: "",
+      p_limit: 500,
+    },
+  ]);
 });
 
 test("schema 4 is required before cloud synchronization can run", async () => {
@@ -93,7 +80,11 @@ test("schema 4 is required before cloud synchronization can run", async () => {
   provider.makeRequest = async () => new Response("2");
   await assert.rejects(provider.init(), /Unsupported sync schema/);
   provider.makeRequest = async (_method, path) =>
-    new Response(path.endsWith("watchmarker_event_merge_version") ? "1" : "4");
+    path.endsWith("watchmarker_sync_state")
+      ? Response.json({ version: 1, owner: "owner", revisions: {} })
+      : new Response(
+          path.endsWith("watchmarker_event_merge_version") ? "1" : "4",
+        );
   await provider.init();
   assert.equal(provider.isConnected, true);
 });

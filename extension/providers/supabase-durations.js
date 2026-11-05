@@ -1,3 +1,4 @@
+import { getSyncPage } from "./supabase-sync-pages.js";
 import { normalizeDuration } from "../duration/duration-records.js";
 
 const TABLE = "/youtube_video_durations";
@@ -30,21 +31,8 @@ export async function uploadDurations(provider, rows) {
     );
   return true;
 }
-export async function downloadDurations(provider, after = "", limit = 500) {
-  // Remove expired API metadata in the cloud as well as on each installation.
-  if (!after)
-    await provider.makeRequest(
-      "DELETE",
-      `${TABLE}?expires_at=lte.${Date.now()}`,
-    );
-  const params = new URLSearchParams({
-    select: "str_ident,seconds,fetched_at,expires_at,unavailable",
-    order: "str_ident.asc",
-    limit: String(limit),
-    or: `(unavailable.eq.true,expires_at.gt.${Date.now()})`,
-  });
-  if (after) params.set("str_ident", `gt.${after}`);
-  return (
-    await (await provider.makeRequest("GET", `${TABLE}?${params}`)).json()
-  ).map(durationFromRow);
+export async function downloadDurations(provider, after, limit, window) {
+  return (await getSyncPage(provider, "durations", after, limit, window)).map(
+    durationFromRow,
+  );
 }

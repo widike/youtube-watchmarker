@@ -1,3 +1,4 @@
+import { getSyncPage } from "./supabase-sync-pages.js";
 import { normalizeBlock } from "../shared/blocked-video-records.js";
 
 const TABLE = "/youtube_blocked_videos";
@@ -19,21 +20,15 @@ export async function uploadBlockedVideos(provider, records) {
   return true;
 }
 
-export async function downloadBlockedVideos(provider, after = "", limit = 500) {
-  const params = new URLSearchParams({
-    select: "str_ident,title,blocked,updated_at,change_id",
-    order: "str_ident.asc",
-    limit: String(limit),
-  });
-  if (after) params.set("str_ident", `gt.${after}`);
-  const response = await provider.makeRequest("GET", `${TABLE}?${params}`);
-  return (await response.json()).map((row) =>
-    normalizeBlock({
-      videoId: row.str_ident,
-      title: row.title,
-      blocked: row.blocked,
-      updatedAt: Number(row.updated_at),
-      changeId: row.change_id,
-    }),
+export async function downloadBlockedVideos(provider, after, limit, window) {
+  return (await getSyncPage(provider, "blocked", after, limit, window)).map(
+    (row) =>
+      normalizeBlock({
+        videoId: row.str_ident,
+        title: row.title,
+        blocked: row.blocked,
+        updatedAt: Number(row.updated_at),
+        changeId: row.change_id,
+      }),
   );
 }

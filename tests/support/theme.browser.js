@@ -7,6 +7,7 @@ import { videoCard } from "../../extension/ui/history-library.js";
 import { verifyDisclosureLayout } from "./sync-layout.browser.js";
 import { verifyPageTemplates } from "./page-templates.browser.js";
 import { verifySyncStates } from "./sync-status.browser.js";
+import { verifySetupSqlButton } from "./setup-sql.browser.js";
 
 const fixture = window.fixture;
 const results = [];
@@ -286,22 +287,7 @@ try {
         document.activeElement === element("#create-link"),
         "Keyboard focus was lost after connection",
       );
-      await verifyDisclosureLayout(element("#sync-setup-toggle"), [
-        element("#cloud-heading"),
-        element("#sync-summary"),
-        element("#create-link"),
-      ]);
-      element("#sync-setup-toggle").click();
-      await waitFor(() => element("#project-settings").open);
-      assert(
-        !element("#sync-setup").hidden,
-        "Database maintenance became inaccessible after connecting",
-      );
-      assert(
-        element("#project-fields").hidden && element("#start-sync").hidden,
-        "Database maintenance exposed first-device creation controls",
-      );
-      element("#sync-setup-toggle").click();
+      await verifySetupSqlButton(fixture, assert, waitFor);
       element("#create-link").click();
       await waitFor(
         () =>

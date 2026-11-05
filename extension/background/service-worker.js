@@ -226,9 +226,9 @@ async function initializeServiceWorker() {
   await durationBackfill.initialize();
 
   // Network availability must never block recording a local watch.
-  void withWatchmarkerRefresh(() => SyncManagerInstance.syncNow()).catch(
-    (error) => logger.warn("History sync deferred:", error.message),
-  );
+  void withWatchmarkerRefresh(() =>
+    SyncManagerInstance.syncNow({ forceDownload: false }),
+  ).catch((error) => logger.warn("History sync deferred:", error.message));
   logger.info("Service worker context initialized");
 }
 

@@ -210,7 +210,7 @@ export async function testDurationSync({
       "Interrupted download succeeded",
     );
     assert(
-      (await readMetadata(db, "durationDownloadAfter")) === "bbbbbbbbbbb",
+      (await readMetadata(db, "syncWindow:durations")).after === "bbbbbbbbbbb",
       "Download cursor was not committed",
     );
     cloud.getDurationPage = async () => [row("ccccccccccc", { seconds: -1 })];
@@ -219,7 +219,7 @@ export async function testDurationSync({
       "Invalid duration accepted",
     );
     assert(
-      (await readMetadata(db, "durationDownloadAfter")) === "bbbbbbbbbbb",
+      (await readMetadata(db, "syncWindow:durations")).after === "bbbbbbbbbbb",
       "Invalid page advanced cursor",
     );
     cloud.getDurationPage = page;
@@ -234,6 +234,11 @@ export async function testDurationSync({
       !(await pendingDurations(db)).length &&
         !(await storage(db).readCache(now)).length,
       "Local removal retained cache/outbox",
+    );
+    await new HistorySync(db, cloud).sync();
+    assert(
+      (await storage(db).readCache(now)).length === 3,
+      "Explicit cache removal did not allow cloud restoration",
     );
   });
 }

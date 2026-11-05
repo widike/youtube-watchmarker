@@ -1,10 +1,8 @@
 import { credentialStorage } from "./credential-storage.js";
 import { supabaseAuthClient } from "./supabase-auth-client.js";
 import { mergeVideoData, normalizeVideo } from "../history/history-records.js";
-import {
-  uploadWatchEvents,
-  downloadWatchEvents,
-} from "./supabase-watch-events.js";
+import { uploadWatchEvents } from "./supabase-watch-events.js";
+import { getSyncPage, getSyncState } from "./supabase-sync-pages.js";
 
 import { uploadWatchTime, downloadWatchTime } from "./supabase-watch-time.js";
 import { uploadDurations, downloadDurations } from "./supabase-durations.js";
@@ -14,8 +12,6 @@ import {
 } from "./supabase-blocked-videos.js";
 
 const TABLE = "/youtube_watch_history";
-const COLUMNS =
-  "str_ident,int_timestamp,str_title,int_count,int_deleted_at,int_imported_count";
 
 function fromRow(row) {
   return {
@@ -25,6 +21,7 @@ function fromRow(row) {
     intCount: Number(row.int_count) || 1,
     intDeletedAt: Number(row.int_deleted_at) || 0,
     intImportedCount: Number(row.int_imported_count) || 0,
+    watchEvents: row.watch_events,
   };
 }
 
@@ -87,6 +84,7 @@ export class SupabaseDatabaseProvider {
       );
       if ((await response.json()) !== 4)
         throw new Error("Unsupported sync schema");
+      await this.getSyncState();
       await this.makeRequest(
         "GET",
         "/youtube_video_durations?select=str_ident&limit=0",
@@ -109,7 +107,7 @@ export class SupabaseDatabaseProvider {
     } catch (error) {
       return {
         exists: false,
-        error: `Sync setup needs attention: ${error.message}. Open Connection settings for the database setup.`,
+        error: `Sync setup needs attention: ${error.message}. Choose Copy setup SQL in Sync & data and run it in Supabase SQL Editor.`,
       };
     }
   }
@@ -153,42 +151,31 @@ export class SupabaseDatabaseProvider {
   async importBlockedVideos(rows) {
     return uploadBlockedVideos(this, rows);
   }
-  async getBlockedVideoPage(after = "", limit = 500) {
-    return downloadBlockedVideos(this, after, limit);
+  async getBlockedVideoPage(after, limit, window) {
+    return downloadBlockedVideos(this, after, limit, window);
   }
   async importDurations(rows) {
     return uploadDurations(this, rows);
   }
-  async getDurationPage(after = "", limit = 500) {
-    return downloadDurations(this, after, limit);
+  async getDurationPage(after, limit, window) {
+    return downloadDurations(this, after, limit, window);
   }
-  async getWatchTimePage(after = "", limit = 500) {
-    return downloadWatchTime(this, after, limit);
+  async getWatchTimePage(after, limit, window) {
+    return downloadWatchTime(this, after, limit, window);
   }
 
   async putVideo(video) {
     return this.importVideos([video]);
   }
 
-  async getVideoPage(after = "", limit = 500) {
-    const cursor = after ? `&str_ident=gt.${encodeURIComponent(after)}` : "";
-    const response = await this.makeRequest(
-      "GET",
-      `${TABLE}?select=${COLUMNS}&order=str_ident.asc&limit=${limit}${cursor}`,
-    );
-    const rows = (await response.json()).map(fromRow);
-    return (await downloadWatchEvents(this, rows)).map(normalizeVideo);
+  async getSyncState() {
+    return getSyncState(this);
   }
 
-  async getAllVideos() {
-    const videos = [];
-    let after = "";
-    for (;;) {
-      const rows = await this.getVideoPage(after);
-      if (!rows.length) return videos;
-      videos.push(...rows);
-      after = rows.at(-1).strIdent;
-    }
+  async getVideoPage(after, limit, window) {
+    return (await getSyncPage(this, "history", after, limit, window))
+      .map(fromRow)
+      .map(normalizeVideo);
   }
 }
 

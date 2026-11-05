@@ -1,6 +1,7 @@
 import { clearButtonBusy, setButtonBusy } from "../../ui/button-state.js";
 import { CaptchaChallenge } from "../../ui/captcha-challenge.js";
 import { renderSyncStatus, showSyncStatus } from "./sync-status.js";
+import { loadSetupSql } from "./setup-sql.js";
 
 export class ProviderController {
   constructor({ client, elements, onDataChanged }) {
@@ -19,12 +20,6 @@ export class ProviderController {
     e.projectSetupForm.addEventListener("submit", (event) => {
       event.preventDefault();
       void this.connectDevice("project");
-    });
-    e.syncSetupToggle.addEventListener("click", () => {
-      this.showSetup = !this.showSetup;
-      e.syncSetup.hidden = !this.showSetup;
-      e.projectSetup.open = this.showSetup;
-      e.syncSetupToggle.setAttribute("aria-expanded", String(this.showSetup));
     });
     for (const input of [
       e.connectionCode,
@@ -79,16 +74,7 @@ export class ProviderController {
         throw new Error(response?.error || "Status unavailable");
       const status = response.status;
       this.connected = Boolean(status.configured);
-      e.syncSetup.hidden = this.connected && !this.showSetup;
-      e.syncSetupToggle.hidden = !this.connected;
-      e.connectDeviceForm.hidden = this.connected;
-      e.connectionCodeHelp.hidden = this.connected;
-      e.firstDeviceHelp.hidden = this.connected;
-      e.projectFields.hidden = this.connected;
-      e.startSyncButton.hidden = this.connected;
-      e.projectSetupLabel.textContent = this.connected
-        ? "Database setup"
-        : "First device setup";
+      e.syncSetup.hidden = this.connected;
       e.syncConnected.hidden = !this.connected;
       e.syncDatabaseButton.hidden = !this.connected;
       e.syncDatabaseButton.disabled = !this.connected;
@@ -220,30 +206,7 @@ export class ProviderController {
 
   async copySetupSql() {
     try {
-      const migrations = [
-        "20261101000000_durable_history_sync.sql",
-        "20261101010000_watch_events.sql",
-        "20261101020000_device_linking.sql",
-        "20261101030000_import_reconciliation.sql",
-        "20261101040000_playback_time_sync.sql",
-        "20261101050000_anonymous_access_hardening.sql",
-        "20261101060000_captcha_configuration.sql",
-        "20261101070000_short_connection_codes.sql",
-        "20261103000000_video_duration_sync.sql",
-        "20261103010000_watch_event_precision.sql",
-        "20261105000000_blocked_video_sync.sql",
-      ];
-      const sql = await Promise.all(
-        migrations.map(async (name) => {
-          const response = await fetch(
-            chrome.runtime.getURL(`supabase/migrations/${name}`),
-          );
-          if (!response.ok)
-            throw new Error("Database setup SQL could not be loaded");
-          return response.text();
-        }),
-      );
-      await navigator.clipboard.writeText(sql.join("\n\n"));
+      await navigator.clipboard.writeText(await loadSetupSql());
       this.elements.syncFeedback.textContent =
         "SQL copied. Run in Supabase SQL Editor.";
     } catch (error) {

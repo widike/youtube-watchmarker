@@ -32,14 +32,26 @@ test("duration transport preserves expiry and sends only duration metadata, with
     "/youtube_video_durations?on_conflict=user_id,str_ident",
     [durationToRow(row)],
   ]);
-  assert.deepEqual(await provider.getDurationPage("a:b%?"), [row]);
-  assert.equal(
-    new URL(`https://example.test${calls[1][1]}`).searchParams.get("str_ident"),
-    "gt.a:b%?",
+  assert.deepEqual(
+    await provider.getDurationPage("a:b%?", 500, { since: "2", until: "4" }),
+    [row],
   );
-  await provider.getDurationPage();
-  assert.equal(calls[2][0], "DELETE");
-  assert.match(calls[2][1], /expires_at=lte\./);
+  assert.deepEqual(calls[1], [
+    "POST",
+    "/rpc/watchmarker_sync_page",
+    {
+      p_collection: "durations",
+      p_since: "2",
+      p_until: "4",
+      p_after: "a:b%?",
+      p_limit: 500,
+    },
+  ]);
+  assert.equal(
+    calls.length,
+    2,
+    "Downloading a page must not issue a cleanup request",
+  );
 });
 test("duration merges reject invalid metadata and resolve equal dates consistently", () => {
   for (const extra of [
@@ -64,5 +76,5 @@ test("connection setup reports the missing duration migration before claiming sy
   };
   const status = await provider.checkTableStatus();
   assert.equal(status.exists, false);
-  assert.match(status.error, /Connection settings/);
+  assert.match(status.error, /Copy setup SQL in Sync & data/);
 });

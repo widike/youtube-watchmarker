@@ -13,10 +13,13 @@ export async function resolveCloudIdentity(
   session,
   remote,
   storage = credentialStorage,
+  resolvedOwner,
 ) {
-  const owner = await (
-    await remote.makeRequest("POST", "/rpc/watchmarker_history_owner", {})
-  ).json();
+  const owner =
+    resolvedOwner ??
+    (await (
+      await remote.makeRequest("POST", "/rpc/watchmarker_history_owner", {})
+    ).json());
   if (
     typeof owner !== "string" ||
     !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(owner)
@@ -56,6 +59,9 @@ export async function resolveCloudIdentity(
       "durationLastDownload",
       "durationRepair",
       "syncStatus",
+      "syncWindow:history",
+      "syncWindow:watchTime",
+      "syncWindow:durations",
     ])
       store.delete(key);
   }

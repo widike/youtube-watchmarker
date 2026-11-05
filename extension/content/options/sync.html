@@ -30,15 +30,10 @@
           </button>
           <button
             class="quiet-button compact-button"
-            id="sync-setup-toggle"
+            id="setup-sql"
             type="button"
-            aria-label="Database setup"
-            title="Database setup"
-            aria-controls="sync-setup"
-            aria-expanded="false"
-            hidden
           >
-            <i class="fas fa-cog" aria-hidden="true"></i>
+            Copy setup SQL
           </button>
         </div>
       </div>
@@ -60,9 +55,6 @@
         <button class="primary-button" id="create-link" type="button">
           <i class="fas fa-plus" aria-hidden="true"></i>Create connection code
         </button>
-        <p class="field-note">
-          Enter the six-letter code on your other device.
-        </p>
         <div id="device-link-panel" class="device-link-panel" hidden>
           <label for="generated-connection-code" class="field-label"
             >Connection code</label
@@ -181,13 +173,6 @@
                 disabled
               >
                 Create new history
-              </button>
-              <button
-                class="quiet-button compact-button"
-                id="setup-sql"
-                type="button"
-              >
-                Copy setup SQL
               </button>
             </div>
           </form>

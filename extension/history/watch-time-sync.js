@@ -4,26 +4,20 @@ import {
   pendingWatchTime,
   queueWatchTime,
   acknowledgeWatchTime,
-  mergeWatchTimes,
 } from "./watch-time-replication.js";
 
-export async function syncWatchTime(
+export async function uploadPendingWatchTime(
   db,
   remote,
-  { now = Date.now, deadline = now() + 6000, forceDownload = true } = {},
+  { now = Date.now, deadline = now() + 6000 } = {},
 ) {
   let uploaded = 0;
-  let downloaded = 0;
   const repair = (await readMetadata(db, "watchTimeRepair")) || {
     after: "",
     completedAt: 0,
   };
   let repairComplete = true;
-  if (
-    !repair.completedAt ||
-    now() < repair.completedAt ||
-    now() - repair.completedAt >= 86_400_000
-  ) {
+  if (!repair.completedAt) {
     repairComplete = false;
     while (now() < deadline) {
       const rows = await watchTimePage(db, repair.after);
@@ -48,28 +42,8 @@ export async function syncWatchTime(
     await acknowledgeWatchTime(db, entries);
     uploaded += entries.length;
   }
-  let after = (await readMetadata(db, "watchTimeDownloadAfter")) || "";
-  const last = (await readMetadata(db, "watchTimeLastDownload")) || 0;
-  const shouldDownload =
-    forceDownload || after || !last || now() < last || now() - last >= 300_000;
-  let complete = !shouldDownload;
-  while (shouldDownload && now() < deadline) {
-    const rows = await remote.getWatchTimePage(after);
-    if (!rows.length) {
-      await writeMetadata(db, "watchTimeDownloadAfter", "");
-      await writeMetadata(db, "watchTimeLastDownload", now());
-      complete = true;
-      break;
-    }
-    await mergeWatchTimes(db, rows);
-    after = rows.at(-1).snapshotId;
-    await writeMetadata(db, "watchTimeDownloadAfter", after);
-    downloaded += rows.length;
-  }
   return {
     uploaded,
-    downloaded,
-    complete:
-      complete && repairComplete && !(await pendingWatchTime(db, 1)).length,
+    complete: repairComplete && !(await pendingWatchTime(db, 1)).length,
   };
 }

@@ -22,9 +22,9 @@ export async function verifySyncStates(fixture, assert) {
     elements.syncSummary.querySelector(".sync-state-detail").textContent;
   try {
     assert(
-      elements.connectionCodeHelp.textContent.includes(
-        "Create connection code",
-      ),
+      document
+        .getElementById("connection-code-help")
+        .textContent.includes("Create connection code"),
       "Disconnected setup does not explain where to get a code",
     );
     assert(
@@ -79,8 +79,7 @@ export async function verifySyncStates(fixture, assert) {
         `Missing detail: ${expectedDetail}`,
       );
       assert(
-        elements.connectionCodeHelp.hidden === status.configured &&
-          elements.firstDeviceHelp.hidden === status.configured,
+        elements.syncSetup.hidden === status.configured,
         "Setup guidance does not match connection state",
       );
       const styles = getComputedStyle(elements.syncSummary);

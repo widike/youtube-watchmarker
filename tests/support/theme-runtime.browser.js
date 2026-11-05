@@ -7,6 +7,11 @@ const fixture = (window.fixture = {
   sync: {},
   providerStatus: { configured: false },
   requests: [],
+  copiedTexts: [],
+});
+Object.defineProperty(navigator, "clipboard", {
+  value: { writeText: async (text) => fixture.copiedTexts.push(text) },
+  configurable: true,
 });
 window.addEventListener("error", (event) => fixture.errors.push(event.message));
 window.addEventListener("unhandledrejection", (event) =>
@@ -22,6 +27,7 @@ chrome.storage = {
   onChanged: { addListener() {}, removeListener() {} },
 };
 chrome.runtime = {
+  getURL: (path) => `/extension/${path}`,
   sendMessage: async (request) => {
     const { action } = request;
     fixture.requests.push(request);

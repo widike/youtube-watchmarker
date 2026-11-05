@@ -6,7 +6,7 @@ YouTube keeps track of your watch history and automatically marks videos that yo
 
 ## Installation
 
-Download `youtube-watchmarker-1.3.1.zip` from the
+Download `youtube-watchmarker-1.3.2.zip` from the
 [latest GitHub release](https://github.com/widike/youtube-watchmarker/releases/latest),
 extract it, and select the extracted folder using **Load unpacked** at
 `chrome://extensions` in Chrome 126 or newer. You can also load the repository
@@ -35,7 +35,7 @@ upgrade requirements.
 - **Watch Badge**: Display "WATCHED" badge on marked videos
 - **Watch Date**: Show the date when video was watched in the badge
 - **Hide Progress Bar**: Hide YouTube's default progress bars on watched videos
-- **Video Blocking**: Enable **Preferences → Local video blocking → Hide unwanted videos** to add an X beside AI Summary on YouTube cards. Videos disappear without sending YouTube feedback or marking them watched. Blocks and unblocks sync through your existing Supabase device connection, with offline retries. Manage the list in Preferences; turning the setting off preserves it. Apply the current **Connection → Copy setup SQL** on existing projects to add block-list sync support.
+- **Video Blocking**: Enable **Preferences → Appearance → Allow hiding unwanted videos** to add an X beside AI Summary on YouTube cards. Videos disappear without sending YouTube feedback or marking them watched. Blocks and unblocks sync through your existing Supabase device connection, with offline retries. Manage the list in Preferences; turning the setting off preserves it. Apply the current **Connection → Copy setup SQL** on existing projects to add block-list sync support.
 
 ### Watch Detection Methods
 
@@ -202,7 +202,7 @@ No new service, permissions, or chart library is required.
 Run `npm ci` to install development dependencies and `npm run build` to
 regenerate the bundled dependencies, copy the SQL migrations needed by the
 settings UI, and validate extension imports and assets. Load `extension/` in
-Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.3.1.zip`;
+Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.3.2.zip`;
 the archive contains only the installable extension and its licenses.
 
 Use `npm test`, `npm run lint`, and `npm run format:check` for local checks.
@@ -293,8 +293,10 @@ Normal restoration does not require an exported file.
   watches from different devices merge by event identity, keeping both timestamps.
 - Uploads retry after failures and restarts; old imports are never skipped by a
   watch-date watermark.
-- Downloads merge all remote records in stable ID pages. Missing remote rows
-  never mean deletion. Daily reconciliation can rebuild missing cloud rows.
+- Downloads use server revisions and merge only changed records in stable ID
+  pages. Watch dates do not limit synchronization. Missing remote rows never
+  mean deletion. Existing local records are queued once; normal sync does not
+  republish every retained record each day.
 - The trash button creates a synced deletion marker. Offline devices and source
   reimports cannot bring that video back. A later explicit watch can restore it.
 - Imports merge with existing history. There is no automatic pruning or reset.
@@ -306,18 +308,11 @@ Normal restoration does not require an exported file.
 1. In Supabase, enable **Authentication → Sign In / Providers → Anonymous
    Sign-Ins**, and obtain a modern `sb_publishable_…` key from **Settings → API Keys**.
    No email provider, SMTP server, username, password, or OAuth app is needed.
-2. Run [the base database setup](supabase/migrations/20261101000000_durable_history_sync.sql)
-   followed by [the watch-event migration](supabase/migrations/20261101010000_watch_events.sql)
-   followed by [device linking](supabase/migrations/20261101020000_device_linking.sql)
-   followed by [import reconciliation](supabase/migrations/20261101030000_import_reconciliation.sql)
-   followed by [playback-time sync](supabase/migrations/20261101040000_playback_time_sync.sql)
-   followed by [anonymous access hardening](supabase/migrations/20261101050000_anonymous_access_hardening.sql)
-   followed by [CAPTCHA configuration](supabase/migrations/20261101060000_captcha_configuration.sql)
-   followed by [short connection codes](supabase/migrations/20261101070000_short_connection_codes.sql)
-   followed by [video duration sync](supabase/migrations/20261103000000_video_duration_sync.sql)
-   and [watch-event precision](supabase/migrations/20261103010000_watch_event_precision.sql)
-   in the project's SQL Editor. All ten preserve existing history.
-   **Sync & data → First device setup → Copy setup SQL** copies all ten in order.
+2. Choose **Sync & data → Copy setup SQL** and run it in the project's SQL
+   Editor. This includes all current setup migrations, including blocked-video
+   sync, in one transaction. It is safe to rerun on an existing project: history,
+   device links, playback time and CAPTCHA settings are preserved. If a step
+   fails, the entire setup rolls back.
    Follow [the CAPTCHA setup](docs/anonymous-sign-ins.md#captcha-and-signup-abuse)
    to register your public Turnstile site key and configure its secret in Supabase.
    For an existing project, apply the import-reconciliation migration so the
@@ -345,8 +340,12 @@ Normal restoration does not require an exported file.
    rewatches to appear individually; counter-only writes cannot supply past dates.
 
 The extension uploads pending changes every 30 seconds while Chrome can run,
-checks remote history every five minutes, and checks immediately on startup,
-connection, or **Sync now**. SmartTube queues network-constrained work after a watch
+checks remote revision counters every five minutes when idle, and checks immediately
+on connection or **Sync now**. Worker restarts preserve the poll interval and
+failure backoff (one minute, doubling up to one hour). Unchanged collections
+produce no page downloads; manual sync also uses incremental changes. Apply
+`20261105010000_incremental_sync.sql` using **Copy setup SQL** before loading this
+extension version. SmartTube queues network-constrained work after a watch
 and has a 15-minute periodic retry. OS scheduling and connectivity can delay work.
 Cloud restoration resumes from its last committed page after an interruption.
 

@@ -8,10 +8,11 @@ import {
 } from "../history/history-storage.js";
 export { mergeVideoData } from "../history/history-records.js";
 
-import { syncWatchTime } from "../history/watch-time-sync.js";
-import { syncDurations } from "../duration/duration-sync.js";
-
-const DAY = 24 * 60 * 60 * 1000;
+import { uploadPendingWatchTime } from "../history/watch-time-sync.js";
+import { uploadPendingDurations } from "../duration/duration-sync.js";
+import { mergeWatchTimes } from "../history/watch-time-replication.js";
+import { mergeDurations } from "../duration/duration-replication.js";
+import { downloadChanges } from "./sync-window.js";
 
 export async function importVideosInBatches(provider, videos, batchSize = 100) {
   for (let i = 0; i < videos.length; i += batchSize) {
@@ -20,8 +21,7 @@ export async function importVideosInBatches(provider, videos, batchSize = 100) {
   return videos.length;
 }
 
-// No watch-date watermark: imports can contain arbitrarily old watches.
-// The outbox tracks local changes; stable ID pages reconcile the remote union.
+// Watch dates never serve as sync watermarks: old imports are new server changes.
 export class HistorySync {
   constructor(db, remote, now = Date.now, durationsChanged = async () => {}) {
     this.db = db;
@@ -31,33 +31,32 @@ export class HistorySync {
     this.running = null;
   }
 
-  sync({ forceDownload = true } = {}) {
+  sync({ state } = {}) {
     if (!this.running) {
-      this.running = this.run(forceDownload).finally(() => {
+      this.running = this.run(state).finally(() => {
         this.running = null;
       });
     }
     return this.running;
   }
 
-  async run(forceDownload) {
+  async run(state) {
     const deadline = this.now() + 20_000;
     let uploaded = 0;
     let downloaded = 0;
     try {
-      // Repair missing cloud rows daily, including after a cloud restore.
-      // Cursor progress is durable, so a worker restart resumes safely.
+      // Seed pre-outbox installations once. Durable outboxes handle all later
+      // changes; elapsed time is not evidence that the cloud lost every row.
       const repair = (await readMetadata(this.db, "repair")) || {
         completedAt: 0,
         after: "",
       };
-      if (
-        this.now() < repair.completedAt ||
-        this.now() - repair.completedAt >= DAY
-      ) {
+      let repairComplete = Boolean(repair.completedAt);
+      if (!repair.completedAt) {
         while (this.now() < deadline) {
           const rows = await localPage(this.db, repair.after);
           if (!rows.length) {
+            repairComplete = true;
             await writeMetadata(this.db, "repair", {
               completedAt: this.now(),
               after: "",
@@ -80,38 +79,64 @@ export class HistorySync {
         await acknowledgeVideos(this.db, entries);
         uploaded += entries.length;
       }
-      const time = await syncWatchTime(this.db, this.remote, {
+      const time = await uploadPendingWatchTime(this.db, this.remote, {
         now: this.now,
         deadline: Math.min(deadline, this.now() + 6000),
-        forceDownload,
       });
-      const durations = await syncDurations(this.db, this.remote, {
+      const durations = await uploadPendingDurations(this.db, this.remote, {
         now: this.now,
         deadline: Math.min(deadline, this.now() + 4000),
-        forceDownload,
-        onDownloaded: this.durationsChanged,
       });
-      let after = (await readMetadata(this.db, "downloadAfter")) || "";
-      const lastDownload = (await readMetadata(this.db, "lastDownload")) || 0;
-      const shouldDownload =
-        forceDownload ||
-        after ||
-        this.now() < lastDownload ||
-        this.now() - lastDownload >= 5 * 60_000;
-      let complete = !shouldDownload;
-      while (shouldDownload && this.now() < deadline) {
-        const rows = await this.remote.getVideoPage(after);
-        if (!rows.length) {
-          await writeMetadata(this.db, "downloadAfter", "");
-          await writeMetadata(this.db, "lastDownload", this.now());
-          complete = true;
-          break;
-        }
-        await saveVideos(this.db, rows, { pending: false });
-        after = rows.at(-1).strIdent;
-        await writeMetadata(this.db, "downloadAfter", after);
-        downloaded += rows.length;
-      }
+      // Refresh after uploads so server-side conflict merges return immediately.
+      if (!state || uploaded || time.uploaded || durations.uploaded)
+        state = await this.remote.getSyncState();
+      const results = {};
+      const collections = [
+        [
+          "history",
+          "getVideoPage",
+          "strIdent",
+          (rows) => saveVideos(this.db, rows, { pending: false }),
+        ],
+        [
+          "watchTime",
+          "getWatchTimePage",
+          "snapshotId",
+          (rows) => mergeWatchTimes(this.db, rows),
+        ],
+        [
+          "durations",
+          "getDurationPage",
+          "strIdent",
+          async (rows) => {
+            const changed = await mergeDurations(
+              this.db,
+              rows.filter(
+                (row) => row.unavailable || row.expiresAt > this.now(),
+              ),
+            );
+            if (changed) await this.durationsChanged();
+          },
+        ],
+      ];
+      for (const [collection, method, key, merge] of collections)
+        results[collection] = await downloadChanges({
+          storage: {
+            get: (key) => readMetadata(this.db, key),
+            set: (key, value) => writeMetadata(this.db, key, value),
+          },
+          collection,
+          latest: state.revisions[collection],
+          page: (...args) => this.remote[method](...args),
+          merge,
+          key: (row) => row[key],
+          now: this.now,
+          deadline,
+        });
+      downloaded = results.history.downloaded;
+      const complete =
+        repairComplete &&
+        Object.values(results).every((result) => result.complete);
       const pending = (await pendingVideos(this.db, 1)).length > 0;
       const previous = (await readMetadata(this.db, "syncStatus")) || {};
       const status = {
@@ -120,23 +145,19 @@ export class HistorySync {
         uploaded,
         downloaded,
         timeUploaded: time.uploaded,
-        timeDownloaded: time.downloaded,
+        timeDownloaded: results.watchTime.downloaded,
         durationsUploaded: durations.uploaded,
-        durationsDownloaded: durations.downloaded,
+        durationsDownloaded: results.durations.downloaded,
         inProgress:
           !complete || pending || !time.complete || !durations.complete,
         lastAttempt: this.now(),
         lastSuccess:
-          shouldDownload &&
-          complete &&
-          !pending &&
-          time.complete &&
-          durations.complete
+          complete && !pending && time.complete && durations.complete
             ? this.now()
             : previous.lastSuccess || 0,
       };
       await writeMetadata(this.db, "syncStatus", status);
-      return { success: true, ...status };
+      return { ...status, success: true };
     } catch (error) {
       const previous = (await readMetadata(this.db, "syncStatus")) || {};
       await writeMetadata(this.db, "syncStatus", {

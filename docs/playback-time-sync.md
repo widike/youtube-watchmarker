@@ -39,8 +39,11 @@ The extension commits a measurement and its outbox obligation together in
 IndexedDB. SmartTube does the same in SQLite. Upload acknowledgement checks the
 revision, so an older network reply cannot acknowledge newer time. Failed and
 lost replies remain retryable. Download cursors advance only after local commit.
-Both clients paginate downloads and periodically republish retained snapshots
-to repair cloud loss. A newly linked device restores the shared duration union.
+The extension downloads only server-revision changes and does not periodically
+republish retained snapshots. Its initial local migration runs once, then durable
+outboxes carry new changes. Apply `20261105010000_incremental_sync.sql` for this
+download protocol; the version 4 upload contract remains the same for SmartTube.
+A newly linked device restores the shared duration union.
 Existing browser-only measurements are queued automatically under their original
 IDs on the first sync, preserving their measured totals without duplication.
 

@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.3.2 — 2026-11-05
+
+More reliable playback saves, title search, synced video blocking, and smaller
+cloud transfers.
+
+- Final measured playback updates are accepted when leaving or replacing a
+  YouTube document, preserving valid watch time during navigation.
+- History search matches words in video titles instead of treating video IDs or
+  channel names as title matches.
+- **Preferences → Appearance → Allow hiding unwanted videos** adds an X to
+  YouTube cards. Blocks and unblocks sync across linked devices with offline
+  retries. Turning the setting off preserves the list; hiding a video does not
+  mark it watched or send feedback to YouTube.
+- Cloud sync downloads records changed since its saved server revision across
+  history, playback time, cached durations and blocked videos. Older imported
+  watches remain eligible, interrupted downloads resume, and unchanged collections
+  need no page downloads. Retained records are no longer republished every day.
+- Idle polling and failure backoff survive service-worker restarts. Pending local
+  changes can sync between polls; failures retry with increasing delays.
+- **Sync & data → Copy setup SQL** is available directly in the connection panel.
+  It copies all current setup migrations in one transaction. Reapplying setup
+  preserves history, device links, playback time, sync checkpoints and CAPTCHA
+  settings; a failed step rolls back the entire transaction.
+
+Existing Supabase projects require both
+`20261105000000_blocked_video_sync.sql` and
+`20261105010000_incremental_sync.sql`. Run the current **Copy setup SQL** output
+in the project's Supabase SQL Editor to install them. Update linked Chrome
+extensions and use **Sync now**. The SmartTube playback upload contract remains
+version 4. No server migration is applied by installing the extension ZIP.
+
+Extract the ZIP into the extension installation folder, reload it at
+`chrome://extensions`, and refresh YouTube tabs. Source checkouts use
+`npm ci`, `npm run build`, then **Load unpacked → extension/**.
+
+[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.3.1...v1.3.2)
+
 ## 1.3.1 — 2026-11-03
 
 The existing 1.3.1 package was updated on 2026-11-04 with playback tracking and

@@ -1,3 +1,4 @@
+import { getSyncPage } from "./supabase-sync-pages.js";
 import { normalizeWatchTime } from "../history/watch-time-records.js";
 
 const TABLE = "/youtube_watch_time";
@@ -49,15 +50,8 @@ export async function uploadWatchTime(provider, rows) {
     );
   return true;
 }
-export async function downloadWatchTime(provider, after = "", limit = 500) {
-  const params = new URLSearchParams({
-    select:
-      "snapshot_id,event_id,str_ident,str_title,minute_at,from_at,to_at,milliseconds,duration_seconds,media_ranges,observed_deletion,event_watched_at",
-    order: "snapshot_id.asc",
-    limit: String(limit),
-  });
-  if (after) params.set("snapshot_id", `gt.${after}`);
-  return (
-    await (await provider.makeRequest("GET", `${TABLE}?${params}`)).json()
-  ).map(timeFromRow);
+export async function downloadWatchTime(provider, after, limit, window) {
+  return (await getSyncPage(provider, "watchTime", after, limit, window)).map(
+    timeFromRow,
+  );
 }

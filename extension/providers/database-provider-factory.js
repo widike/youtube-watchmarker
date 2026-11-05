@@ -7,6 +7,7 @@ import { pendingWatchTimeCount } from "../history/watch-time-replication.js";
 import { pendingDurationCount } from "../duration/duration-replication.js";
 import { DurationStorage } from "../duration/duration-storage.js";
 import { resolveCloudIdentity } from "./cloud-identity.js";
+import { shouldSync, scheduleSync } from "./cloud-sync-schedule.js";
 import { getBlockedVideoStore } from "../background/blocked-videos.js";
 import { BlockedVideoSync } from "../background/blocked-video-sync.js";
 import {
@@ -96,7 +97,47 @@ export class DatabaseProviderFactory {
     ));
   }
 
-  async performDeltaSync(options) {
+  performDeltaSync(options = {}) {
+    if (!this.running)
+      this.running = this.performScheduledSync(options).finally(() => {
+        this.running = null;
+      });
+    return this.running;
+  }
+
+  async performScheduledSync({ forceDownload = false } = {}) {
+    const db = this.databaseManager.database;
+    const previous = (await readMetadata(db, "syncStatus")) || {};
+    const pending =
+      (await readRequest(
+        db
+          .transaction(OUTBOX_STORE, "readonly")
+          .objectStore(OUTBOX_STORE)
+          .count(),
+      )) +
+      (await pendingWatchTimeCount(db)) +
+      (await pendingDurationCount(db)) +
+      (await getBlockedVideoStore().pendingRecords()).length;
+    if (
+      !shouldSync(previous, { now: Date.now(), pending, force: forceDownload })
+    )
+      return { ...previous, success: !previous.error };
+    let result;
+    try {
+      result = await this.performCloudSync();
+    } catch (error) {
+      result = { success: false, error: error.message, inProgress: false };
+    }
+    const status = {
+      ...((await readMetadata(db, "syncStatus")) || {}),
+      ...result,
+      ...scheduleSync(previous, result, Date.now()),
+    };
+    await writeMetadata(db, "syncStatus", status);
+    return status;
+  }
+
+  async performCloudSync() {
     const [configuration, session] = await Promise.all([
       credentialStorage.getConfiguration(),
       credentialStorage.getSession(),
@@ -106,17 +147,23 @@ export class DatabaseProviderFactory {
         success: false,
         error: "Connect to sync your history across devices.",
       };
+    const state = await supabaseDatabaseProvider.getSyncState();
+    // A successful incremental-state RPC verifies the deployed schema without
+    // repeating the manual setup probes after every worker restart.
+    supabaseDatabaseProvider.isConnected = true;
     await resolveCloudIdentity(
       this.databaseManager.database,
       configuration,
       session,
       supabaseDatabaseProvider,
+      credentialStorage,
+      state.owner,
     );
     const previous =
       (await readMetadata(this.databaseManager.database, "syncStatus")) || {};
     const [history, blocks] = await Promise.allSettled([
-      this.sync.sync(options),
-      this.blockedVideoSync.sync(),
+      this.sync.sync({ state }),
+      this.blockedVideoSync.sync({ state }),
     ]);
     const result =
       history.status === "fulfilled"

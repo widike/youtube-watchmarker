@@ -12,50 +12,6 @@
   <div class="section-stack">
     <section
       class="surface-card settings-card"
-      aria-labelledby="blocking-heading"
-    >
-      <div class="section-heading">
-        <div><h2 id="blocking-heading">Local video blocking</h2></div>
-      </div>
-      <div class="preference-row">
-        <label for="idBlocking_Enabled"
-          ><strong>Hide unwanted videos</strong></label
-        >
-        <div class="preference-switch">
-          <input
-            class="switch-input"
-            type="checkbox"
-            role="switch"
-            id="idBlocking_Enabled"
-            aria-describedby="blocking-help"
-          />
-        </div>
-      </div>
-      <p id="blocking-help">
-        Adds an X beside the AI summary button on YouTube cards. Blocks and
-        unblocks sync through your device connection; no feedback is sent to
-        YouTube. Turning this off shows the videos again and keeps your list.
-      </p>
-      <div id="blocked-videos-panel" hidden>
-        <h3>Blocked videos</h3>
-        <p data-blocked-status role="status" aria-live="polite"></p>
-        <button
-          class="btn btn-secondary"
-          type="button"
-          data-blocked-retry
-          hidden
-        >
-          Retry
-        </button>
-        <ul
-          class="blocked-videos-list"
-          data-blocked-list
-          aria-label="Blocked videos"
-        ></ul>
-      </div>
-    </section>
-    <section
-      class="surface-card settings-card"
       aria-labelledby="detection-heading"
     >
       <div class="section-heading">
@@ -234,6 +190,36 @@
             id="idVisualization_Hidepaidpromotion"
           />
         </div>
+      </div>
+      <div class="preference-row">
+        <label for="idBlocking_Enabled"
+          ><strong>Allow hiding unwanted videos</strong></label
+        >
+        <div class="preference-switch">
+          <input
+            class="switch-input"
+            type="checkbox"
+            role="switch"
+            id="idBlocking_Enabled"
+          />
+        </div>
+      </div>
+      <div id="blocked-videos-panel" hidden>
+        <h3>Blocked videos</h3>
+        <p data-blocked-status role="status" aria-live="polite"></p>
+        <button
+          class="btn btn-secondary"
+          type="button"
+          data-blocked-retry
+          hidden
+        >
+          Retry
+        </button>
+        <ul
+          class="blocked-videos-list"
+          data-blocked-list
+          aria-label="Blocked videos"
+        ></ul>
       </div>
     </section>
   </div>

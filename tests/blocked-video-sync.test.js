@@ -19,22 +19,32 @@ function device(now) {
 
 function remote() {
   const rows = new Map();
+  let revision = 0;
+  const versions = new Map();
   return {
     rows,
+    getSyncState: async () => ({ revisions: { blocked: String(revision) } }),
     async importBlockedVideos(records) {
       for (const value of records) {
         const row = normalizeBlock(value);
         if (
           !rows.has(row.videoId) ||
           compareBlocks(row, rows.get(row.videoId)) > 0
-        )
+        ) {
           rows.set(row.videoId, row);
+          versions.set(row.videoId, ++revision);
+        }
       }
       return true;
     },
-    async getBlockedVideoPage(after) {
+    async getBlockedVideoPage(after, _limit, window) {
       return [...rows.values()]
-        .filter((row) => row.videoId > after)
+        .filter(
+          (row) =>
+            row.videoId > after &&
+            versions.get(row.videoId) > Number(window.since) &&
+            versions.get(row.videoId) <= Number(window.until),
+        )
         .sort((a, b) => (a.videoId < b.videoId ? -1 : 1))
         .slice(0, 2);
     },
@@ -146,11 +156,13 @@ test("Supabase transports only block metadata and includes unblock tombstones", 
     Object.keys(calls[0][2][0]).sort(),
     ["str_ident", "title", "blocked", "updated_at", "change_id"].sort(),
   );
-  assert.deepEqual(await provider.getBlockedVideoPage("cursor%?"), [
-    normalizeBlock(row),
-  ]);
-  assert.equal(
-    new URL(`https://example.test${calls[1][1]}`).searchParams.get("str_ident"),
-    "gt.cursor%?",
+  assert.deepEqual(
+    await provider.getBlockedVideoPage("cursor%?", 500, {
+      since: "3",
+      until: "4",
+    }),
+    [normalizeBlock(row)],
   );
+  assert.equal(calls[1][1], "/rpc/watchmarker_sync_page");
+  assert.equal(calls[1][2].p_after, "cursor%?");
 });

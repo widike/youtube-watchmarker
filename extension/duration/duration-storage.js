@@ -91,6 +91,7 @@ export class DurationStorage {
       const keys = await readRequest(store.getAllKeys(durationRange(prefix)));
       for (const key of keys) store.delete(key);
     }
+    store.delete("syncWindow:durations");
     await done;
     await this.notifyCacheChanged();
   }

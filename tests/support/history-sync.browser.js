@@ -1,3 +1,4 @@
+import { testCloudTraffic } from "./cloud-traffic.browser.js";
 import { testWatchTimeSync } from "./watch-time-sync.browser.js";
 import { testDurationSync } from "./duration-sync.browser.js";
 import { testCloudIdentity } from "./cloud-identity.browser.js";
@@ -170,7 +171,7 @@ await test("old imports and failures survive restart and retry without a discard
   assert((await pendingVideos(db)).length === 0, "upload was not acknowledged");
 });
 
-await test("daily reconciliation repairs partial cloud loss", async () => {
+await test("explicit reconciliation repairs partial cloud loss", async () => {
   const db = await database();
   const cloud = remote();
   await saveVideos(db, [video("abcdefghijk"), video("lmnopqrstuv")]);
@@ -199,7 +200,7 @@ await test("failed page does not advance durable download cursor", async () => {
     "partial download reported complete",
   );
   assert(
-    (await readMetadata(db, "downloadAfter")) === "bbbbbbbbbbb",
+    (await readMetadata(db, "syncWindow:history")).after === "bbbbbbbbbbb",
     "wrong persisted cursor",
   );
   cloud.getVideoPage = page;
@@ -292,30 +293,49 @@ await test("explicit deletion syncs, stale offline writes cannot restore it, a n
   );
 });
 
-await test("background downloads poll every five minutes and manual sync restores immediately", async () => {
+await test("unchanged syncs and worker restarts transfer no rows; old-dated imports use server revisions", async () => {
   const db = await database();
   const cloud = remote();
   let clock = Date.now();
-  const sync = new HistorySync(db, cloud, () => clock);
-  await sync.sync({ forceDownload: false });
-  await cloud.importVideos([video("abcdefghijk")]);
-  await sync.sync({ forceDownload: false });
-  assert((await localPage(db)).length === 0, "poll interval was ignored");
-  clock += 6 * 60_000;
-  await sync.sync({ forceDownload: false });
-  assert((await localPage(db)).length === 1, "background pull did not run");
-  await cloud.importVideos([video("lmnopqrstuv")]);
-  await sync.sync();
+  await saveVideos(db, [video("bbbbbbbbbbb")]);
+  await new HistorySync(db, cloud, () => clock).sync();
+  let pages = 0;
+  let uploads = 0;
+  for (const method of [
+    "getVideoPage",
+    "getWatchTimePage",
+    "getDurationPage",
+  ]) {
+    const original = cloud[method];
+    cloud[method] = (...args) => {
+      pages++;
+      return original(...args);
+    };
+  }
+  const upload = cloud.importVideos;
+  cloud.importVideos = (rows) => {
+    uploads += rows.length;
+    return upload(rows);
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    clock += 86400000;
+    const result = await new HistorySync(db, cloud, () => clock).sync();
+    assert(result.success && !result.inProgress, "Idle sync failed");
+  }
   assert(
-    (await localPage(db)).length === 2,
-    "manual pull did not run immediately",
+    pages === 0 && uploads === 0,
+    "Idle sync repeated downloads or daily uploads",
   );
-  clock -= 86_400_000;
-  await cloud.importVideos([video("zzzzzzzzzzz")]);
-  await sync.sync({ forceDownload: false });
+  await cloud.importVideos([video("abcdefghijk", 1)]);
+  const result = await new HistorySync(db, cloud, () => clock).sync();
   assert(
-    (await localPage(db)).length === 3,
-    "clock rollback stopped cloud downloads",
+    result.downloaded === 1 && (await localPage(db)).length === 2,
+    "Old-dated import below the previous ID cursor was missed",
+  );
+  clock -= 86400000;
+  assert(
+    (await new HistorySync(db, cloud, () => clock).sync()).success,
+    "Clock rollback blocked sync",
   );
 });
 
@@ -343,5 +363,6 @@ await testCloudIdentity({ test, database, remote, assert });
 await testTitleRecovery({ test, database, assert });
 await testVideoDeletion({ test, database, assert });
 await testHistoryReads({ test, database, assert });
+await testCloudTraffic({ test, database, remote, assert });
 await fetch("/results", { method: "POST", body: JSON.stringify(results) });
 document.body.textContent = JSON.stringify(results);

@@ -1,4 +1,4 @@
-const CURSOR_KEY = "watchmarker_blocked_videos_cursor";
+import { downloadChanges } from "../providers/sync-window.js";
 
 // Unblocks are durable tombstones. An offline device's old block cannot restore
 // a video after another device unblocks it. Acknowledgement is revision-specific.
@@ -7,18 +7,17 @@ export class BlockedVideoSync {
     Object.assign(this, { store, remote, now });
   }
 
-  sync() {
+  sync({ state } = {}) {
     if (!this.running)
-      this.running = this.run().finally(() => {
+      this.running = this.run(state).finally(() => {
         this.running = null;
       });
     return this.running;
   }
 
-  async run() {
+  async run(state) {
     const deadline = this.now() + 10_000;
     let uploaded = 0;
-    let downloaded = 0;
     while (this.now() < deadline) {
       const entries = (await this.store.pendingRecords()).slice(0, 100);
       if (!entries.length) break;
@@ -27,29 +26,28 @@ export class BlockedVideoSync {
       await this.store.acknowledge(entries);
       uploaded += entries.length;
     }
-    let after = (await this.store.storage.get(CURSOR_KEY))[CURSOR_KEY] || "";
-    while (this.now() < deadline) {
-      const rows = await this.remote.getBlockedVideoPage(after);
-      if (
-        rows.some(
-          (row, index) =>
-            row.videoId <= (index ? rows[index - 1].videoId : after),
-        )
-      )
-        throw new Error("Invalid blocked-video page order");
-      if (!rows.length) {
-        await this.store.storage.set({ [CURSOR_KEY]: "" });
-        return {
-          uploaded,
-          downloaded,
-          complete: !(await this.store.pendingRecords()).length,
-        };
-      }
-      await this.store.merge(rows);
-      downloaded += rows.length;
-      after = rows.at(-1).videoId;
-      await this.store.storage.set({ [CURSOR_KEY]: after });
-    }
-    return { uploaded, downloaded, complete: false };
+    if (!state || uploaded) state = await this.remote.getSyncState();
+    const result = await downloadChanges({
+      storage: {
+        get: async (key) =>
+          (await this.store.storage.get(`${key}:${state.owner}`))[
+            `${key}:${state.owner}`
+          ],
+        set: (key, value) =>
+          this.store.storage.set({ [`${key}:${state.owner}`]: value }),
+      },
+      collection: "blocked",
+      latest: state.revisions.blocked,
+      page: (...args) => this.remote.getBlockedVideoPage(...args),
+      merge: (rows) => this.store.merge(rows),
+      key: (row) => row.videoId,
+      now: this.now,
+      deadline,
+    });
+    return {
+      uploaded,
+      ...result,
+      complete: result.complete && !(await this.store.pendingRecords()).length,
+    };
   }
 }

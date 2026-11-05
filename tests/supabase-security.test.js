@@ -50,11 +50,20 @@ test("PostgREST sends the publishable key separately from the user's JWT and fet
       ]),
     );
   });
-  const rows = await new SupabaseDatabaseProvider().getVideoPage("previous000");
+  const rows = await new SupabaseDatabaseProvider().getVideoPage(
+    "previous000",
+    500,
+    { since: "5", until: "7" },
+  );
   assert.equal(requests[0].headers.apikey, publishableKey);
   assert.equal(requests[0].headers.Authorization, "Bearer user-jwt");
-  assert.match(requests[0].url, /order=str_ident.asc/);
-  assert.match(requests[0].url, /str_ident=gt.previous000/);
-  assert.match(requests[0].url, /int_deleted_at/);
+  assert.match(requests[0].url, /rpc\/watchmarker_sync_page/);
+  assert.deepEqual(JSON.parse(requests[0].body), {
+    p_collection: "history",
+    p_since: "5",
+    p_until: "7",
+    p_after: "previous000",
+    p_limit: 500,
+  });
   assert.equal(rows[0].intDeletedAt, 200);
 });

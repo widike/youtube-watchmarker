@@ -30,16 +30,24 @@ test("duration transport preserves stable identities, coverage, and event dates 
     return new Response(JSON.stringify([timeToRow(row)]));
   };
   await provider.importWatchTime([row]);
-  const rows = await provider.getWatchTimePage("a:b%?");
+  const rows = await provider.getWatchTimePage("a:b%?", 500, {
+    since: "2",
+    until: "4",
+  });
   assert.deepEqual(rows, [row]);
   assert.equal(calls[0][0], "POST");
   assert.match(calls[0][1], /on_conflict=user_id,snapshot_id/);
-  assert.equal(
-    new URL(`https://example.test${calls[1][1]}`).searchParams.get(
-      "snapshot_id",
-    ),
-    "gt.a:b%?",
-  );
+  assert.deepEqual(calls[1], [
+    "POST",
+    "/rpc/watchmarker_sync_page",
+    {
+      p_collection: "watchTime",
+      p_since: "2",
+      p_until: "4",
+      p_after: "a:b%?",
+      p_limit: 500,
+    },
+  ]);
 });
 test("duration merges take the cumulative maximum and reject identity corruption", () => {
   assert.deepEqual(mergeWatchTime(row, { ...row, milliseconds: 1000 }), row);
