@@ -5,6 +5,21 @@ import { verifyImportedWeek } from "./statistics-imported-week.browser.js";
 
 export async function verifyAverageWeek({ $, assert, waitFor, ready }) {
   await verifyImportedWeek(assert, waitFor);
+  const cell = $('[data-heatmap="week"] button:not([data-level="0"])');
+  cell.scrollIntoView({ block: "center", inline: "center" });
+  const { x, y, width, height } = cell.getBoundingClientRect();
+  const hit = document.elementFromPoint(x + width / 2, y + height / 2);
+  assert(hit === cell, "Average week cell cannot be hovered");
+  hit.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+  const tooltip = cell.closest(".stats-card").querySelector(".stats-tooltip");
+  assert(
+    tooltip.offsetWidth > 0 &&
+      tooltip.textContent === cell.getAttribute("aria-label"),
+    "Average week tooltip does not show the weekday, hour and average",
+  );
+  hit.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
+  assert(tooltip.offsetWidth === 0, "Average week tooltip did not dismiss");
+
   const fixture = window.statisticsFixture;
   fixture.noTime = true;
   for (const period of Object.keys(PERIODS)) {
@@ -42,8 +57,14 @@ export async function verifyAverageWeek({ $, assert, waitFor, ready }) {
     assert(document.activeElement === cells[47], "Hourly navigation failed");
     assert(
       grid.closest(".stats-card").querySelector("[data-cell-detail]")
-        .textContent === cells[47].title,
+        .textContent === cells[47].getAttribute("aria-label"),
       "Hour detail was not announced",
+    );
+    const tooltip = grid.closest(".stats-card").querySelector(".stats-tooltip");
+    assert(
+      tooltip.offsetWidth > 0 &&
+        tooltip.textContent === cells[47].getAttribute("aria-label"),
+      "Average week tooltip did not follow keyboard focus",
     );
     const first = cells[0].getBoundingClientRect();
     const lastHour = cells[23].getBoundingClientRect();

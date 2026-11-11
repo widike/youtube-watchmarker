@@ -33,13 +33,29 @@ export function timeline(stats) {
           year: "numeric",
         })
       : dateLabel(date);
+  const description = points.map(
+    ({ date, count }) => `${label(date)}: ${duration(count)}`,
+  );
   const bars = points
     .map(({ date, count }, index) => {
+      const x = index * step;
       const barHeight = (count / max) * height;
-      return `<rect x="${index * step + step * 0.15}" y="${height - barHeight}" width="${Math.max(0.5, step * 0.7)}" height="${barHeight}" rx="${Math.min(3, step * 0.2)}"><title>${escape(label(date))}: ${duration(count)}</title></rect>`;
+      return `<g class="stats-timeline-bucket">
+        <rect class="stats-timeline-bar" x="${x + step * 0.15}" y="${height - barHeight}" width="${step * 0.7}" height="${barHeight}" rx="${Math.min(3, step * 0.2)}"/>
+        <rect x="${x}" y="0" width="${step}" height="${height}" fill="none" pointer-events="all" data-stats-tooltip="${escape(`${label(date)}: ${hours(count)} h`)}"/>
+      </g>`;
     })
     .join("");
   return `<div class="section-heading"><h2>Viewing time</h2></div>
-    <div class="stats-timeline"><span>${hours(max)} h</span><svg viewBox="0 0 ${width} ${height + 2}" role="img" aria-describedby="stats-timeline-values" aria-label="${monthly ? "Monthly" : "Daily"} hours watched, from ${escape(label(points[0].date))} to ${escape(label(points.at(-1).date))}."><desc id="stats-timeline-values">${escape(points.map(({ date, count }) => `${label(date)}: ${duration(count)}`).join("; "))}</desc><line x1="0" x2="${width}" y1="${height / 2}" y2="${height / 2}" class="stats-gridline"/>${bars}</svg><span>0</span></div>
+    <div class="stats-timeline" data-stats-tooltip-region>
+      <span>${hours(max)} h</span>
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-describedby="stats-timeline-values" aria-label="${monthly ? "Monthly" : "Daily"} hours watched, from ${escape(label(points[0].date))} to ${escape(label(points.at(-1).date))}.">
+        <desc id="stats-timeline-values">${escape(description.join("; "))}</desc>
+        <line x1="0" x2="${width}" y1="${height / 2}" y2="${height / 2}" class="stats-gridline"/>
+        ${bars}
+      </svg>
+      <div class="stats-tooltip" aria-hidden="true" hidden></div>
+      <span>0</span>
+    </div>
     <div class="stats-axis"><span>${escape(label(points[0].date))}</span><span>${escape(label(points.at(-1).date))}</span></div>`;
 }

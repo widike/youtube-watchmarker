@@ -36,7 +36,11 @@ const stylesheets = {
   Showcount: ".youwatch-mark::after { --youwatch-count:attr(watchcount); }",
   Hideprogress:
     ".youwatch-mark :is(ytd-thumbnail-overlay-resume-playback-renderer, ytm-thumbnail-overlay-resume-playback-renderer) { display:none !important; }",
-  Hidepaidpromotion: ".ytp-paid-content-overlay { display:none !important; }",
+  Hidepaidpromotion: `
+    .ytp-paid-content-overlay,
+    ytm-paid-content-overlay-renderer,
+    .YtmPaidContentOverlayHost { display:none !important; }
+  `,
 };
 const defaults = {
   idBlocking_Enabled: false,

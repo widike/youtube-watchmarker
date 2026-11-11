@@ -49,8 +49,25 @@
     font-style: normal;
     letter-spacing: 0;
   }
-  .stats-timeline {
+  [data-stats-tooltip-region] {
     position: relative;
+  }
+  .stats-tooltip {
+    position: absolute;
+    left: 0;
+    z-index: 2;
+    width: max-content;
+    max-width: 100%;
+    padding: 4px 8px;
+    border: 1px solid var(--control-line);
+    border-radius: 4px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    font-size: var(--font-small);
+    pointer-events: none;
+  }
+  .stats-timeline {
     margin: 24px 0 0 32px;
   }
   .stats-timeline svg {
@@ -60,15 +77,16 @@
     overflow: visible;
     fill: var(--accent);
   }
-  .stats-timeline rect {
+  .stats-timeline-bar {
     opacity: 0.8;
   }
-  .stats-timeline rect:hover {
+  .stats-timeline-bucket:hover .stats-timeline-bar {
     opacity: 1;
   }
   .stats-gridline {
     stroke: var(--line);
     stroke-dasharray: 3 5;
+    vector-effect: non-scaling-stroke;
   }
   .stats-timeline > span {
     position: absolute;

@@ -1,6 +1,10 @@
 import { statistics } from "./statistics-fixture.browser.js";
 import { PERIODS } from "../../extension/statistics/statistics-dates.js";
-import { number } from "../../extension/ui/statistics-format.js";
+import {
+  dateLabel,
+  hours,
+  number,
+} from "../../extension/ui/statistics-format.js";
 import { verifyCalendarDatabase } from "./statistics-database.browser.js";
 
 export async function verifyStatisticsPeriods({ $, assert, waitFor, ready }) {
@@ -15,6 +19,8 @@ export async function verifyStatisticsPeriods({ $, assert, waitFor, ready }) {
     $(`[data-stats-period="${period}"]`).click();
     await waitFor(() => ready());
     const expected = statistics(period);
+    if (period === "month" || period === "all")
+      verifyTimeline({ $, assert, expected, period });
     const metric = [...document.querySelectorAll(".stats-metric")].find(
       (row) => row.querySelector("span").textContent === "Recorded activity",
     );
@@ -126,4 +132,45 @@ export async function verifyStatisticsPeriods({ $, assert, waitFor, ready }) {
   fixture.noTime = false;
   $('[data-stats-period="month"]').click();
   await waitFor(() => ready());
+}
+
+function verifyTimeline({ $, assert, expected, period }) {
+  const chart = $(".stats-timeline");
+  const plot = chart.querySelector("svg");
+  const bars = [...plot.querySelectorAll(".stats-timeline-bar")];
+  const first = bars[0].getBoundingClientRect();
+  const last = bars.at(-1).getBoundingClientRect();
+  const bounds = plot.getBoundingClientRect();
+  const edgePadding = bounds.width / bars.length / 4;
+  assert(
+    first.left - bounds.left < edgePadding &&
+      bounds.right - last.right < edgePadding,
+    "Timeline bars leave unused space at the plot edges",
+  );
+
+  const target = plot.querySelector("[data-stats-tooltip]");
+  target.scrollIntoView({ block: "center" });
+  const { x, y, width } = target.getBoundingClientRect();
+  const hit = document.elementFromPoint(x + width / 2, y + 2);
+  assert(hit === target, "Timeline bucket cannot be hovered across its height");
+  hit.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+
+  const tooltip = chart.querySelector(".stats-tooltip");
+  const monthly = period === "all";
+  const label = monthly
+    ? new Date(2022, 0, 1).toLocaleDateString(undefined, {
+        month: "short",
+        year: "numeric",
+      })
+    : dateLabel("2026-10-02");
+  const total = expected.time.timeline
+    .filter(({ date }) => date.startsWith(monthly ? "2022-01" : "2026-10-02"))
+    .reduce((sum, { count }) => sum + count, 0);
+  assert(
+    tooltip.offsetWidth > 0 &&
+      tooltip.textContent === `${label}: ${hours(total)} h`,
+    "Timeline tooltip does not show the bucket date and hours",
+  );
+  hit.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
+  assert(tooltip.offsetWidth === 0, "Timeline tooltip did not dismiss");
 }

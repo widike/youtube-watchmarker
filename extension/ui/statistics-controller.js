@@ -1,5 +1,6 @@
 import { dashboard, periodControls } from "./statistics-dashboard.js";
 import { bindHeatmaps } from "./statistics-heatmaps.js";
+import { bindStatisticsTooltips } from "./statistics-tooltips.js";
 import { popupStatistics } from "./popup-statistics.js";
 import { PERIODS } from "../statistics/statistics-dates.js";
 
@@ -89,6 +90,7 @@ export class StatisticsController {
       }
       content.innerHTML = dashboard(stats);
       bindHeatmaps(content);
+      bindStatisticsTooltips(content);
       this.stats = stats;
       if (status) status.textContent = "";
     } catch {
