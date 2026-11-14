@@ -6,7 +6,7 @@ YouTube keeps track of your watch history and automatically marks videos that yo
 
 ## Installation
 
-Download `youtube-watchmarker-1.3.2.zip` from the
+Download `youtube-watchmarker-1.3.3.zip` from the
 [latest GitHub release](https://github.com/widike/youtube-watchmarker/releases/latest),
 extract it, and select the extracted folder using **Load unpacked** at
 `chrome://extensions` in Chrome 126 or newer. You can also load the repository
@@ -202,7 +202,7 @@ No new service, permissions, or chart library is required.
 Run `npm ci` to install development dependencies and `npm run build` to
 regenerate the bundled dependencies, copy the SQL migrations needed by the
 settings UI, and validate extension imports and assets. Load `extension/` in
-Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.3.2.zip`;
+Chrome. Run `npm run package` to create `dist/youtube-watchmarker-1.3.3.zip`;
 the archive contains only the installable extension and its licenses.
 
 Use `npm test`, `npm run lint`, and `npm run format:check` for local checks.

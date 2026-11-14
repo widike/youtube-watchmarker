@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.3 — 2026-11-14
+
+- Fixed a race at minute boundaries that could interrupt watch-time recording.
+  Failed writes now log the original error.
+- Insights chart tooltips work on hover and keyboard focus and stay inside the
+  chart area.
+- **Hide Paid-Promotion Overlays** now also hides overlays on mobile YouTube.
+
+To update, extract the ZIP into the existing extension folder, reload it at
+`chrome://extensions`, and refresh open YouTube tabs. This release requires no
+new Supabase migrations.
+
+[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.3.2...v1.3.3)
+
 ## 1.3.2 — 2026-11-05
 
 More reliable playback saves, title search, synced video blocking, and smaller
