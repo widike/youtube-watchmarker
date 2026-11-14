@@ -141,22 +141,33 @@ export async function testWatchTimeSync({
     );
     assert((await total(db)) === 1000, "Malformed page changed recorded time");
     const row = (await readWatchTime(db))[0];
-    let rejected = false;
+    const before = await pendingWatchTime(db);
+    let abortReason;
     try {
-      await mergeWatchTimes(db, [
-        {
-          ...row,
-          strIdent: "mnopqrstuvw",
-          milliseconds: 2000,
-          to: minute + 2000,
-        },
-      ]);
-    } catch {
-      rejected = true;
+      await mergeWatchTimes(
+        db,
+        [
+          { ...row, snapshotId: `${row.snapshotId}:other` },
+          {
+            ...row,
+            from: minute + 1000,
+            milliseconds: 2000,
+            to: minute + 3000,
+          },
+        ],
+        { pending: true },
+      );
+    } catch (error) {
+      abortReason = error.message;
     }
     assert(
-      rejected && (await total(db)) === 1000,
-      "Snapshot identity collision changed history",
+      abortReason === "Conflicting playback time identity",
+      `Expected the original snapshot identity error, received ${abortReason}`,
+    );
+    assert(
+      (await total(db)) === 1000 &&
+        JSON.stringify(await pendingWatchTime(db)) === JSON.stringify(before),
+      "Snapshot identity collision changed history or its outbox",
     );
     cloud.getWatchTimePage = original;
     assert(

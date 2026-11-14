@@ -11,7 +11,8 @@ const range = (prefix) => IDBKeyRange.bound(prefix, `${prefix}\uffff`);
 export async function mergeWatchTimes(db, rows, { pending = false } = {}) {
   const normalized = rows.map((row) => normalizeWatchTime(row));
   const tx = db.transaction(META_STORE, "readwrite", { durability: "strict" });
-  const done = transactionDone(tx);
+  let abortReason;
+  const done = transactionDone(tx, () => abortReason);
   const store = tx.objectStore(META_STORE);
   for (const row of normalized) {
     const key = `${TIME_PREFIX}${row.snapshotId}`;
@@ -27,7 +28,8 @@ export async function mergeWatchTimes(db, rows, { pending = false } = {}) {
             { revision: crypto.randomUUID(), row: next },
             `${TIME_OUTBOX}${row.snapshotId}`,
           );
-      } catch {
+      } catch (error) {
+        abortReason = error;
         tx.abort();
       }
     };

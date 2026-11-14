@@ -162,12 +162,17 @@
           });
           if (!response?.success) break;
           if (this.pending.get(key) === snapshot) this.pending.delete(key);
-          if (snapshot.minute + MINUTE < this.clock() && !this.pending.has(key))
-            this.snapshots.delete(key);
         }
       } catch {
         // Keep cumulative snapshots for the next player event to retry.
       } finally {
+        // An acknowledgement can arrive before a sample that still starts in
+        // the previous minute. Keep its cumulative total until sampling passes it.
+        const nextSampleStart = this.previous?.at ?? this.clock();
+        for (const [key, { minute }] of this.snapshots) {
+          if (minute + MINUTE <= nextSampleStart && !this.pending.has(key))
+            this.snapshots.delete(key);
+        }
         this.sending = false;
       }
     }

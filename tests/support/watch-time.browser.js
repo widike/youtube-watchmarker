@@ -127,6 +127,58 @@ export async function verifyRealPlayback(assert) {
   }
 }
 
+async function verifyMinuteRollover(db, assert, minute) {
+  const sender = { tab: { id: 2 }, frameId: 0, documentId: "rollover" };
+  const session = {
+    videoId: "abcdefghijk",
+    sessionId: crypto.randomUUID(),
+    title: "Rollover",
+    watchedMilliseconds: 60_000,
+  };
+  let clock = minute + 58_000;
+  const player = { currentTime: 20, readyState: 4, playbackRate: 1 };
+  const errors = [];
+  const { WatchTimeTracker } = globalThis.YouTubeWatchmarkerContent;
+  const tracker = new WatchTimeTracker(
+    {
+      async send(message) {
+        try {
+          await saveWatchTime(db, message, sender, clock);
+        } catch (error) {
+          errors.push(error.message);
+          return { success: false };
+        }
+        // The first write commits before the boundary, but the content script
+        // receives its acknowledgement before the next player sample arrives.
+        clock = Math.max(clock, minute + 60_001);
+        return { success: true };
+      },
+    },
+    () => clock,
+  );
+  tracker.observe(player, "playing", session);
+  clock += 1000;
+  player.currentTime += 1;
+  tracker.observe(player, "timeupdate", session);
+  await tracker.flush();
+  clock = minute + 60_250;
+  player.currentTime += 1.25;
+  tracker.observe(player, "timeupdate", session);
+  await tracker.flush();
+  assert(!errors.length, errors.join("; "));
+  const rows = (await readWatchTime(db)).filter(({ snapshotId }) =>
+    snapshotId.includes(session.sessionId),
+  );
+  assert(
+    rows.length === 2 &&
+      rows[0].from === minute + 58_000 &&
+      rows[0].to === minute + 60_000 &&
+      rows[0].milliseconds === 2000 &&
+      rows[1].milliseconds === 250,
+    `Acknowledgement at minute rollover lost playback: ${JSON.stringify(rows)}`,
+  );
+}
+
 export async function verifyDurationPersistence(assert) {
   const name = `watchmarker-time-${crypto.randomUUID()}`;
   const open = () =>
@@ -200,6 +252,7 @@ export async function verifyDurationPersistence(assert) {
       entry.watchedMilliseconds === 3000,
     "Persisted coverage did not join the exact playback after restart",
   );
+  await verifyMinuteRollover(db, assert, minute);
   db.close();
   indexedDB.deleteDatabase(name);
   await verifyRealPlayback(assert);

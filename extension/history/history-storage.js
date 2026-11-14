@@ -60,13 +60,15 @@ export function upgradeHistoryStorage(db, transaction) {
   };
 }
 
-export function transactionDone(transaction) {
+export function transactionDone(transaction, getAbortReason = () => null) {
   return new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve(true);
     transaction.onabort = () =>
-      reject(transaction.error || new Error("History transaction aborted"));
-    transaction.onerror = () =>
-      reject(transaction.error || new Error("History transaction failed"));
+      reject(
+        getAbortReason() ??
+          transaction.error ??
+          new Error("History transaction aborted"),
+      );
   });
 }
 
