@@ -1,3 +1,5 @@
+import { Database } from "../../extension/background/bg-database.js";
+import { readWatchTime } from "../../extension/history/watch-time-storage.js";
 import { DATABASE } from "../../extension/shared/constants.js";
 import { IndexedDBProvider } from "../../extension/providers/indexeddb-provider.js";
 import { YoutubeManager } from "../../extension/sources/bg-youtube.js";
@@ -20,6 +22,7 @@ const event = (sessionId = "00000000-0000-4000-8000-000000000001") => ({
   sessionId,
   reason: "progress",
   watchedMilliseconds: 60_000,
+  eventWatchedAt: Date.now(),
   title: "Grüße 😀",
 });
 
@@ -40,6 +43,7 @@ async function setup(db) {
 export async function testPlaybackDurability({ test, database, open, assert }) {
   globalThis.chrome = {
     storage: {
+      local: { set: async () => {}, remove: async () => {} },
       sync: { get: async (key) => ({ [key]: true }) },
       session: {
         get: async () => {
@@ -52,6 +56,54 @@ export async function testPlaybackDurability({ test, database, open, assert }) {
     },
     tabs: { query: async () => [] },
   };
+
+  await test("disabled watch preferences never persist or queue measurements", async () => {
+    const db = await database();
+    const original = Database.database;
+    const originalGet = chrome.storage.sync.get;
+    Database.database = db;
+    try {
+      const { handleYoutubeWatchTime } = await import(
+        "../../extension/handlers/statistics-handlers.js"
+      );
+      chrome.storage.sync.get = async () => ({ idCondition_Youprog: false });
+      const minute = Math.floor((Date.now() - 120_000) / 60_000) * 60_000;
+      const packet = {
+        ...event(),
+        reasons: ["progress"],
+        eventWatchedAt: minute,
+        buckets: [
+          { minute, from: minute, to: minute + 1000, milliseconds: 1000 },
+        ],
+      };
+      assert(
+        (await handleYoutubeWatchTime(packet, sender)).recordingDisabled,
+        "disabled preference was ignored",
+      );
+      assert(
+        (await readWatchTime(db)).length === 0,
+        "disabled measurement was stored",
+      );
+      chrome.storage.sync.get = async () => ({ idCondition_Youprog: true });
+      assert(
+        (await handleYoutubeWatchTime(packet, sender)).success,
+        "enabled measurement failed",
+      );
+      const rows = await readWatchTime(db, [id]);
+      const { tracker } = await setup(db);
+      chrome.storage.sync.get = originalGet;
+      const saved = await tracker.recordWatch(packet, sender);
+      assert(
+        rows.length === 1 &&
+          rows[0].eventWatchedAt === saved.watchEvents[0].watchedAt,
+        "measurement and watch disagree on the playback date",
+      );
+    } finally {
+      chrome.storage.sync.get = originalGet;
+      Database.database = original;
+      db.close();
+    }
+  });
 
   await test("sub-minute playback commits no history or upload obligation", async () => {
     const db = await database();
@@ -164,7 +216,10 @@ export async function testPlaybackDurability({ test, database, open, assert }) {
     );
     assert((await provider.getVideo(id)) === null, "trash became visible");
     const restored = await tracker.recordWatch(
-      event("00000000-0000-4000-8000-000000000002"),
+      {
+        ...event("00000000-0000-4000-8000-000000000002"),
+        eventWatchedAt: Date.now() + 10,
+      },
       sender,
     );
     assert(restored.intCount === 2, "restoration lost the repeat view");

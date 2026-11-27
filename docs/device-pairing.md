@@ -14,9 +14,9 @@ If an installation already has a separate cloud history, an administrator can
 review both identities and run `supabase/admin/reconnect-history.sql`, with
 `watchmarker.recovery_source` and `watchmarker.recovery_target` set to the reviewed
 owner UUIDs. The script keeps the source rows, merges unique events and duration
-data into the target, records a private audit and links only the source owner’s
+data and block-list changes into the target, records a private audit and links only the source owner’s
 own device. It refuses to move another history’s linked devices or mutate watch
-identities. Apply `20261103010000_watch_event_precision.sql` first. Extension
+identities. Apply the current setup SQL first. Extension
 1.3.1 follows this authenticated server membership, refreshes its cached owner
 and resets namespace-specific download/repair cursors. It retains local history
 and rotated tokens, and continues to reject unrelated owner/project switches.

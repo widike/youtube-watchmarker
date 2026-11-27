@@ -2,6 +2,7 @@ import { WebEncryption } from "./web-encryption.js";
 
 const CONFIG_VERSION = 5;
 const STORAGE_KEY = "supabase_credentials";
+const PENDING_PAIRING_KEY = "supabase_pending_pairing";
 const ACCESS_SESSION_KEY = "supabase_access_session";
 
 function isValidProjectId(value) {
@@ -97,6 +98,28 @@ export class CredentialStorage {
       },
     });
     await this.storeAccessSession(session);
+  }
+
+  async getPendingPairing(code) {
+    if (!code) return null;
+    const stored = (await chrome.storage.local.get(PENDING_PAIRING_KEY))[
+      PENDING_PAIRING_KEY
+    ];
+    if (!stored) return null;
+    const pending = JSON.parse(await this.encryption.decrypt(stored));
+    return pending.code === code ? pending : null;
+  }
+
+  async storePendingPairing(code, configuration, session) {
+    this.validateSession(session);
+    const encrypted = await this.encryption.encrypt(
+      JSON.stringify({ code, configuration, session }),
+    );
+    await chrome.storage.local.set({ [PENDING_PAIRING_KEY]: encrypted });
+  }
+
+  async clearPendingPairing() {
+    await chrome.storage.local.remove(PENDING_PAIRING_KEY);
   }
 
   async getConfiguration() {

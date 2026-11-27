@@ -29,7 +29,10 @@ export async function testWatchEvents({
     const db = await database();
     try {
       const watchedAt = new Date(2026, 10, 3, 22, 15).getTime();
-      const video = await recordPlayback(db, id, "Title", "missed", watchedAt);
+      const video = await recordPlayback(db, id, "Title", "missed", {
+        watchedAt,
+        recovered: true,
+      });
       assert(
         video.intTimestamp === watchedAt &&
           video.intCount === 1 &&
@@ -38,12 +41,19 @@ export async function testWatchEvents({
         "a recovered play lost its measured time",
       );
       assert(
-        (await recordPlayback(db, id, "Title", "missed", watchedAt)) === null,
+        (await recordPlayback(db, id, "Title", "missed", {
+          watchedAt,
+          recovered: true,
+        })) === null,
         "a recovered play was counted again",
       );
       await deleteVideo(db, id);
       assert(
-        (await recordPlayback(db, id, "Title", "late", watchedAt + 1)) === null,
+        (await recordPlayback(db, id, "Title", "late", {
+          watchedAt: Date.now() + 60_000,
+          recovered: true,
+          observedDeletion: 0,
+        })) === null,
         "recovery revived a deleted video",
       );
       const other = "bbbbbbbbbbb";
@@ -56,8 +66,10 @@ export async function testWatchEvents({
         },
       ]);
       assert(
-        (await recordPlayback(db, other, "Title", "same-day", watchedAt)) ===
-          null,
+        (await recordPlayback(db, other, "Title", "same-day", {
+          watchedAt,
+          recovered: true,
+        })) === null,
         "a recovered play doubled that day's import",
       );
     } finally {

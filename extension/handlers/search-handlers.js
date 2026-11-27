@@ -34,9 +34,10 @@ export const handleSearchVideos = createHandler(
       sort: request.sort,
     });
 
+    const videoIds = result.videos.map((video) => video.strIdent);
     const [time, durations] = await Promise.all([
-      readWatchTime(Database.database),
-      durationStorage.readCache(),
+      readWatchTime(Database.database, videoIds),
+      durationStorage.readForVideos(videoIds),
     ]);
     const videos = enrichHistoryVideos(result.videos, time, durations);
     // Scheduling metadata must not wait behind an in-flight network backfill.
@@ -64,11 +65,7 @@ export const handleSearchDelete = createHandler(
       return { success: false, error: "Missing video ID" };
     }
 
-    const result = await Search.delete(videoId, (progress) => {
-      logger.debug("Delete progress:", progress);
-    });
-
-    return { success: true, ...result };
+    return Search.delete(videoId);
   },
   { name: "handleSearchDelete" },
 );

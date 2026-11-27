@@ -2,7 +2,6 @@ import { supabaseDatabaseProvider } from "./supabase-database-provider.js";
 import { credentialStorage } from "./credential-storage.js";
 import { IndexedDBProvider } from "./indexeddb-provider.js";
 import { HistorySync } from "./provider-sync.js";
-import { YouTubeDeletionQueue } from "../sources/youtube-deletion-queue.js";
 import { pendingWatchTimeCount } from "../history/watch-time-replication.js";
 import { pendingDurationCount } from "../duration/duration-replication.js";
 import { DurationStorage } from "../duration/duration-storage.js";
@@ -29,7 +28,6 @@ export class DatabaseProviderFactory {
       Date.now,
       () => new DurationStorage(() => manager.database).notifyCacheChanged(),
     );
-    this.youtubeDeletions = new YouTubeDeletionQueue(manager.database);
     this.blockedVideoSync = new BlockedVideoSync(
       getBlockedVideoStore(),
       supabaseDatabaseProvider,
@@ -108,6 +106,8 @@ export class DatabaseProviderFactory {
   async performScheduledSync({ forceDownload = false } = {}) {
     const db = this.databaseManager.database;
     const previous = (await readMetadata(db, "syncStatus")) || {};
+    if (!(await this.isConfigured()))
+      return { success: true, downloaded: 0, timeDownloaded: 0 };
     const pending =
       (await readRequest(
         db
@@ -121,7 +121,12 @@ export class DatabaseProviderFactory {
     if (
       !shouldSync(previous, { now: Date.now(), pending, force: forceDownload })
     )
-      return { ...previous, success: !previous.error };
+      return {
+        ...previous,
+        downloaded: 0,
+        timeDownloaded: 0,
+        success: !previous.error,
+      };
     let result;
     try {
       result = await this.performCloudSync();
@@ -131,6 +136,8 @@ export class DatabaseProviderFactory {
     const status = {
       ...((await readMetadata(db, "syncStatus")) || {}),
       ...result,
+      downloaded: result.downloaded ?? 0,
+      timeDownloaded: result.timeDownloaded ?? 0,
       ...scheduleSync(previous, result, Date.now()),
     };
     await writeMetadata(db, "syncStatus", status);
@@ -182,6 +189,8 @@ export class DatabaseProviderFactory {
       ...((await readMetadata(this.databaseManager.database, "syncStatus")) ||
         {}),
       error,
+      downloaded: result.downloaded ?? 0,
+      timeDownloaded: result.timeDownloaded ?? 0,
       inProgress: Boolean(
         result.inProgress ||
           (blocks.status === "fulfilled" && !blocks.value.complete),
@@ -231,17 +240,20 @@ export class DatabaseProviderFactory {
       "readonly",
     );
     const pending = await readRequest(tx.objectStore(OUTBOX_STORE).count());
-    const youtubeJobs = await this.youtubeDeletions.pending();
+    const configured = await this.isConfigured();
+    const status = await readMetadata(
+      this.databaseManager.database,
+      "syncStatus",
+    );
     return {
-      configured: await credentialStorage.hasAuthenticatedSession(),
+      ...status,
+      configured,
+      ...(configured ? {} : { error: null, inProgress: false }),
       pending:
         pending +
-        youtubeJobs.length +
         (await pendingWatchTimeCount(this.databaseManager.database)) +
         (await pendingDurationCount(this.databaseManager.database)) +
         (await getBlockedVideoStore().pendingRecords()).length,
-      ...((await readMetadata(this.databaseManager.database, "syncStatus")) ||
-        {}),
     };
   }
 }

@@ -56,21 +56,26 @@ export class VideoRecordStore {
       : null;
   }
 
-  recordPlayback(videoId, title, playbackId) {
-    const provider = this.getProvider();
-    return this.serialize(provider, videoId, () =>
-      provider.recordPlayback(videoId, this.selectTitle("", title), playbackId),
-    );
-  }
-
-  recoverPlayback({ videoId, title, playbackId, watchedAt }) {
+  recordPlayback(videoId, title, playbackId, watchedAt) {
     const provider = this.getProvider();
     return this.serialize(provider, videoId, () =>
       provider.recordPlayback(
         videoId,
         this.selectTitle("", title),
         playbackId,
-        watchedAt,
+        { watchedAt },
+      ),
+    );
+  }
+
+  recoverPlayback({ videoId, title, playbackId, watchedAt, observedDeletion }) {
+    const provider = this.getProvider();
+    return this.serialize(provider, videoId, () =>
+      provider.recordPlayback(
+        videoId,
+        this.selectTitle("", title),
+        playbackId,
+        { watchedAt, observedDeletion, recovered: true },
       ),
     );
   }

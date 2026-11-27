@@ -4,6 +4,7 @@ import {
 } from "../../extension/history/watch-time-storage.js";
 import {
   pendingWatchTime,
+  queueWatchTime,
   acknowledgeWatchTime,
   mergeWatchTimes,
 } from "../../extension/history/watch-time-replication.js";
@@ -31,6 +32,7 @@ export async function testWatchTimeSync({
     title: "Space",
     sessionId,
     watchedMilliseconds: 60000,
+    eventWatchedAt: minute,
     buckets: [
       { minute, from: minute, to: minute + milliseconds, milliseconds },
     ],
@@ -71,6 +73,11 @@ export async function testWatchTimeSync({
     await saveWatchTime(db, packet(1000), sender);
     const sent = await pendingWatchTime(db);
     await saveWatchTime(db, packet(2000), sender);
+    await queueWatchTime(db, [sent[0].row]);
+    assert(
+      (await pendingWatchTime(db))[0].row.milliseconds === 2000,
+      "repair queued stale playback time",
+    );
     await acknowledgeWatchTime(db, sent);
     assert(
       (await pendingWatchTime(db)).length === 1,

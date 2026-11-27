@@ -72,6 +72,7 @@
     }
 
     add(session, from, to, milliseconds, media) {
+      session.eventWatchedAt ??= from;
       session.watchedMilliseconds =
         (session.watchedMilliseconds || 0) + milliseconds;
       const span = to - from;
@@ -117,9 +118,11 @@
       this.previous = null;
       // Ads interrupt the meter, but only leaving/replaying ends the playback.
       for (const [key, snapshot] of this.snapshots) {
+        if (!discardUnqualified) continue;
+        snapshot.session.closed = true;
         if (
-          !discardUnqualified ||
-          snapshot.session.watchedMilliseconds >= MINUTE
+          snapshot.session.watchedMilliseconds >= MINUTE &&
+          !snapshot.session.recordingDisabled
         )
           continue;
         this.snapshots.delete(key);
@@ -144,6 +147,8 @@
             videoId: snapshot.session.videoId,
             sessionId: snapshot.session.sessionId,
             watchedMilliseconds: snapshot.session.watchedMilliseconds,
+            eventWatchedAt: snapshot.session.eventWatchedAt,
+            reasons: [...(snapshot.session.reasons || [])],
             title: snapshot.session.title,
             buckets: [
               {
@@ -161,6 +166,10 @@
             ],
           });
           if (!response?.success) break;
+          snapshot.session.recordingDisabled =
+            response.recordingDisabled === true;
+          if (snapshot.session.recordingDisabled && !snapshot.session.closed)
+            continue;
           if (this.pending.get(key) === snapshot) this.pending.delete(key);
         }
       } catch {

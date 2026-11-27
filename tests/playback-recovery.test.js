@@ -19,6 +19,7 @@ const row = (video, session, offset, overrides = {}) => ({
   from: start + offset * minute,
   to: start + (offset + 1) * minute,
   milliseconds: minute,
+  eventWatchedAt: start + offset * minute,
   ...overrides,
 });
 
@@ -31,7 +32,10 @@ function setup(initial = []) {
 
 test("rows of one play become one watch at its first measured moment", () => {
   const plays = measuredPlaybacks(
-    [row("aaaaaaaaaaa", "one", 2), row("aaaaaaaaaaa", "one", 1)],
+    [
+      row("aaaaaaaaaaa", "one", 2, { eventWatchedAt: start + minute }),
+      row("aaaaaaaaaaa", "one", 1),
+    ],
     later,
   );
   assert.deepEqual(plays, [
@@ -41,6 +45,7 @@ test("rows of one play become one watch at its first measured moment", () => {
       title: "Title aaaaaaaaaaa",
       watchedAt: start + minute,
       end: start + 3 * minute,
+      observedDeletion: 0,
     },
   ]);
 });
@@ -52,6 +57,18 @@ test("a client's own event date wins, so a replayed snapshot cannot conflict", (
     later,
   );
   assert.equal(play.watchedAt, eventWatchedAt);
+});
+
+test("recovery skips measurements without an event date or with conflicting deletion markers", () => {
+  const example = row("aaaaaaaaaaa", "one", 1);
+  assert.deepEqual(
+    measuredPlaybacks([{ ...example, eventWatchedAt: undefined }], later),
+    [],
+  );
+  assert.deepEqual(
+    measuredPlaybacks([example, { ...example, observedDeletion: 100 }], later),
+    [],
+  );
 });
 
 test("plays that may still be running or uploading are left alone", () => {

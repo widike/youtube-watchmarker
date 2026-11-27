@@ -1,4 +1,11 @@
-import { watchTimePage, mergeWatchTimes } from "./watch-time-replication.js";
+import {
+  watchTimeForVideos,
+  watchTimePage,
+  putWatchTimes,
+} from "./watch-time-replication.js";
+import { EVENT_STORE } from "./history-event-storage.js";
+import { META_STORE, readRequest, transactionDone } from "./history-storage.js";
+import { DATABASE } from "../shared/constants.js";
 import "../shared/video-identity.js";
 
 const MINUTE = 60_000;
@@ -21,11 +28,15 @@ export function validateWatchTime(request, sender, now = Date.now()) {
     (sender.frameId !== 0 && !departingDocument) ||
     !Number.isFinite(request.watchedMilliseconds) ||
     request.watchedMilliseconds < MINUTE ||
+    !Number.isSafeInteger(request.eventWatchedAt) ||
+    request.eventWatchedAt <= 0 ||
+    request.eventWatchedAt > now + 2000 ||
     !Array.isArray(request.buckets) ||
     !request.buckets.length ||
     request.buckets.length > 20
   )
     throw new Error("Invalid playback time report");
+  const minutes = new Set();
   for (const bucket of request.buckets) {
     if (
       bucket.mediaRanges !== undefined &&
@@ -45,6 +56,7 @@ export function validateWatchTime(request, sender, now = Date.now()) {
     )
       throw new Error("Invalid playback coverage");
     if (
+      minutes.has(bucket.minute) ||
       !Number.isSafeInteger(bucket.minute) ||
       bucket.minute <= 0 ||
       bucket.minute % MINUTE ||
@@ -60,6 +72,7 @@ export function validateWatchTime(request, sender, now = Date.now()) {
       bucket.to - bucket.from < bucket.milliseconds
     )
       throw new Error("Invalid playback time interval");
+    minutes.add(bucket.minute);
   }
 }
 
@@ -67,20 +80,65 @@ export function validateWatchTime(request, sender, now = Date.now()) {
 // messages, out-of-order delivery and service-worker restarts cannot add time.
 export async function saveWatchTime(db, request, sender, now = Date.now()) {
   validateWatchTime(request, sender, now);
-  await mergeWatchTimes(
-    db,
-    request.buckets.map((bucket) => ({
-      ...bucket,
-      snapshotId: `${sender.tab.id}:${sender.documentId || ""}:${request.sessionId}:${bucket.minute}`,
-      eventId: `playback:${sender.tab.id}:${sender.documentId || ""}:${request.sessionId}`,
-      strIdent: request.videoId,
-      strTitle: String(request.title || ""),
-    })),
-    { pending: true },
+  const playbackId = `${sender.tab.id}:${sender.documentId || ""}:${request.sessionId}`;
+  const eventId = `playback:${playbackId}`;
+  const tx = db.transaction(
+    [META_STORE, EVENT_STORE, DATABASE.STORE_NAME],
+    "readwrite",
+    { durability: "strict" },
   );
+  let failure;
+  const done = transactionDone(tx, () => failure);
+  try {
+    const [event, first, video] = await Promise.all([
+      readRequest(tx.objectStore(EVENT_STORE).get([request.videoId, eventId])),
+      readRequest(
+        tx
+          .objectStore(META_STORE)
+          .index("watchTimeEvent")
+          .get([request.videoId, eventId]),
+      ),
+      readRequest(tx.objectStore(DATABASE.STORE_NAME).get(request.videoId)),
+    ]);
+    const marker = video?.intDeletedAt || 0;
+    const observedDeletion =
+      event?.observedDeletion ?? first?.observedDeletion ?? marker;
+    const eventWatchedAt =
+      event?.watchedAt || first?.eventWatchedAt || request.eventWatchedAt;
+    if (observedDeletion === marker && eventWatchedAt > marker) {
+      putWatchTimes(
+        tx,
+        request.buckets.map((bucket) => ({
+          ...bucket,
+          snapshotId: `${playbackId}:${bucket.minute}`,
+          eventId,
+          eventWatchedAt,
+          observedDeletion,
+          strIdent: request.videoId,
+          strTitle: String(request.title || ""),
+        })),
+        {
+          pending: true,
+          fail: (error) => {
+            failure = error;
+          },
+        },
+      );
+    }
+  } catch (error) {
+    failure = error;
+    try {
+      tx.abort();
+    } catch {
+      /* A failed request may have aborted it. */
+    }
+  }
+  await done;
   return true;
 }
 
-export async function readWatchTime(db) {
-  return watchTimePage(db, "", Infinity);
+export async function readWatchTime(db, videoIds) {
+  return videoIds
+    ? watchTimeForVideos(db, videoIds)
+    : watchTimePage(db, "", Infinity);
 }

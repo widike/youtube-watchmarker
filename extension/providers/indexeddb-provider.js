@@ -7,7 +7,11 @@ import {
 import { DATABASE } from "../shared/constants.js";
 import { recordPlayback } from "../history/history-playback.js";
 import { repairVideoTitle } from "../history/history-title-storage.js";
-import { readVideos } from "../history/history-event-storage.js";
+import {
+  historyRevision,
+  knownPlaybackEvents,
+  readVideos,
+} from "../history/history-event-storage.js";
 // @ts-check
 
 /**
@@ -101,7 +105,7 @@ export class IndexedDBProvider {
     });
   }
 
-  async recordPlayback(videoId, title, playbackId, recoveredAt) {
+  async recordPlayback(videoId, title, playbackId, metadata) {
     this.updateConnectionStatus();
     if (!this.isConnected) throw new Error("Database not connected");
     return recordPlayback(
@@ -109,7 +113,7 @@ export class IndexedDBProvider {
       videoId,
       title,
       playbackId,
-      recoveredAt,
+      metadata,
     );
   }
 
@@ -117,6 +121,14 @@ export class IndexedDBProvider {
     this.updateConnectionStatus();
     if (!this.isConnected) throw new Error("Database not connected");
     return repairVideoTitle(this.databaseManager.database, videoId, title);
+  }
+
+  get historyRevision() {
+    return historyRevision(this.databaseManager.database);
+  }
+
+  knownPlaybackEvents(plays) {
+    return knownPlaybackEvents(this.databaseManager.database, plays);
   }
 
   async getAllVideos({ includeDeleted = false } = {}) {
@@ -153,8 +165,8 @@ export class IndexedDBProvider {
     );
   }
 
-  async deleteVideo(videoId, options) {
-    return deleteVideo(this.databaseManager.database, videoId, options);
+  async deleteVideo(videoId) {
+    return deleteVideo(this.databaseManager.database, videoId);
   }
 
   async importVideos(videos) {
@@ -167,63 +179,6 @@ export class IndexedDBProvider {
     }
 
     return saveVideos(this.databaseManager.database, videos);
-  }
-
-  async searchVideos(query, limit = 100) {
-    if (!this.isConnected) {
-      throw new Error("Database not connected");
-    }
-
-    const allVideos = await this.getAllVideos();
-    const filteredVideos = allVideos.filter(
-      (video) =>
-        video.strTitle &&
-        video.strTitle.toLowerCase().includes(query.toLowerCase()),
-    );
-
-    return filteredVideos.slice(0, limit);
-  }
-
-  async getVideosByDateRange(startTimestamp, endTimestamp) {
-    if (!this.isConnected) {
-      throw new Error("Database not connected");
-    }
-
-    const allVideos = await this.getAllVideos();
-    return allVideos.filter(
-      (video) =>
-        video.intTimestamp >= startTimestamp &&
-        video.intTimestamp <= endTimestamp,
-    );
-  }
-
-  async getStatistics() {
-    if (!this.isConnected) {
-      throw new Error("Database not connected");
-    }
-
-    const allVideos = await this.getAllVideos();
-
-    if (allVideos.length === 0) {
-      return {
-        totalVideos: 0,
-        oldestTimestamp: 0,
-        newestTimestamp: 0,
-        totalViews: 0,
-        avgViewsPerVideo: 0,
-      };
-    }
-
-    const timestamps = allVideos.map((v) => v.intTimestamp).filter((t) => t);
-    const totalViews = allVideos.reduce((sum, v) => sum + (v.intCount || 1), 0);
-
-    return {
-      totalVideos: allVideos.length,
-      oldestTimestamp: Math.min(...timestamps),
-      newestTimestamp: Math.max(...timestamps),
-      totalViews,
-      avgViewsPerVideo: totalViews / allVideos.length,
-    };
   }
 
   async close() {

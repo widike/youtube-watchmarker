@@ -78,6 +78,20 @@ export class DurationStorage {
     return rows;
   }
 
+  async readForVideos(videoIds, now = Date.now()) {
+    const store = this.database()
+      .transaction(META_STORE, "readonly")
+      .objectStore(META_STORE);
+    const rows = await Promise.all(
+      [...new Set(videoIds)].map((id) =>
+        readRequest(store.get(`${PREFIX}${id}`)),
+      ),
+    );
+    return rows.filter(
+      (row) => row && (row.unavailable || row.expiresAt > now),
+    );
+  }
+
   async writeCache(rows) {
     if (await mergeDurations(this.database(), rows, { pending: true }))
       await this.notifyCacheChanged();

@@ -95,7 +95,9 @@ function withInitialization(handler) {
   return async (request, sender) => {
     await ensureServiceWorkerReady();
     return HISTORY_CHANGES.has(request.action)
-      ? withWatchmarkerRefresh(() => handler(request, sender))
+      ? withWatchmarkerRefresh(() => handler(request, sender), {
+          onlyDownloads: request.action === "sync-manager-sync-now",
+        })
       : handler(request, sender);
   };
 }
@@ -174,8 +176,9 @@ function registerAlarmHandlers() {
 
   alarmManager.registerHandler(HISTORY_SYNC_ALARM, async () => {
     await ensureServiceWorkerReady();
-    await withWatchmarkerRefresh(() =>
-      SyncManagerInstance.syncNow({ forceDownload: false }),
+    await withWatchmarkerRefresh(
+      () => SyncManagerInstance.syncNow({ forceDownload: false }),
+      { onlyDownloads: true },
     );
   });
 
@@ -226,8 +229,9 @@ async function initializeServiceWorker() {
   await durationBackfill.initialize();
 
   // Network availability must never block recording a local watch.
-  void withWatchmarkerRefresh(() =>
-    SyncManagerInstance.syncNow({ forceDownload: false }),
+  void withWatchmarkerRefresh(
+    () => SyncManagerInstance.syncNow({ forceDownload: false }),
+    { onlyDownloads: true },
   ).catch((error) => logger.warn("History sync deferred:", error.message));
   logger.info("Service worker context initialized");
 }
@@ -251,7 +255,10 @@ const historySynchronization = createHistorySynchronization({
   history: History,
   // Download first so another device's own events win over a recovered copy.
   recoverPlaybacks: async () => {
-    await SyncManagerInstance.syncNow({ forceDownload: false });
+    await withWatchmarkerRefresh(
+      () => SyncManagerInstance.syncNow({ forceDownload: false }),
+      { onlyDownloads: true },
+    );
     return recoverMissedPlaybacks(
       Youtube,
       await readWatchTime(Database.database),

@@ -1,3 +1,5 @@
+import { upgradeHistoryStorage } from "../../extension/history/history-storage.js";
+import { DATABASE } from "../../extension/shared/constants.js";
 import { DurationStorage } from "../../extension/duration/duration-storage.js";
 import { DurationBackfill } from "../../extension/duration/duration-backfill.js";
 import {
@@ -15,8 +17,12 @@ export async function verifyDurationBackfill(assert) {
   const open = () =>
     new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 1);
-      request.onupgradeneeded = () =>
-        request.result.createObjectStore("historyMetadata");
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore(DATABASE.STORE_NAME, {
+          keyPath: "strIdent",
+        });
+        upgradeHistoryStorage(request.result, request.transaction);
+      };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -106,6 +112,7 @@ export async function verifyDurationBackfill(assert) {
         sessionId,
         title: "Science",
         watchedMilliseconds: 60_000,
+        eventWatchedAt: now - 1000,
         buckets: [
           {
             minute: Math.floor((now - 1000) / 60_000) * 60_000,

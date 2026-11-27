@@ -1,8 +1,7 @@
 import { YOUTUBE } from "../shared/constants.js";
 import { synchronizeYouTubeSource } from "./youtube-source-sync.js";
 import {
-  parseHistoryPage,
-  extractHistoryContinuationToken,
+  parseHistoryPageResponse,
   parseHistoryContinuationResponse,
 } from "./youtube-history-parser.js";
 
@@ -17,10 +16,7 @@ export function synchronizeHistory(
     signal,
     url: YOUTUBE.URLS.HISTORY,
     label: "YouTube history",
-    parsePage: (html) => ({
-      videos: parseHistoryPage(html),
-      nextToken: extractHistoryContinuationToken(html),
-    }),
+    parsePage: parseHistoryPageResponse,
     parseContinuation: parseHistoryContinuationResponse,
   });
 }

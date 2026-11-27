@@ -94,8 +94,10 @@ position is at least a minute in, which also covers other devices. YouTube never
 shows less than 10%, so that value proves nothing, and such a video stays out
 until a client measured it. These additions are day-only and never add a replay
 to a known video. Every sync also restores plays whose measured time was saved
-without a watch, using the first measured moment; it skips deleted videos and
-days already covered by an import. Existing saved history is retained; use the
+without a watch when the recording provides a playback date and the deletion
+marker it observed. Recovery skips older measurements that lack a playback
+date and days already covered by an import. Switching off every live watch
+detector stops recording and syncing new playback measurements. Existing saved history is retained; use the
 reconciliation preview below for old overlaps.
 Subtracting distinct videos from mixed-source
 records cannot establish repeat watches, so Insights does not show that claim.
@@ -106,14 +108,11 @@ Liked-video imports have no watch timestamp, so they skip already-known video
 IDs entirely, including deleted videos. New likes are imported once as undated
 records and do not contribute to period activity totals.
 
-The history trash action removes every stored watch of a video locally, syncs
-its deletion to Supabase, and removes it from the signed-in YouTube account's
-watch history, including older history pages. Local and cloud deletion markers
-prevent stale devices or imports from restoring the video. Records and watch
-events are retained behind those markers; this is not a permanent data purge.
-Cloud and YouTube failures are shown as pending, with durable retries every
-30 seconds and after extension restarts. Supabase must be connected and YouTube
-must be signed in to complete all three destinations.
+The history trash action removes all saved watches of a video from Watchmarker
+and queues the deletion for Supabase when connected. Deletion markers keep
+older records from restoring the video. If you also want to remove a watch
+from your YouTube account, use [YouTube watch history](https://www.youtube.com/feed/history)
+while signed in to that account.
 
 **Sync & data → Reconcile old imports → Preview reconciliation** inspects the
 database without changing history or the sync outbox. It shows redundant import

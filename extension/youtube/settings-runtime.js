@@ -4,6 +4,12 @@
   const watchmarker = globalThis.YouTubeWatchmarkerContent;
   const { core } = watchmarker;
 
+  const WATCH_CONDITIONS = [
+    "idCondition_Brownav",
+    "idCondition_Youprog",
+    "idCondition_Yourating",
+  ];
+
   class ContentSettingsStore {
     constructor() {
       this.cache = {};
@@ -32,6 +38,7 @@
 
       const result = await chrome.storage.sync.get([
         ...this.settingKeys,
+        ...WATCH_CONDITIONS,
         "idBlocking_Enabled",
       ]);
       this.cache = { ...result };
@@ -98,6 +105,7 @@
     }
   }
 
+  watchmarker.WATCH_CONDITIONS = WATCH_CONDITIONS;
   watchmarker.ContentSettingsStore = ContentSettingsStore;
   watchmarker.BackgroundClient = BackgroundClient;
 })();

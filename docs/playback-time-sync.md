@@ -21,9 +21,9 @@ separately. Abrupt termination can lose an unflushed tail.
 
 Each playback gets a globally unique ID. A snapshot has a stable identity per
 playback and UTC minute; it carries a cumulative millisecond total, observed
-span, video ID, watch-event ID and optional media coverage. SmartTube event
-timestamps also travel with each snapshot so replaying a restored snapshot
-cannot create a conflicting watch date. Downloading a snapshot preserves its
+span, video ID, watch-event ID and optional media coverage. The watch event and its snapshots share the same playback date and observed
+deletion marker. Recovery uses this identity to keep retries consistent across
+clients. Older measurements without a playback date still contribute time. Downloading a snapshot preserves its
 identity and does not create another measurement.
 
 `youtube_watch_time` has the key `(user_id, snapshot_id)`. A trigger rejects

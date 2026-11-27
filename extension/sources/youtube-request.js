@@ -35,7 +35,7 @@ export function prepareYouTubeRequests() {
           },
           condition: {
             regexFilter:
-              "^https://www\\.youtube\\.com/youtubei/v1/(browse|feedback)(\\?|$)",
+              "^https://www\\.youtube\\.com/youtubei/v1/browse(\\?|$)",
             initiatorDomains: [chrome.runtime.id],
             resourceTypes: ["xmlhttprequest"],
             requestMethods: ["post"],

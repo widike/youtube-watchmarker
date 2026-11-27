@@ -12,6 +12,7 @@ const event = (reason, sessionId = first) => ({
   reason,
   sessionId,
   watchedMilliseconds: 60_000,
+  eventWatchedAt: Date.now() - 60_000,
 });
 const watchUrl = "https://www.youtube.com/watch?list=test&v=aaaaaaaaaaa";
 // Chrome freezes sender.url at the URL the document loaded with.

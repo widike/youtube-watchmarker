@@ -1,3 +1,4 @@
+import { WebEncryption } from "../../extension/providers/web-encryption.js";
 import { resolveCloudIdentity } from "../../extension/providers/cloud-identity.js";
 import { HistorySync } from "../../extension/providers/provider-sync.js";
 import {
@@ -12,6 +13,23 @@ import { historyEntries } from "../../extension/history/history-events.js";
 import { enrichHistoryVideos } from "../../extension/history/history-video-statistics.js";
 
 export async function testCloudIdentity({ test, database, remote, assert }) {
+  await test("concurrent credential stores use the key that survives a worker restart", async () => {
+    const first = new WebEncryption();
+    const second = new WebEncryption();
+    const [a, b] = await Promise.all([
+      first.encrypt("fixture one"),
+      second.encrypt("fixture two"),
+    ]);
+    const reopened = new WebEncryption();
+    assert(
+      (await reopened.decrypt(a)) === "fixture one",
+      "first credential became unreadable",
+    );
+    assert(
+      (await reopened.decrypt(b)) === "fixture two",
+      "second credential became unreadable",
+    );
+  });
   const first = "00000000-0000-4000-8000-000000000001";
   const second = "00000000-0000-4000-8000-000000000002";
   const configuration = { projectId: "fixture" };

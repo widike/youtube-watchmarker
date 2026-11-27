@@ -1,3 +1,4 @@
+import { isValidVideoId } from "../shared/validation.js";
 import { fixUtf8DoubleEncoding } from "../shared/text-utils.js";
 import { normalizeVideo } from "./history-records.js";
 
@@ -86,21 +87,36 @@ function parseJson(rawData) {
 
 function normalizeImportedVideo(video) {
   const timestamp = Number(video.intTimestamp || video.int_timestamp);
-  const count = Number(video.intCount || video.int_count || 1);
+  const count = Number(video.intCount ?? video.int_count ?? 1);
   const title = String(video.strTitle || video.str_title || "");
   const deletedAt = Number(video.intDeletedAt || video.int_deleted_at || 0);
 
-  return normalizeVideo({
-    strIdent: String(video.strIdent || video.str_ident || "").trim(),
+  const strIdent = video.strIdent ?? video.str_ident;
+  if (!isValidVideoId(strIdent)) throw new Error("Invalid YouTube video ID");
+  const intImportedCount = video.intImportedCount ?? video.int_imported_count;
+  if (
+    intImportedCount != null &&
+    (!Number.isSafeInteger(Number(intImportedCount)) ||
+      Number(intImportedCount) < 0 ||
+      Number(intImportedCount) > 2147483647)
+  )
+    throw new Error("Imported watch count exceeds database limits");
+  if (!Number.isSafeInteger(count) || count < 1 || count > 2147483647)
+    throw new Error("Watch count exceeds database limits");
+  const normalized = normalizeVideo({
+    strIdent,
     intTimestamp:
       Number.isFinite(timestamp) && timestamp > 0 ? Math.floor(timestamp) : 0,
     strTitle: fixUtf8DoubleEncoding(title),
     intDeletedAt:
       Number.isSafeInteger(deletedAt) && deletedAt > 0 ? deletedAt : 0,
     intCount: Number.isFinite(count) && count > 0 ? Math.floor(count) : 1,
-    intImportedCount: video.intImportedCount ?? video.int_imported_count,
+    intImportedCount,
     watchEvents: video.watchEvents,
   });
+  if (normalized.intCount > 2147483647)
+    throw new Error("Combined watch count exceeds database limits");
+  return normalized;
 }
 
 function getImportRows(parsedData) {
@@ -164,10 +180,14 @@ export function parseHistoryImport(rawData) {
     );
   }
   // Validate the entire file before the handler writes any import chunks.
-  return rows.map((video) => {
+  return rows.map((video, index) => {
     if (!video || typeof video !== "object" || Array.isArray(video)) {
       throw new Error("Invalid database format. Expected video records.");
     }
-    return normalizeImportedVideo(video);
+    try {
+      return normalizeImportedVideo(video);
+    } catch (error) {
+      throw new Error(`Row ${index + 1}: ${error.message}`, { cause: error });
+    }
   });
 }

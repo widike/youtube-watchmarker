@@ -122,10 +122,14 @@ export class ProviderController {
       });
       if (!setup?.success)
         throw new Error(setup?.error || "Verification setup unavailable");
-      e.syncFeedback.textContent = "Verify to connect this device";
-      const captchaToken = await this.challenge.verify(setup.captcha, {
-        signal: this.connectionAttempt.signal,
-      });
+      let captchaToken;
+      if (setup.captcha) {
+        e.syncFeedback.textContent = "Verify to connect this device";
+        captchaToken = await this.challenge.verify(setup.captcha, {
+          signal: this.connectionAttempt.signal,
+        });
+      }
+      this.connectionAttempt.signal.throwIfAborted();
       e.syncFeedback.textContent = "Connecting…";
       const response = await this.client.sendMessage({
         action: "supabase-connect",

@@ -4,6 +4,11 @@
 \ir ../../supabase/migrations/20261101040000_playback_time_sync.sql
 \ir ../../supabase/migrations/20261103000000_video_duration_sync.sql
 \ir ../../supabase/migrations/20261103010000_watch_event_precision.sql
+\ir ../../supabase/migrations/20261105000000_blocked_video_sync.sql
+insert into public.youtube_blocked_videos(user_id,str_ident,blocked,updated_at,change_id)
+values ('00000000-0000-0000-0000-000000000004','abcdefghijk',true,100,gen_random_uuid()),
+       ('00000000-0000-0000-0000-000000000004','mnopqrstuvw',false,200,gen_random_uuid()),
+       ('00000000-0000-0000-0000-000000000001','mnopqrstuvw',true,300,gen_random_uuid());
 set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
 insert into public.youtube_watch_history(str_ident,int_timestamp,int_imported_count) values('abcdefghijk',100,1),('unique_____',300,1);
@@ -21,6 +26,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000004',false);
 select public.assert_link_test(public.watchmarker_history_owner()='00000000-0000-0000-0000-000000000001');
 select public.assert_link_test((select count(*)=3 from public.youtube_watch_history));
+select public.assert_link_test((select count(*)=2 and bool_and(blocked) from public.youtube_blocked_videos));
 select public.assert_link_test((select count(*)=1 from public.youtube_watch_events where event_id='unique-import'));
 select public.assert_link_test((select precision='day' from public.youtube_watch_events where event_id='same-import'));
 insert into public.youtube_watch_events(str_ident,event_id,watched_at,source,precision) values('abcdefghijk','same-import',100,'saved','inferred')

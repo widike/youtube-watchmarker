@@ -2,7 +2,11 @@ import { DATABASE } from "../shared/constants.js";
 import { isDeleted } from "./history-records.js";
 import { isValidVideoTitle } from "../shared/validation.js";
 import { normalizeVideoTitle } from "../shared/text-utils.js";
-import { EVENT_STORE, videoEvents } from "./history-event-storage.js";
+import {
+  EVENT_STORE,
+  videoEvents,
+  markHistoryChanged,
+} from "./history-event-storage.js";
 import { OUTBOX_STORE, transactionDone } from "./history-storage.js";
 
 // Recheck inside the transaction so recovery cannot overwrite a newer title,
@@ -25,6 +29,7 @@ export async function repairVideoTitle(db, videoId, title) {
     result = previous.strTitle;
     if (isValidVideoTitle(result)) return;
     const video = { ...previous, strTitle: normalized };
+    markHistoryChanged(tx);
     history.put(video);
     videoEvents(tx, videoId, (watchEvents) => {
       tx.objectStore(OUTBOX_STORE).put({

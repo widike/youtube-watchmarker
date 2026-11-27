@@ -1,3 +1,5 @@
+import { upgradeHistoryStorage } from "../../extension/history/history-storage.js";
+import { DATABASE } from "../../extension/shared/constants.js";
 import {
   saveWatchTime,
   readWatchTime,
@@ -14,8 +16,12 @@ export async function verifyRealPlayback(assert) {
   const name = `watchmarker-real-playback-${crypto.randomUUID()}`;
   const db = await new Promise((resolve, reject) => {
     const request = indexedDB.open(name, 1);
-    request.onupgradeneeded = () =>
-      request.result.createObjectStore("historyMetadata");
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(DATABASE.STORE_NAME, {
+        keyPath: "strIdent",
+      });
+      upgradeHistoryStorage(request.result, request.transaction);
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -184,8 +190,12 @@ export async function verifyDurationPersistence(assert) {
   const open = () =>
     new Promise((resolve, reject) => {
       const request = indexedDB.open(name, 1);
-      request.onupgradeneeded = () =>
-        request.result.createObjectStore("historyMetadata");
+      request.onupgradeneeded = () => {
+        request.result.createObjectStore(DATABASE.STORE_NAME, {
+          keyPath: "strIdent",
+        });
+        upgradeHistoryStorage(request.result, request.transaction);
+      };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
@@ -196,6 +206,7 @@ export async function verifyDurationPersistence(assert) {
     sessionId: "00000000-0000-4000-8000-000000000001",
     title: "Space",
     watchedMilliseconds: 60_000,
+    eventWatchedAt: minute,
     buckets: [
       {
         minute,

@@ -31,6 +31,13 @@ test("imports refresh thumbnails even when only partially successful", async (t)
     downloaded: 0,
     timeDownloaded: 1,
   }));
+  await withWatchmarkerRefresh(async () => ({ success: false }), {
+    onlyDownloads: true,
+  });
+  await withWatchmarkerRefresh(
+    async () => ({ downloaded: 0, timeDownloaded: 0 }),
+    { onlyDownloads: true },
+  );
   assert.equal(messages.length, 3);
   assert.equal(revisions.length, 3);
   assert(revisions.every((value) => value.watchmarker_history_revision));

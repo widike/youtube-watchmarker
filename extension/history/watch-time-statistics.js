@@ -29,6 +29,9 @@ export function summarizeWatchTime(
   const eligible = rows.filter(
     (row) =>
       row.from > (deleted.get(row.strIdent) || 0) &&
+      (row.estimated ||
+        !row.eventWatchedAt ||
+        (row.observedDeletion || 0) === (deleted.get(row.strIdent) || 0)) &&
       row.to <= now &&
       Number.isFinite(row.milliseconds) &&
       row.milliseconds > 0 &&

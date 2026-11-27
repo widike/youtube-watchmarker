@@ -180,7 +180,14 @@ test("wrapped large imports use the chunked import path", async (t) => {
 test("invalid records fail before any chunk is written", async (t) => {
   const provider = importProvider(t, [video]);
   const rows = Array.from({ length: 1001 }, () => video);
-  for (const badRow of [null, {}, { ...video, watchEvents: [{}] }]) {
+  for (const badRow of [
+    null,
+    {},
+    { ...video, watchEvents: [{}] },
+    { ...video, strIdent: "short" },
+    { ...video, intCount: 2147483648 },
+    { ...video, intImportedCount: 2147483648 },
+  ]) {
     const result = await handleDatabaseImport({
       data: JSON.stringify({ objVideos: [...rows, badRow] }),
     });

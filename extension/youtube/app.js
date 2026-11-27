@@ -23,6 +23,10 @@
       this.playbackTracker = new watchmarker.PlaybackTracker(
         this.backgroundClient,
         this.videoMarkerManager,
+        () =>
+          watchmarker.WATCH_CONDITIONS.some(
+            (key) => this.settingsStore.cache[key] !== false,
+          ),
       );
       this.interactionManager = new watchmarker.InteractionManager(
         this.playbackTracker,
@@ -84,7 +88,7 @@
     registerSettingsListener() {
       this.settingsStore.onChange(async (changes) => {
         if (changes.idBlocking_Enabled) await this.refresh();
-        if (Object.keys(changes).some((key) => key.startsWith("idCondition_")))
+        if (watchmarker.WATCH_CONDITIONS.some((key) => changes[key]))
           this.playbackTracker.retrySettings();
         const visualSettingChanged = this.settingsStore.settingKeys.some(
           (key) => changes[key],

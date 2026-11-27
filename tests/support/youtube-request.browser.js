@@ -11,28 +11,21 @@ export async function checkYouTubeRequests(serverOrigin) {
     type: "xmlhttprequest",
     method: "post",
   };
-  for (const endpoint of ["browse", "feedback"]) {
-    const url = `https://www.youtube.com/youtubei/v1/${endpoint}?key=fixture`;
-    const own = await chrome.declarativeNetRequest.testMatchOutcome({
-      ...request,
-      url,
-    });
-    assert(
-      own.matchedRules.length === 1,
-      `Rule did not match extension ${endpoint}`,
-    );
-    const website = await chrome.declarativeNetRequest.testMatchOutcome({
-      ...request,
-      url,
-      initiator: "https://www.youtube.com/",
-    });
-    assert(
-      website.matchedRules.length === 0,
-      "Rule modified a website request",
-    );
-  }
+  const browse = "https://www.youtube.com/youtubei/v1/browse?key=fixture";
+  const own = await chrome.declarativeNetRequest.testMatchOutcome({
+    ...request,
+    url: browse,
+  });
+  assert(own.matchedRules.length === 1, "Rule did not match extension browse");
+  const website = await chrome.declarativeNetRequest.testMatchOutcome({
+    ...request,
+    url: browse,
+    initiator: "https://www.youtube.com/",
+  });
+  assert(website.matchedRules.length === 0, "Rule modified a website request");
   for (const url of [
     "https://www.youtube.com/youtubei/v1/browse-unrelated",
+    "https://www.youtube.com/youtubei/v1/feedback?key=fixture",
     "https://www.youtube.com/watch?v=aaaaaaaaaaa",
     "https://example.com/youtubei/v1/browse",
   ]) {

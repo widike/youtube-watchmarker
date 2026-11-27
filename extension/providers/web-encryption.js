@@ -30,11 +30,24 @@ async function readKey() {
   }
 }
 
-async function writeKey(key) {
+async function storeKeyIfMissing(candidate) {
   const database = await openDatabase();
   try {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    await requestResult(transaction.objectStore(STORE_NAME).put(key, KEY_ID));
+    const transaction = database.transaction(STORE_NAME, "readwrite", {
+      durability: "strict",
+    });
+    const store = transaction.objectStore(STORE_NAME);
+    return await new Promise((resolve, reject) => {
+      const request = store.get(KEY_ID);
+      let key;
+      request.onsuccess = () => {
+        key = request.result || candidate;
+        if (!request.result) store.add(key, KEY_ID);
+      };
+      transaction.oncomplete = () => resolve(key);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error("Key storage was aborted"));
+    });
   } finally {
     database.close();
   }
@@ -53,7 +66,10 @@ export class WebEncryption {
 
   getKey() {
     if (!this.keyPromise) {
-      this.keyPromise = this.loadOrCreateKey();
+      this.keyPromise = this.loadOrCreateKey().catch((error) => {
+        this.keyPromise = null;
+        throw error;
+      });
     }
     return this.keyPromise;
   }
@@ -71,8 +87,7 @@ export class WebEncryption {
       false,
       ["encrypt", "decrypt"],
     );
-    await writeKey(key);
-    return key;
+    return storeKeyIfMissing(key);
   }
 
   async encrypt(text) {

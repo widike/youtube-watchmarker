@@ -32,7 +32,7 @@ test("merge preserves membership, latest watch, count and nonempty title in eith
 
 test(
   "real Chrome IndexedDB durability and multi-device sync",
-  { timeout: 40_000 },
+  { timeout: 90_000 },
   async (t) => {
     const chrome =
       process.env.CHROME_PATH ||
@@ -99,7 +99,7 @@ test(
         new Promise((_, reject) => {
           timer = setTimeout(
             () => reject(new Error("Chrome IndexedDB tests timed out")),
-            30_000,
+            75_000,
           );
         }),
       ]);
@@ -107,7 +107,7 @@ test(
         t.diagnostic(result.name);
         assert.equal(result.passed, true, result.error || result.name);
       }
-      assert.equal(results.length, 44);
+      assert.equal(results.length, 46);
     } finally {
       clearTimeout(timer);
       child.kill();

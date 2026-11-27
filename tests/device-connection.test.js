@@ -28,6 +28,24 @@ function setup(t) {
   });
   t.mock.method(credentialStorage, "getConfiguration", async () => null);
   t.mock.method(credentialStorage, "getSession", async () => null);
+  let pending;
+  t.mock.method(credentialStorage, "getPendingPairing", async (code) =>
+    pending?.code === code ? pending : null,
+  );
+  t.mock.method(
+    credentialStorage,
+    "storePendingPairing",
+    async (code, active, session) => {
+      pending = {
+        code,
+        configuration: active,
+        session: structuredClone(session),
+      };
+    },
+  );
+  t.mock.method(credentialStorage, "clearPendingPairing", async () => {
+    pending = undefined;
+  });
   const stored = t.mock.method(
     credentialStorage,
     "storeAuthenticatedConfiguration",
@@ -48,6 +66,7 @@ function setup(t) {
       userId: "new-device",
       accessToken: "device-access",
       refreshToken: "device-refresh",
+      expiresAt: Date.now() + 3_600_000,
     }),
   );
   const rpc = t.mock.method(supabaseAuthClient, "deviceRpc", async () => owner);
@@ -80,6 +99,34 @@ test("another device discovers the public project and redeems a short code", asy
   );
   assert.equal(identity.mock.calls[0].arguments[1].historyOwnerId, owner);
   assert.equal(stored.mock.calls[0].arguments[1].userId, "new-device");
+});
+
+test("a lost claim reply resumes the original device even after directory expiry", async (t) => {
+  const { create, stored } = setup(t);
+  t.mock.method(
+    supabaseAuthClient,
+    "deviceRpc",
+    async (_configuration, session, name) => {
+      assert.equal(session.userId, "new-device");
+      if (name === "watchmarker_claim_link")
+        throw new Error("Lost reply after claim");
+      assert.equal(name, "watchmarker_history_owner");
+      return owner;
+    },
+  );
+  assert.equal(
+    (await handleSupabaseConnect({ connectionCode: token })).success,
+    false,
+  );
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Directory entry expired");
+  });
+  assert.equal(
+    (await handleSupabaseConnect({ connectionCode: token })).success,
+    true,
+  );
+  assert.equal(create.mock.callCount(), 1);
+  assert.equal(stored.mock.calls[0].arguments[1].historyOwnerId, owner);
 });
 
 test("a consumed or expired invitation cannot replace saved credentials", async (t) => {

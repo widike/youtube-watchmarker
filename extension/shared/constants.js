@@ -1,6 +1,6 @@
 export const DATABASE = {
   NAME: "Database",
-  VERSION: 403,
+  VERSION: 404,
   STORE_NAME: "storeDatabase",
   INDEXES: {
     IDENT: "strIdent",
@@ -21,7 +21,6 @@ export const YOUTUBE = {
     BASE: "https://www.youtube.com/youtubei/v1/",
     ENDPOINTS: {
       BROWSE: "browse",
-      FEEDBACK: "feedback",
     },
   },
 };

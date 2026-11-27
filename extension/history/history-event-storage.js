@@ -2,6 +2,36 @@ import { DATABASE } from "../shared/constants.js";
 
 export const EVENT_STORE = "watchEvents";
 
+const revisions = new WeakMap();
+const trackedTransactions = new WeakSet();
+
+export function historyRevision(db) {
+  return revisions.get(db) ?? 0;
+}
+
+export function markHistoryChanged(transaction) {
+  trackedTransactions.add(transaction);
+}
+
+export function commitHistoryRevision(transaction) {
+  if (trackedTransactions.has(transaction))
+    revisions.set(transaction.db, historyRevision(transaction.db) + 1);
+}
+
+export async function knownPlaybackEvents(db, plays) {
+  const tx = db.transaction(EVENT_STORE, "readonly");
+  const store = tx.objectStore(EVENT_STORE);
+  const requests = plays.map(
+    ({ videoId, playbackId }) =>
+      new Promise((resolve, reject) => {
+        const request = store.getKey([videoId, `playback:${playbackId}`]);
+        request.onsuccess = () => resolve(Boolean(request.result));
+        request.onerror = () => reject(request.error);
+      }),
+  );
+  return Promise.all(requests);
+}
+
 export function videoEvents(transaction, strIdent, receive) {
   const request = transaction
     .objectStore(EVENT_STORE)
@@ -12,6 +42,7 @@ export function videoEvents(transaction, strIdent, receive) {
 }
 
 export function putEventVideo(transaction, video) {
+  markHistoryChanged(transaction);
   const { watchEvents, ...summary } = video;
   transaction.objectStore(DATABASE.STORE_NAME).put(summary);
   const store = transaction.objectStore(EVENT_STORE);

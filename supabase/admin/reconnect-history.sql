@@ -4,7 +4,7 @@
 begin;
 lock table public.youtube_watch_history, public.youtube_watch_events,
   public.youtube_watch_time, public.youtube_video_durations,
-  private.watchmarker_devices in share row exclusive mode;
+  public.youtube_blocked_videos, private.watchmarker_devices in share row exclusive mode;
 
 create table if not exists private.watchmarker_history_recoveries (
   source_owner uuid not null,
@@ -71,6 +71,12 @@ begin
   from public.youtube_video_durations where user_id=source_owner
   on conflict(user_id,str_ident) do update set seconds=excluded.seconds,fetched_at=excluded.fetched_at,
     expires_at=excluded.expires_at,unavailable=excluded.unavailable;
+
+  insert into public.youtube_blocked_videos(user_id,str_ident,title,blocked,updated_at,change_id)
+  select target_owner,str_ident,title,blocked,updated_at,change_id
+  from public.youtube_blocked_videos where user_id=source_owner
+  on conflict(user_id,str_ident) do update set title=excluded.title,blocked=excluded.blocked,
+    updated_at=excluded.updated_at,change_id=excluded.change_id;
 
   insert into private.watchmarker_devices(device_id,owner_id) values(source_owner,target_owner)
   on conflict(device_id) do update set owner_id=excluded.owner_id;

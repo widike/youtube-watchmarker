@@ -1,12 +1,10 @@
 import {
   deleteVideo,
-  readMetadata,
   localPage,
   pendingVideos,
   saveVideos,
   acknowledgeVideos,
 } from "../../extension/history/history-storage.js";
-import { YouTubeDeletionQueue } from "../../extension/sources/youtube-deletion-queue.js";
 import { isDeleted } from "../../extension/history/history-records.js";
 import { DatabaseProviderFactory } from "../../extension/providers/database-provider-factory.js";
 import { credentialStorage } from "../../extension/providers/credential-storage.js";
@@ -14,15 +12,10 @@ import { supabaseDatabaseProvider } from "../../extension/providers/supabase-dat
 
 export async function testVideoDeletion({ test, database, assert }) {
   const id = "aaaaaaaaaaa";
-  await test("deletion and both retry obligations survive reopening IndexedDB", async () => {
+  await test("cloud deletion survives reopening IndexedDB", async () => {
     const db = await database();
     await saveVideos(db, [{ strIdent: id, intTimestamp: 100 }]);
-    await deleteVideo(db, id, { youtube: true });
-    assert(isDeleted((await localPage(db))[0]), "local video was not deleted");
-    assert(
-      (await pendingVideos(db))[0].video.intDeletedAt > 0,
-      "cloud deletion not queued",
-    );
+    await deleteVideo(db, id);
     const name = db.name;
     db.close();
     const reopened = await new Promise((resolve, reject) => {
@@ -30,60 +23,22 @@ export async function testVideoDeletion({ test, database, assert }) {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
     });
-    const job = await readMetadata(reopened, `youtubeDeletion:${id}`);
-    assert(job?.videoId === id, "YouTube deletion not durable");
-    const failed = new YouTubeDeletionQueue(
-      reopened,
-      async (_id, { checkpoint }) => {
-        await checkpoint({ nextToken: "older" });
-        throw new Error("Offline");
-      },
-    );
-    assert(!(await failed.process(id)).success, "failure acknowledged");
     assert(
-      (await failed.pending())[0].state.nextToken === "older",
-      "checkpoint lost",
+      isDeleted((await localPage(reopened))[0]),
+      "local deletion did not survive",
     );
-    const retry = new YouTubeDeletionQueue(reopened, async (_id, { state }) => {
-      assert(state.nextToken === "older", "worker restart lost cursor");
-      return { success: true };
-    });
-    assert((await retry.retry()).success, "retry did not finish");
-    assert((await retry.pending()).length === 0, "completed job still queued");
     assert(
-      (await pendingVideos(reopened)).length === 1,
-      "YouTube acknowledged cloud prematurely",
+      (await pendingVideos(reopened))[0].video.intDeletedAt > 0,
+      "cloud deletion not queued",
     );
     reopened.close();
-  });
-
-  await test("finishing an old YouTube deletion cannot acknowledge a newer deletion", async () => {
-    const db = await database();
-    await deleteVideo(db, id, { youtube: true });
-    let finish;
-    const queue = new YouTubeDeletionQueue(
-      db,
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const first = queue.process(id);
-    while (!finish) await new Promise((resolve) => setTimeout(resolve, 0));
-    assert(queue.process(id) === first, "concurrent request duplicated");
-    await deleteVideo(db, id, { youtube: true });
-    const newer = (await queue.pending())[0].revision;
-    finish({ success: true });
-    assert(!(await first).success, "newer deletion falsely reported complete");
-    assert((await queue.pending())[0].revision === newer, "newer job lost");
-    db.close();
   });
 
   await test("cloud deletion acknowledgement is independent of a running full sync", async () => {
     const db = await database();
     const factory = new DatabaseProviderFactory();
     factory.setDatabaseManager({ database: db });
-    await deleteVideo(db, id, { youtube: true });
+    await deleteVideo(db, id);
     const saved = {
       configuration: credentialStorage.getConfiguration,
       session: credentialStorage.getSession,
@@ -122,12 +77,8 @@ export async function testVideoDeletion({ test, database, assert }) {
         (await pendingVideos(db)).length === 0,
         "cloud acknowledgement missing",
       );
-      assert(
-        (await factory.youtubeDeletions.pending()).length === 1,
-        "cloud cleared YouTube job",
-      );
       // General sync may already have acknowledged the same tombstone.
-      await deleteVideo(db, id, { youtube: true });
+      await deleteVideo(db, id);
       await acknowledgeVideos(db, await pendingVideos(db));
       assert(
         (await factory.syncVideoDeletion(id)).success,

@@ -236,7 +236,7 @@ export class HistorySearchController {
     if (this.disposed || this.deleting) return;
     if (
       !confirm(
-        "Delete all watches of this video from local history, Supabase on all devices, and the signed-in YouTube account's history?",
+        "Delete all watches of this video from Watchmarker on this device and any connected devices? To remove it from YouTube, open YouTube history under Sync & data.",
       )
     )
       return;

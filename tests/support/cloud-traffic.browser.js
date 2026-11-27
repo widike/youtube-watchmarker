@@ -105,13 +105,20 @@ export async function testCloudTraffic({ test, database, remote, assert }) {
         changed.success && uploads === 1 && changed.downloaded === 1,
         "Pending change did not bypass idle interval or downloaded unchanged records",
       );
+      const idle = await worker().performDeltaSync();
+      assert(
+        idle.downloaded === 0 && idle.timeDownloaded === 0,
+        "Idle sync repeated old download counts",
+      );
       offline = true;
       await saveVideos(db, [
         { strIdent: "bbbbbbbbbbb", intTimestamp: 2, intCount: 1 },
       ]);
       const failed = await worker().performDeltaSync();
       assert(
-        !failed.success && failed.retryAt === clock + 60_000,
+        !failed.success &&
+          failed.downloaded === 0 &&
+          failed.retryAt === clock + 60_000,
         "Failure backoff was not saved",
       );
       const failedChecks = checks;

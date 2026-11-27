@@ -59,6 +59,7 @@ function setup(t) {
         title,
         sessionId,
         watchedMilliseconds,
+        eventWatchedAt: Date.now() - 60_000,
         reason: "progress",
       },
       { tab: { id: 1, url }, frameId: 0, documentId: "doc" },

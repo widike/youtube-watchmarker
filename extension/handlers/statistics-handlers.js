@@ -1,3 +1,4 @@
+import { LIVE_WATCH_CONDITIONS } from "../background/video-tracker.js";
 import { createHandler } from "../shared/handler-wrapper.js";
 import { databaseProviderFactory } from "../providers/database-provider-factory.js";
 import { summarizeHistory } from "../history/history-statistics.js";
@@ -29,6 +30,14 @@ export const handleHistoryStatistics = createHandler(
 
 export const handleYoutubeWatchTime = createHandler(
   async (request, sender) => {
+    const keys = Array.isArray(request.reasons)
+      ? request.reasons
+          .filter((reason) => Object.hasOwn(LIVE_WATCH_CONDITIONS, reason))
+          .map((reason) => LIVE_WATCH_CONDITIONS[reason])
+      : [];
+    const settings = keys.length ? await chrome.storage.sync.get(keys) : {};
+    if (!keys.some((key) => settings[key] === true))
+      return { recordingDisabled: true };
     await saveWatchTime(Database.database, request, sender);
     return {};
   },

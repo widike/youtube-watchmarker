@@ -26,13 +26,20 @@ export async function broadcastWatchState(message) {
 
 // Imports can partially succeed before failing. Refresh either way, without
 // making a successful history write depend on an open content-script recipient.
-export async function withWatchmarkerRefresh(operation) {
+export async function withWatchmarkerRefresh(
+  operation,
+  { onlyDownloads = false } = {},
+) {
   let result;
   try {
     result = await operation();
     return result;
   } finally {
-    if (result?.downloaded !== 0 || result?.timeDownloaded > 0)
+    if (
+      result?.downloaded > 0 ||
+      result?.timeDownloaded > 0 ||
+      (!onlyDownloads && result?.downloaded === undefined)
+    )
       await broadcastWatchState({ action: "youtube-refresh" });
   }
 }

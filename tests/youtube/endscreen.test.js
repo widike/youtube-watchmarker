@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -41,17 +42,24 @@ test(
       globalThis.chrome = original;
     }
     const profile = await mkdtemp(join(tmpdir(), "watchmarker-endscreen-"));
+    const server = createServer((_request, response) => {
+      response.setHeader("Content-Type", "text/html");
+      response.end("<!doctype html><title>Watchmarker end screen</title>");
+    });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const fixtureUrl = `http://127.0.0.1:${server.address().port}/`;
+    const headed = process.env.WATCHMARKER_HEADED_CHROME === "1";
     const child = spawn(
       chrome,
       [
-        "--headless",
+        ...(headed ? [] : ["--headless"]),
         "--no-first-run",
         "--disable-background-networking",
         "--disable-extensions",
         "--remote-debugging-port=0",
         `--user-data-dir=${profile}`,
         "--window-size=1100,800",
-        "about:blank",
+        fixtureUrl,
       ],
       { stdio: ["ignore", "ignore", "pipe"] },
     );
@@ -76,7 +84,9 @@ test(
         (res) => res.json(),
       );
       socket = new WebSocket(
-        targets.find((target) => target.type === "page").webSocketDebuggerUrl,
+        targets.find(
+          (target) => target.type === "page" && target.url === fixtureUrl,
+        ).webSocketDebuggerUrl,
       );
       await new Promise((resolve, reject) => {
         socket.addEventListener("open", resolve, { once: true });
@@ -92,23 +102,26 @@ test(
         if (response.error) operation.reject(new Error(response.error.message));
         else operation.resolve(response.result);
       });
-      const evaluate = (expression) =>
+      const command = (method, params = {}) =>
         new Promise((resolve, reject) => {
           const id = ++sequence;
           pending.set(id, { resolve, reject });
           socket.send(
             JSON.stringify({
               id,
-              method: "Runtime.evaluate",
-              params: {
-                expression,
-                awaitPromise: true,
-                returnByValue: true,
-                userGesture: true,
-              },
+              method,
+              params,
             }),
           );
         });
+      const evaluate = (expression) =>
+        command("Runtime.evaluate", {
+          expression,
+          awaitPromise: true,
+          returnByValue: true,
+          userGesture: true,
+        });
+      await command("Page.bringToFront");
       const files = [
         "shared/video-identity.js",
         "youtube/core.js",
@@ -125,25 +138,45 @@ test(
       const loaded = await evaluate(source.join("\n"));
       assert.equal(loaded.exceptionDetails, undefined);
       for (const fullscreen of [false, true]) {
-        const result = await evaluate(
-          `verifyEndscreen(${JSON.stringify(settings)}, ${fullscreen})`,
-        );
-        assert.equal(
-          result.exceptionDetails,
-          undefined,
-          result.exceptionDetails?.exception?.description,
-        );
-        assert.equal(result.result.value.fullscreen, fullscreen);
-        t.diagnostic(
-          `${fullscreen ? "Fullscreen" : "Normal"}: ${result.result.value.tiles} tile layouts, toggles, dynamic insertions and recycled links passed`,
+        await t.test(
+          fullscreen ? "fullscreen" : "normal layout",
+          async (layout) => {
+            const result = await evaluate(
+              `verifyEndscreen(${JSON.stringify(settings)}, ${fullscreen})`,
+            );
+            if (
+              fullscreen &&
+              !headed &&
+              result.exceptionDetails?.exception?.description ===
+                "TypeError: not granted"
+            ) {
+              layout.skip(
+                "Chrome denied fullscreen. A visible Chrome window can be requested with WATCHMARKER_HEADED_CHROME=1.",
+              );
+              return;
+            }
+            assert.equal(
+              result.exceptionDetails,
+              undefined,
+              result.exceptionDetails?.exception?.description,
+            );
+            assert.equal(result.result.value.fullscreen, fullscreen);
+            layout.diagnostic(
+              `${result.result.value.tiles} tile layouts, toggles, dynamic insertions and recycled links passed`,
+            );
+          },
         );
       }
     } finally {
       clearTimeout(timer);
       socket?.close();
-      const stopped = new Promise((resolve) => child.once("exit", resolve));
-      child.kill();
-      await stopped;
+      if (child.exitCode === null && child.signalCode === null) {
+        const stopped = new Promise((resolve) => child.once("exit", resolve));
+        child.kill();
+        await stopped;
+      }
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
       await rm(profile, {
         recursive: true,
         force: true,

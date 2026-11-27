@@ -14,13 +14,6 @@ import { mergeWatchTimes } from "../history/watch-time-replication.js";
 import { mergeDurations } from "../duration/duration-replication.js";
 import { downloadChanges } from "./sync-window.js";
 
-export async function importVideosInBatches(provider, videos, batchSize = 100) {
-  for (let i = 0; i < videos.length; i += batchSize) {
-    await provider.importVideos(videos.slice(i, i + batchSize));
-  }
-  return videos.length;
-}
-
 // Watch dates never serve as sync watermarks: old imports are new server changes.
 export class HistorySync {
   constructor(db, remote, now = Date.now, durationsChanged = async () => {}) {
@@ -44,6 +37,7 @@ export class HistorySync {
     const deadline = this.now() + 20_000;
     let uploaded = 0;
     let downloaded = 0;
+    let timeDownloaded = 0;
     try {
       // Seed pre-outbox installations once. Durable outboxes handle all later
       // changes; elapsed time is not evidence that the cloud lost every row.
@@ -96,13 +90,19 @@ export class HistorySync {
           "history",
           "getVideoPage",
           "strIdent",
-          (rows) => saveVideos(this.db, rows, { pending: false }),
+          async (rows) => {
+            await saveVideos(this.db, rows, { pending: false });
+            downloaded += rows.length;
+          },
         ],
         [
           "watchTime",
           "getWatchTimePage",
           "snapshotId",
-          (rows) => mergeWatchTimes(this.db, rows),
+          async (rows) => {
+            await mergeWatchTimes(this.db, rows);
+            timeDownloaded += rows.length;
+          },
         ],
         [
           "durations",
@@ -133,7 +133,6 @@ export class HistorySync {
           now: this.now,
           deadline,
         });
-      downloaded = results.history.downloaded;
       const complete =
         repairComplete &&
         Object.values(results).every((result) => result.complete);
@@ -145,7 +144,7 @@ export class HistorySync {
         uploaded,
         downloaded,
         timeUploaded: time.uploaded,
-        timeDownloaded: results.watchTime.downloaded,
+        timeDownloaded,
         durationsUploaded: durations.uploaded,
         durationsDownloaded: results.durations.downloaded,
         inProgress:
@@ -166,7 +165,12 @@ export class HistorySync {
         lastAttempt: this.now(),
         inProgress: false,
       });
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+        downloaded,
+        timeDownloaded,
+      };
     }
   }
 }

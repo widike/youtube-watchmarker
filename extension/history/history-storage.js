@@ -9,6 +9,8 @@ import {
   EVENT_STORE,
   videoEvents,
   putEventVideo,
+  markHistoryChanged,
+  commitHistoryRevision,
   readVideos,
 } from "./history-event-storage.js";
 
@@ -23,6 +25,14 @@ export function upgradeHistoryStorage(db, transaction) {
   const outbox = db.objectStoreNames.contains(OUTBOX_STORE)
     ? transaction.objectStore(OUTBOX_STORE)
     : db.createObjectStore(OUTBOX_STORE, { keyPath: "strIdent" });
+  const metadata = transaction.objectStore(META_STORE);
+  if (!metadata.indexNames.contains("watchTimeEvent"))
+    metadata.createIndex("watchTimeEvent", ["strIdent", "eventId"]);
+  if (!metadata.indexNames.contains("watchTimeVideo"))
+    metadata.createIndex("watchTimeVideo", ["strIdent", "minute"]);
+  metadata.delete(
+    IDBKeyRange.bound("youtubeDeletion:", "youtubeDeletion:\uffff"),
+  );
   if (db.objectStoreNames.contains(EVENT_STORE)) return;
   const events = db.createObjectStore(EVENT_STORE, {
     keyPath: ["strIdent", "eventId"],
@@ -62,7 +72,10 @@ export function upgradeHistoryStorage(db, transaction) {
 
 export function transactionDone(transaction, getAbortReason = () => null) {
   return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve(true);
+    transaction.oncomplete = () => {
+      commitHistoryRevision(transaction);
+      resolve(true);
+    };
     transaction.onabort = () =>
       reject(
         getAbortReason() ??
@@ -176,9 +189,9 @@ export async function localPage(db, after = "", limit = 500) {
 }
 
 // Only an explicit user action creates a deletion marker. Sync never calls this.
-export async function deleteVideo(db, strIdent, { youtube = false } = {}) {
+export async function deleteVideo(db, strIdent) {
   const tx = db.transaction(
-    [DATABASE.STORE_NAME, OUTBOX_STORE, EVENT_STORE, META_STORE],
+    [DATABASE.STORE_NAME, OUTBOX_STORE, EVENT_STORE],
     "readwrite",
     {
       durability: "strict",
@@ -203,12 +216,8 @@ export async function deleteVideo(db, strIdent, { youtube = false } = {}) {
           previous.intDeletedAt || 0,
         ) + 1,
     };
+    markHistoryChanged(tx);
     history.put(video);
-    if (youtube)
-      tx.objectStore(META_STORE).put(
-        { videoId: strIdent, revision: crypto.randomUUID() },
-        `youtubeDeletion:${strIdent}`,
-      );
     videoEvents(tx, strIdent, (watchEvents) => {
       tx.objectStore(OUTBOX_STORE).put({
         strIdent,

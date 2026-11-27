@@ -17,11 +17,18 @@ import {
 let connecting = false;
 
 export const handleSupabaseCaptchaConfiguration = createHandler(
-  async (request) => ({
-    captcha: await loadCaptchaConfiguration(
-      await connectionConfiguration(request),
-    ),
-  }),
+  async (request) => {
+    const code =
+      request.connectionCode && decodeConnection(request.connectionCode);
+    const pending = await credentialStorage.getPendingPairing(code);
+    return {
+      captcha: pending
+        ? null
+        : await loadCaptchaConfiguration(
+            await connectionConfiguration(request),
+          ),
+    };
+  },
   { name: "handleSupabaseCaptchaConfiguration" },
 );
 
@@ -44,9 +51,11 @@ export const handleSupabaseConnect = createHandler(
         ? decodeConnection(request.connectionCode)
         : null;
       const saved = await credentialStorage.getConfiguration();
+      const pending = await credentialStorage.getPendingPairing(token);
       const configuration =
-        (token ? await loadConnectionProject(token) : request.configuration) ||
-        saved;
+        (token
+          ? (pending?.configuration ?? (await loadConnectionProject(token)))
+          : request.configuration) || saved;
       const validation = credentialStorage.validateConfiguration(configuration);
       if (!validation.isValid) throw new Error(validation.errors.join(". "));
       const active = {
@@ -63,22 +72,49 @@ export const handleSupabaseConnect = createHandler(
         throw new Error(
           "Link this history using a connection code from another connected device.",
         );
-      const session =
-        saved?.projectId === active.projectId && current
-          ? {
-              ...current,
-              accessToken: await supabaseAuthClient.getAccessToken(),
-            }
-          : await supabaseAuthClient.createDeviceSession(
+      let session;
+      if (saved?.projectId === active.projectId && current) {
+        await supabaseAuthClient.getAccessToken();
+        session = await credentialStorage.getSession();
+      } else if (pending) {
+        session = pending.session;
+        if (session.expiresAt <= Date.now() + 60_000) {
+          try {
+            session = await supabaseAuthClient.refreshDeviceSession(
               active,
-              request.captchaToken,
+              session,
             );
-      session.historyOwnerId = await supabaseAuthClient.deviceRpc(
-        active,
-        session,
-        token ? "watchmarker_claim_link" : "watchmarker_history_owner",
-        token ? { p_token: token } : {},
-      );
+          } catch (error) {
+            if (error.status === 400 || error.status === 401)
+              await credentialStorage.clearPendingPairing();
+            throw error;
+          }
+          await credentialStorage.storePendingPairing(token, active, session);
+        }
+      } else {
+        session = await supabaseAuthClient.createDeviceSession(
+          active,
+          request.captchaToken,
+        );
+        if (token)
+          await credentialStorage.storePendingPairing(token, active, session);
+      }
+      const recoveredOwner =
+        pending?.session.userId === session.userId &&
+        (await supabaseAuthClient.deviceRpc(
+          active,
+          session,
+          "watchmarker_history_owner",
+        ));
+      session.historyOwnerId =
+        recoveredOwner && recoveredOwner !== session.userId
+          ? recoveredOwner
+          : await supabaseAuthClient.deviceRpc(
+              active,
+              session,
+              token ? "watchmarker_claim_link" : "watchmarker_history_owner",
+              token ? { p_token: token } : {},
+            );
       if (typeof session.historyOwnerId !== "string" || !session.historyOwnerId)
         throw new Error(
           "Code incorrect, expired or already used, or too many attempts. Check the code or try again in 10 minutes.",
@@ -88,6 +124,7 @@ export const handleSupabaseConnect = createHandler(
         configuration,
         session,
       );
+      if (token) await credentialStorage.clearPendingPairing();
       await supabaseDatabaseProvider.close();
       // Local recording stays available while the initial cloud restore runs.
       void databaseProviderFactory

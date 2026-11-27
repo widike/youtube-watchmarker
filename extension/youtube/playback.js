@@ -5,9 +5,14 @@
   const { core } = watchmarker;
 
   class PlaybackTracker {
-    constructor(backgroundClient, videoMarkerManager) {
+    constructor(
+      backgroundClient,
+      videoMarkerManager,
+      recordingEnabled = () => true,
+    ) {
       this.backgroundClient = backgroundClient;
       this.videoMarkerManager = videoMarkerManager;
+      this.recordingEnabled = recordingEnabled;
       this.session = null;
       this.endedPlayer = null;
       this.watchTime = new watchmarker.WatchTimeTracker(backgroundClient);
@@ -66,7 +71,7 @@
     }
 
     currentSession() {
-      if (this.navigating) return null;
+      if (this.navigating || !this.recordingEnabled()) return null;
       const videoId = core.getCurrentVideoId();
       if (!videoId) {
         this.watchTime.reset(true);
@@ -84,7 +89,8 @@
     }
 
     retrySettings() {
-      this.session?.reports.clear();
+      this.watchTime.reset(true);
+      this.session = null;
       this.refresh();
     }
 
@@ -118,6 +124,7 @@
       }
       this.session.title = core.getCurrentVideoTitle() || this.session.title;
       if (event.type === "ended") {
+        this.session.reasons.add("progress");
         this.watchTime.observe(player, event.type, this.session);
         this.endedPlayer = player;
         if (player.ended && player.currentTime > 0)
@@ -142,6 +149,7 @@
       }
       this.session.player = player;
       this.session.lastTime = player.currentTime;
+      this.session.reasons.add("progress");
       this.watchTime.observe(player, event.type, this.session);
       void this.report("progress");
     }
@@ -154,6 +162,7 @@
         return;
       const title = core.getCurrentVideoTitle() || session.title;
       session.title = title;
+      if (reason === "rating") void this.watchTime.flush();
       await Promise.all(
         [...session.reasons].map((signal) =>
           this.reportReason(session, signal, title),
@@ -178,6 +187,7 @@
           videoId: session.videoId,
           sessionId: session.sessionId,
           watchedMilliseconds: session.watchedMilliseconds,
+          eventWatchedAt: session.eventWatchedAt,
           reason,
           title,
         });

@@ -10,30 +10,7 @@ export class SyncManager {
   }
 
   async syncNow(options) {
-    // YouTube retries also run for local-only or disconnected installations.
-    const [cloud, youtube] = await Promise.allSettled([
-      databaseProviderFactory.performDeltaSync(options),
-      databaseProviderFactory.youtubeDeletions.retry(),
-    ]);
-    const result =
-      cloud.status === "fulfilled"
-        ? cloud.value
-        : { success: false, error: cloud.reason.message };
-    const deletionError =
-      youtube.status === "rejected"
-        ? youtube.reason.message
-        : youtube.value?.success === false
-          ? youtube.value.error
-          : null;
-    return deletionError
-      ? {
-          ...result,
-          success: false,
-          error: [result.error, `YouTube: ${deletionError}`]
-            .filter(Boolean)
-            .join("; "),
-        }
-      : result;
+    return databaseProviderFactory.performDeltaSync(options);
   }
 
   async getStatus() {

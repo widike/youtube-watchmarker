@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { SearchManager } from "../extension/background/bg-search.js";
 import { SupabaseDatabaseProvider } from "../extension/providers/supabase-database-provider.js";
 
-function fixture(cloud = { success: true }, youtube = { success: true }) {
+function fixture(cloud = { success: true }) {
   const calls = [];
   const manager = new SearchManager();
   manager.setProviderFactory({
@@ -14,39 +14,29 @@ function fixture(cloud = { success: true }, youtube = { success: true }) {
       calls.push(["cloud", id]);
       return cloud;
     },
-    youtubeDeletions: {
-      process: async (id) => {
-        calls.push(["youtube", id]);
-        return youtube;
-      },
-    },
+    isConfigured: async () => true,
   });
   return { manager, calls };
 }
 
-test("trash commits local deletion and its YouTube obligation before awaiting both services", async () => {
+test("trash commits local deletion before syncing Supabase", async () => {
   const { manager, calls } = fixture();
   assert.deepEqual(await manager.delete("aaaaaaaaaaa"), {
     success: true,
     deleted: true,
   });
   assert.deepEqual(calls, [
-    ["local", "aaaaaaaaaaa", { youtube: true }],
+    ["local", "aaaaaaaaaaa"],
     ["cloud", "aaaaaaaaaaa"],
-    ["youtube", "aaaaaaaaaaa"],
   ]);
 });
 
-test("partial failures preserve local deletion and report both outstanding services", async () => {
-  const { manager } = fixture(
-    { success: false, error: "offline" },
-    { success: false, error: "sign in" },
-  );
+test("cloud failure preserves local deletion and reports its retry", async () => {
+  const { manager } = fixture({ success: false, error: "offline" });
   const result = await manager.delete("aaaaaaaaaaa");
   assert.equal(result.success, false);
   assert.equal(result.deleted, true);
-  assert.match(result.error, /Supabase: offline/);
-  assert.match(result.error, /YouTube: sign in/);
+  assert.match(result.error, /Supabase.*offline/);
 });
 
 test("invalid IDs have no side effects", async () => {

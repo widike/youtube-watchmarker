@@ -8,32 +8,44 @@ const SETTLED_MILLISECONDS = 10 * 60_000;
 export function measuredPlaybacks(rows, now = Date.now()) {
   const plays = new Map();
   for (const row of rows) {
-    if (!row.eventId.startsWith(PLAYBACK)) continue;
-    const play = plays.get(row.eventId) || {
+    if (!row.eventId.startsWith(PLAYBACK) || !row.eventWatchedAt) continue;
+    const key = `${row.strIdent}:${row.eventId}`;
+    const play = plays.get(key) || {
       videoId: row.strIdent,
       playbackId: row.eventId.slice(PLAYBACK.length),
       title: "",
-      watchedAt: row.eventWatchedAt ?? row.from,
+      watchedAt: row.eventWatchedAt,
+      observedDeletion: row.observedDeletion || 0,
       end: row.to,
     };
     play.title ||= row.strTitle;
-    play.watchedAt = Math.min(play.watchedAt, row.eventWatchedAt ?? row.from);
+    play.conflicting ||=
+      play.watchedAt !== row.eventWatchedAt ||
+      play.observedDeletion !== (row.observedDeletion || 0);
     play.end = Math.max(play.end, row.to);
-    plays.set(row.eventId, play);
+    plays.set(key, play);
   }
-  return [...plays.values()].filter(
-    (play) => play.end <= now - SETTLED_MILLISECONDS,
-  );
+  return [...plays.values()]
+    .filter(
+      (play) => !play.conflicting && play.end <= now - SETTLED_MILLISECONDS,
+    )
+    .map(({ conflicting: _conflicting, ...play }) => play);
 }
 
 export async function recoverMissedPlaybacks(manager, rows, now = Date.now()) {
   let recoveredCount = 0;
   let failedCount = 0;
-  for (const play of measuredPlaybacks(rows, now)) {
-    try {
-      if (await manager.recoverPlayback(play)) recoveredCount++;
-    } catch {
-      failedCount++;
+  const plays = measuredPlaybacks(rows, now);
+  for (let offset = 0; offset < plays.length; offset += 500) {
+    const batch = plays.slice(offset, offset + 500);
+    const known = await manager.getProvider().knownPlaybackEvents(batch);
+    for (const [index, play] of batch.entries()) {
+      if (known[index]) continue;
+      try {
+        if (await manager.recoverPlayback(play)) recoveredCount++;
+      } catch {
+        failedCount++;
+      }
     }
   }
   if (failedCount)

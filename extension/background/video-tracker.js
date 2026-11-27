@@ -5,7 +5,7 @@ import { cleanHistoryTitle } from "../sources/browser-history-parser.js";
 import { videoTitleRecovery } from "../shared/video-title-recovery.js";
 
 const { isVideoId, parseVideoId } = globalThis.YouTubeWatchmarkerVideo;
-const CONDITIONS = {
+export const LIVE_WATCH_CONDITIONS = {
   navigation: "idCondition_Brownav",
   progress: "idCondition_Youprog",
   rating: "idCondition_Yourating",
@@ -23,7 +23,7 @@ export class VideoTracker {
     if (
       !isVideoId(videoId) ||
       !/^[a-f0-9-]{36}$/i.test(sessionId || "") ||
-      !Object.hasOwn(CONDITIONS, reason) ||
+      !Object.hasOwn(LIVE_WATCH_CONDITIONS, reason) ||
       !Number.isInteger(tabId) ||
       tabId < 0 ||
       (sender.frameId !== undefined && sender.frameId !== 0) ||
@@ -37,9 +37,17 @@ export class VideoTracker {
       request.watchedMilliseconds < 60_000
     )
       return null;
-    const settings = await chrome.storage.sync.get(CONDITIONS[reason]);
-    if (settings[CONDITIONS[reason]] !== true) return null;
+    const settings = await chrome.storage.sync.get(
+      LIVE_WATCH_CONDITIONS[reason],
+    );
+    if (settings[LIVE_WATCH_CONDITIONS[reason]] !== true) return null;
 
+    if (
+      !Number.isSafeInteger(request.eventWatchedAt) ||
+      request.eventWatchedAt <= 0 ||
+      request.eventWatchedAt > Date.now() + 2000
+    )
+      throw new Error("Invalid playback start");
     const playbackId = `${tabId}:${sender.documentId || ""}:${sessionId}`;
     const title = isValidVideoTitle(request.title)
       ? request.title
@@ -48,6 +56,7 @@ export class VideoTracker {
       videoId,
       title,
       playbackId,
+      request.eventWatchedAt,
     );
     // Recording stays local and immediate even if metadata is unavailable.
     if (video && !isValidVideoTitle(video.strTitle)) {

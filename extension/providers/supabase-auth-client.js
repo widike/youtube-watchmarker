@@ -112,6 +112,17 @@ export class SupabaseAuthClient {
     return payload;
   }
 
+  async refreshDeviceSession(configuration, previousSession) {
+    const payload = await this.request("/token?grant_type=refresh_token", {
+      body: { refresh_token: previousSession.refreshToken },
+      configuration,
+    });
+    return {
+      ...this.createStoredSession(payload, previousSession),
+      historyOwnerId: previousSession.historyOwnerId,
+    };
+  }
+
   refreshSession() {
     if (!this.refreshPromise) {
       this.refreshPromise = this.performSessionRefresh().finally(() => {
@@ -130,11 +141,10 @@ export class SupabaseAuthClient {
     }
 
     try {
-      const payload = await this.request("/token?grant_type=refresh_token", {
-        body: { refresh_token: previousSession.refreshToken },
-      });
-      const session = this.createStoredSession(payload, previousSession);
-      session.historyOwnerId = previousSession.historyOwnerId;
+      const session = await this.refreshDeviceSession(
+        undefined,
+        previousSession,
+      );
       await credentialStorage.storeSession(session);
       return session;
     } catch (error) {

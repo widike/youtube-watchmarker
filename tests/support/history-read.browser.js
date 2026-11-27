@@ -1,4 +1,8 @@
-import { readVideos } from "../../extension/history/history-event-storage.js";
+import { SearchManager } from "../../extension/background/bg-search.js";
+import {
+  historyRevision,
+  readVideos,
+} from "../../extension/history/history-event-storage.js";
 import {
   localPage,
   saveVideos,
@@ -8,6 +12,47 @@ import { IndexedDBProvider } from "../../extension/providers/indexeddb-provider.
 import { recordPlayback } from "../../extension/history/history-playback.js";
 
 export async function testHistoryReads({ test, database, assert }) {
+  await test("consecutive history pages reuse the ordered search until history changes", async () => {
+    const db = await database();
+    try {
+      let reads = 0;
+      const manager = new SearchManager();
+      const provider = {
+        get historyRevision() {
+          return historyRevision(db);
+        },
+        async getAllVideos() {
+          reads++;
+          return readVideos(db);
+        },
+      };
+      manager.setProviderFactory({ getCurrentProvider: () => provider });
+      await saveVideos(db, [
+        { strIdent: "abcdefghijk", intTimestamp: 100, strTitle: "Fixture one" },
+        { strIdent: "mnopqrstuvw", intTimestamp: 200, strTitle: "Fixture two" },
+      ]);
+      const first = await manager.lookup("", 0, 1);
+      const second = await manager.lookup("", 1, 1);
+      assert(
+        reads === 1 && first.videos[0].strIdent !== second.videos[0].strIdent,
+        "pagination reread history or repeated a row",
+      );
+      await saveVideos(db, [
+        {
+          strIdent: "zzzzzzzzzzz",
+          intTimestamp: 300,
+          strTitle: "Fixture three",
+        },
+      ]);
+      const changed = await manager.lookup("", 0, 1);
+      assert(
+        reads === 2 && changed.videos[0].strIdent === "zzzzzzzzzzz",
+        "a committed write did not invalidate search",
+      );
+    } finally {
+      db.close();
+    }
+  });
   await test("bulk history reads preserve events and bound single-video and paged queries", async () => {
     const db = await database();
     const records = Array.from({ length: 1000 }, (_, index) => ({

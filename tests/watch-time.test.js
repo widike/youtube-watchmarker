@@ -186,6 +186,7 @@ test("duration reports reject invalid intervals, subframes, and forged cumulativ
   const request = {
     ...session,
     watchedMilliseconds: 60_000,
+    eventWatchedAt: bucket().from,
     buckets: [bucket()],
   };
   validateWatchTime(request, sender, now);

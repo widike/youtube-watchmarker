@@ -64,14 +64,37 @@ export class SearchManager {
     try {
       const currentProvider = this.getProvider();
 
-      // Get all videos from the current provider
-      const allVideos = await currentProvider.getAllVideos();
-      await videoTitleRecovery.repair(currentProvider, allVideos);
-
-      const filteredVideos = queryHistory(historyEntries(allVideos), {
-        ...options,
+      const revision = currentProvider.historyRevision;
+      const today = new Date().setHours(0, 0, 0, 0);
+      const key = JSON.stringify([
         query,
-      });
+        options.wordGroup,
+        options.period,
+        options.sort,
+        today,
+      ]);
+      const cached = this.search;
+      let filteredVideos;
+      if (
+        cached?.provider === currentProvider &&
+        cached.revision === revision &&
+        cached.key === key
+      ) {
+        filteredVideos = cached.videos;
+      } else {
+        const allVideos = await currentProvider.getAllVideos();
+        await videoTitleRecovery.repair(currentProvider, allVideos);
+        filteredVideos = queryHistory(historyEntries(allVideos), {
+          ...options,
+          query,
+        });
+        this.search = {
+          provider: currentProvider,
+          revision,
+          key,
+          videos: filteredVideos,
+        };
+      }
 
       // Count matches across the complete library.
       const totalResults = filteredVideos.length;
@@ -94,28 +117,20 @@ export class SearchManager {
   // implies deletion. The durable tombstone is retried like every other write.
   async delete(videoId) {
     if (!isValidVideoId(videoId)) throw new Error("Invalid video ID");
-    await this.getProvider().deleteVideo(videoId, { youtube: true });
-    const operations = await Promise.allSettled([
-      this.providerFactory.syncVideoDeletion(videoId),
-      this.providerFactory.youtubeDeletions.process(videoId),
-    ]);
-    const pending = operations.flatMap((result, index) => {
-      const service = index === 0 ? "Supabase" : "YouTube";
-      if (result.status === "rejected")
-        return [`${service}: ${result.reason.message}`];
-      return result.value?.success
-        ? []
-        : [`${service}: ${result.value?.error || "Deletion pending"}`];
-    });
-    return {
-      deleted: true,
-      success: pending.length === 0,
-      ...(pending.length
-        ? {
-            error: `Deleted locally. Pending deletion will retry automatically. ${pending.join("; ")}`,
-          }
-        : {}),
-    };
+    await this.getProvider().deleteVideo(videoId);
+    try {
+      if (!(await this.providerFactory.isConfigured()))
+        return { deleted: true, success: true };
+      const result = await this.providerFactory.syncVideoDeletion(videoId);
+      if (!result.success) throw new Error(result.error);
+      return { deleted: true, success: true };
+    } catch (error) {
+      return {
+        deleted: true,
+        success: false,
+        error: `Deleted locally. Supabase will retry automatically: ${error.message}`,
+      };
+    }
   }
 }
 

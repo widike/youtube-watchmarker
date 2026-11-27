@@ -60,10 +60,8 @@ test("authenticated requests install matching browser headers before sending a c
     assert.deepEqual(rule.condition.requestMethods, ["post"]);
     const matches = new RegExp(rule.condition.regexFilter);
     assert.ok(matches.test(url));
-    assert.ok(
-      matches.test("https://www.youtube.com/youtubei/v1/feedback?key=test"),
-    );
     for (const other of [
+      "https://www.youtube.com/youtubei/v1/feedback?key=test",
       "https://www.youtube.com/youtubei/v1/browse-elsewhere",
       "https://www.youtube.com/watch?v=aaaaaaaaaaa",
       "https://evil.test/youtubei/v1/browse",

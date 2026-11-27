@@ -17,15 +17,29 @@ export function memoryHistory(initial = []) {
         mergeVideo(records.get(video.strIdent), video),
       );
     },
-    recordPlayback: async (id, title, playbackId, recoveredAt) => {
+    knownPlaybackEvents: async (plays) =>
+      plays.map(
+        ({ videoId, playbackId }) =>
+          records
+            .get(videoId)
+            ?.watchEvents.some(
+              ({ eventId }) => eventId === `playback:${playbackId}`,
+            ) ?? false,
+      ),
+    recordPlayback: async (
+      id,
+      title,
+      playbackId,
+      { watchedAt = Date.now(), recovered = false } = {},
+    ) => {
       const previous = await provider.getVideo(id);
       const eventId = `playback:${playbackId}`;
       const events = previous?.watchEvents || [];
       const seen = events.some((event) => event.eventId === eventId);
-      if (recoveredAt && seen) return null;
+      if (recovered && seen) return null;
       const timestamp = seen
         ? previous.intTimestamp
-        : Math.max(previous?.intTimestamp || 0, recoveredAt || Date.now());
+        : Math.max(previous?.intTimestamp || 0, watchedAt);
       const video = normalizeVideo({
         ...previous,
         strIdent: id,
@@ -38,7 +52,7 @@ export function memoryHistory(initial = []) {
               ...events,
               {
                 eventId,
-                watchedAt: timestamp,
+                watchedAt,
                 source: "playback",
                 precision: "exact",
               },
