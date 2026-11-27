@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.3.4 (2026-11-27)
+
+- The trash action removes videos from Watchmarker and syncs the deletion to
+  connected devices. To remove a watch from your YouTube account, open
+  **Sync & data → YouTube history** and remove it there. Previously queued
+  YouTube account deletions are cleared when the extension updates.
+- Turning off all live watch detectors stops new playback measurements.
+  Playback timestamps stay consistent across connected devices, and recovery
+  respects deletion markers. First-time cloud sync retains the newest playback
+  measurements.
+- Device pairing can resume after a lost connection reply. Administrator
+  recovery now transfers block-list changes, including unblocks.
+- History search reuses results across pages and reads measurements only for
+  videos on the requested page. Idle cloud checks avoid unnecessary refreshes.
+- Backup imports reject invalid video IDs and out-of-range watch counts before
+  writing records. YouTube history recognizes German dates and handles daylight
+  saving transitions.
+
+Extract the ZIP into the existing extension folder, reload it at
+`chrome://extensions`, and refresh open YouTube tabs. This release requires no
+new Supabase migrations.
+
+[Full changelog](https://github.com/widike/youtube-watchmarker/compare/v1.3.3...v1.3.4)
+
 ## 1.3.3 — 2026-11-14
 
 - Fixed a race at minute boundaries that could interrupt watch-time recording.
